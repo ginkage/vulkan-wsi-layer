@@ -65,7 +65,9 @@ wsi_layer_vkCreateSwapchainKHR(VkDevice device, const VkSwapchainCreateInfoKHR *
       return VK_ERROR_OUT_OF_HOST_MEMORY;
    }
 
-   TRY_LOG(sc->init(device, pSwapchainCreateInfo), "Failed to initialise swapchain");
+   VkSwapchainCreateInfoKHR my_create_info = *pSwapchainCreateInfo;
+   my_create_info.presentMode = VK_PRESENT_MODE_FIFO_KHR;
+   TRY_LOG(sc->init(device, &my_create_info), "Failed to initialise swapchain");
 
    TRY_LOG(device_data.add_layer_swapchain(reinterpret_cast<VkSwapchainKHR>(sc.get())),
            "Failed to associate swapchain with the layer");

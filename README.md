@@ -102,11 +102,12 @@ the `KERNEL_HEADER_DIR` option must be defined as the directory that includes th
 source.
 
 ```
-cmake . -DVULKAN_CXX_INCLUDE="path/to/vulkan-header" \
+cmake . -DCMAKE_BUILD_TYPE=Release \
         -DBUILD_WSI_HEADLESS=0 \
         -DBUILD_WSI_WAYLAND=1 \
-        -DSELECT_EXTERNAL_ALLOCATOR=ion \
-        -DKERNEL_HEADER_DIR="path/to/linux-kernel-headers"
+        -DSELECT_EXTERNAL_ALLOCATOR=dma_buf_heaps \
+        -DWSIALLOC_MEMORY_HEAP_NAME=system-uncached \
+        -DENABLE_WAYLAND_FIFO_PRESENTATION_THREAD=1
 ```
 
 In the command line above, `-DBUILD_WSI_HEADLESS=0` is used to disable support

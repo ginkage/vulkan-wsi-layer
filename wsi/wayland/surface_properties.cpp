@@ -89,7 +89,7 @@ VkResult surface_properties::get_surface_capabilities(VkPhysicalDevice physical_
 
    /* Composite alpha */
    pSurfaceCapabilities->supportedCompositeAlpha = static_cast<VkCompositeAlphaFlagBitsKHR>(
-      VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR | VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR);
+      VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR | VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR | VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR);
    return VK_SUCCESS;
 }
 
@@ -338,7 +338,7 @@ static bool check_wl_protocols(struct wl_display *display)
       return false;
    }
 
-   return (supported.dmabuf && supported.explicit_sync);
+   return (supported.dmabuf /* && supported.explicit_sync */);
 }
 
 VWL_VKAPI_CALL(VkBool32)
