@@ -313,6 +313,13 @@ VKAPI_ATTR VkResult create_device(VkPhysicalDevice physicalDevice, const VkDevic
       }
    }
 
+   VkPhysicalDeviceFeatures enabled_features;
+   if (pCreateInfo->pEnabledFeatures) {
+      enabled_features = *(pCreateInfo->pEnabledFeatures);
+      enabled_features.textureCompressionBC = false;
+      modified_info.pEnabledFeatures = &enabled_features;
+   }
+
    /* Now call create device on the chain further down the list. */
    TRY_LOG(fpCreateDevice(physicalDevice, &modified_info, pAllocator, pDevice), "Failed to create the device");
 
