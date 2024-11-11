@@ -496,16 +496,19 @@ void swapchain::present_image(const pending_present_request &pending_present)
 
    wl_surface_attach(m_surface, image_data->buffer, 0, 0);
 
-   auto present_sync_fd = image_data->present_fence.export_sync_fd();
-   if (!present_sync_fd.has_value())
+   if (m_wsi_surface->get_surface_sync_interface() != nullptr)
    {
-      WSI_LOG_ERROR("Failed to export present fence.");
-      set_error_state(VK_ERROR_SURFACE_LOST_KHR);
-   }
-   else if (present_sync_fd->is_valid())
-   {
-      zwp_linux_surface_synchronization_v1_set_acquire_fence(m_wsi_surface->get_surface_sync_interface(),
-                                                             present_sync_fd->get());
+      auto present_sync_fd = image_data->present_fence.export_sync_fd();
+      if (!present_sync_fd.has_value())
+      {
+         WSI_LOG_ERROR("Failed to export present fence.");
+         set_error_state(VK_ERROR_SURFACE_LOST_KHR);
+      }
+      else if (present_sync_fd->is_valid())
+      {
+         zwp_linux_surface_synchronization_v1_set_acquire_fence(m_wsi_surface->get_surface_sync_interface(),
+                                                                present_sync_fd->get());
+      }
    }
 
    /* TODO: work out damage */
@@ -623,8 +626,14 @@ VkResult swapchain::image_set_present_payload(swapchain_image &image, VkQueue qu
    return image_data->present_fence.set_payload(queue, semaphores, submission_pnext);
 }
 
-VkResult swapchain::image_wait_present(swapchain_image &, uint64_t)
+VkResult swapchain::image_wait_present(swapchain_image &image, uint64_t timeout)
 {
+   if (m_wsi_surface->get_surface_sync_interface() == nullptr)
+   {
+      auto data = reinterpret_cast<wayland_image_data *>(image.data);
+      return data->present_fence.wait_payload(timeout);
+   }
+
    /* With explicit sync in use there is no need to wait for the present sync before submiting the image to the
     * compositor. */
    return VK_SUCCESS;
