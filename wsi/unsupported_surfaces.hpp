@@ -42,8 +42,7 @@ namespace wsi
 {
 /* A list of platform-specific unsupported surface extensions
    Not using the extension macros and symbols due to missing definitions for native platform symbols. */
-static constexpr std::array unsupported_surfaces_ext_array = { "VK_KHR_win32_surface", "VK_KHR_xlib_surface",
-                                                               "VK_KHR_xcb_surface", "VK_EXT_metal_surface",
+static constexpr std::array unsupported_surfaces_ext_array = { "VK_KHR_win32_surface", "VK_EXT_metal_surface",
                                                                "VK_KHR_android_surface" };
 
 } // namespace wsi

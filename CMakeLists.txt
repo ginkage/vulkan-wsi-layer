@@ -57,6 +57,7 @@ endif()
 
 # Backend support
 option(BUILD_WSI_HEADLESS "Build with support for VK_EXT_headless_surface" ON)
+option(BUILD_WSI_X11 "Build with support for VK_KHR_xcb_surface" OFF)
 option(BUILD_WSI_WAYLAND "Build with support for VK_KHR_wayland_surface" OFF)
 option(BUILD_WSI_DISPLAY "Build with support for VK_KHR_display" OFF)
 
@@ -74,7 +75,7 @@ option(ENABLE_WAYLAND_FIFO_PRESENTATION_THREAD "Enable the non-conformant FIFO p
 # VK_EXT_frame_boundary then the layer will not pass its own frame boundary events.
 option(ENABLE_INSTRUMENTATION "Pass frame boundary events by using VK_EXT_frame_boundary" OFF)
 
-if(BUILD_WSI_WAYLAND OR BUILD_WSI_DISPLAY)
+if(BUILD_WSI_WAYLAND OR BUILD_WSI_DISPLAY OR BUILD_WSI_X11)
    set(BUILD_DRM_UTILS true)
    if(SELECT_EXTERNAL_ALLOCATOR STREQUAL "none")
       message(FATAL_ERROR "WSI only supported with an external allocator.")
@@ -262,6 +263,42 @@ else()
    list(APPEND JSON_COMMANDS COMMAND sed -i '/VK_KHR_display/d' ${CMAKE_CURRENT_BINARY_DIR}/VkLayer_window_system_integration.json)
 endif()
 
+# X11 WSI
+if(BUILD_WSI_X11)
+   set(CMAKE_BUILD_TYPE "Debug")
+
+   add_library(wsi_x11 STATIC
+      wsi/x11/drm_display.cpp
+      wsi/x11/surface_properties.cpp
+      wsi/x11/surface.cpp
+      wsi/x11/swapchain.cpp)
+
+   pkg_check_modules(LIBDRM REQUIRED libdrm)
+   message(STATUS "Using libdrm include directories: ${LIBDRM_INCLUDE_DIRS}")
+   message(STATUS "Using libdrm ldflags: ${LIBDRM_LDFLAGS}")
+
+   target_include_directories(wsi_x11 PRIVATE
+      ${PROJECT_SOURCE_DIR}
+      ${VULKAN_CXX_INCLUDE}
+      ${CMAKE_CURRENT_BINARY_DIR})
+
+   target_include_directories(wsi_x11 PUBLIC
+      ${LIBDRM_INCLUDE_DIRS})
+
+   target_compile_options(wsi_x11 INTERFACE "-DBUILD_WSI_X11=1")
+   target_link_libraries(wsi_x11 ${LIBDRM_LDFLAGS} drm)
+   target_link_libraries(wsi_x11 drm_utils)
+   if(NOT EXTERNAL_WSIALLOC_LIBRARY STREQUAL "")
+      target_link_libraries(wsi_x11 ${EXTERNAL_WSIALLOC_LIBRARY})
+   else()
+      target_link_libraries(wsi_x11 wsialloc)
+   endif()
+   list(APPEND LINK_WSI_LIBS wsi_x11 xcb xcb-present xcb-xfixes xcb-dri3 X11-xcb)
+else()
+   list(APPEND JSON_COMMANDS COMMAND sed -i '/VK_KHR_xcb_surface/d' ${CMAKE_CURRENT_BINARY_DIR}/VkLayer_window_system_integration.json)
+   list(APPEND JSON_COMMANDS COMMAND sed -i '/VK_KHR_xlib_surface/d' ${CMAKE_CURRENT_BINARY_DIR}/VkLayer_window_system_integration.json)
+endif()
+
 # Layer
 add_library(${PROJECT_NAME} SHARED
    layer/layer.cpp
@@ -314,3 +351,6 @@ target_link_libraries(${PROJECT_NAME} ${LINK_WSI_LIBS})
 add_custom_target(manifest_json ALL COMMAND
    cp ${PROJECT_SOURCE_DIR}/layer/VkLayer_window_system_integration.json ${CMAKE_CURRENT_BINARY_DIR}
    ${JSON_COMMANDS})
+
+install(TARGETS ${PROJECT_NAME} DESTINATION share/vulkan/implicit_layer.d/)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/VkLayer_window_system_integration.json DESTINATION share/vulkan/implicit_layer.d/)
