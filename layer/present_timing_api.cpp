@@ -29,11 +29,12 @@
  */
 #include <cassert>
 #include "wsi_layer_experimental.hpp"
-#include "wsi/swapchain_base.hpp"
+
+#include <wsi/extensions/present_timing.hpp>
+#include <wsi/swapchain_base.hpp>
 #include "util/macros.hpp"
 
 #if VULKAN_WSI_LAYER_EXPERIMENTAL
-
 /**
  * @brief Implements vkSetSwapchainPresentTimingQueueSizeEXT Vulkan entrypoint.
  */
@@ -43,7 +44,9 @@ wsi_layer_vkSetSwapchainPresentTimingQueueSizeEXT(VkDevice device, VkSwapchainKH
    UNUSED(device);
    assert(swapchain != VK_NULL_HANDLE);
    auto *sc = reinterpret_cast<wsi::swapchain_base *>(swapchain);
-   return sc->presentation_timing_queue_set_size(size);
+
+   auto *ext = sc->get_swapchain_extension<wsi::wsi_ext_present_timing>(true);
+   return ext->present_timing_queue_set_size(size);
 }
 
 /**
@@ -77,8 +80,11 @@ wsi_layer_vkGetSwapchainTimeDomainPropertiesEXT(
       return device_data.disp.GetSwapchainTimeDomainPropertiesEXT(device, swapchain, pTimeDomainsCounter,
                                                                   pSwapchainTimeDomainProperties);
    }
+
    auto *sc = reinterpret_cast<wsi::swapchain_base *>(swapchain);
-   return sc->set_swapchain_time_domain_properties(pSwapchainTimeDomainProperties, pTimeDomainsCounter);
+   auto *ext = sc->get_swapchain_extension<wsi::wsi_ext_present_timing>(true);
+   return ext->get_swapchain_time_domains().get_swapchain_time_domain_properties(pSwapchainTimeDomainProperties,
+                                                                                 pTimeDomainsCounter);
 }
 
 /**

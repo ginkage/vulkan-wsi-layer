@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2019, 2021-2024 Arm Limited.
+ * Copyright (c) 2017-2019, 2021-2025 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -122,12 +122,10 @@ static uint32_t fill_supported_formats(VkPhysicalDevice physical_device,
 
       if (res == VK_SUCCESS)
       {
-#if WSI_IMAGE_COMPRESSION_CONTROL_SWAPCHAIN
          if (layer::instance_private_data::get(physical_device).has_image_compression_support(physical_device))
          {
             formats[format_count].add_device_compression_support(physical_device, format_info);
          }
-#endif
          format_count++;
       }
    }

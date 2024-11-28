@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Arm Limited.
+ * Copyright (c) 2024-2025 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -25,19 +25,19 @@
 /**
  * @file frame_boundary.cpp
  *
- * @brief Contains the functionality for frame boundary handling.
+ * @brief Contains the implementation for the VK_EXT_frame_boundary extension.
  */
-
 #include "frame_boundary.hpp"
 
 namespace wsi
 {
-frame_boundary_handler::frame_boundary_handler(const layer::device_private_data &device_data)
+
+wsi_ext_frame_boundary::wsi_ext_frame_boundary(const layer::device_private_data &device_data)
    : m_handle_frame_boundary_events(device_data.should_layer_handle_frame_boundary_events())
 {
 }
 
-std::optional<VkFrameBoundaryEXT> frame_boundary_handler::handle_frame_boundary_event(
+std::optional<VkFrameBoundaryEXT> wsi_ext_frame_boundary::handle_frame_boundary_event(
    const VkPresentInfoKHR *present_info, VkImage *current_image_to_be_presented)
 {
    /* If frame boundary feature is not enabled by the application, the layer will
@@ -74,12 +74,12 @@ std::optional<VkFrameBoundaryEXT> create_frame_boundary(const VkPresentInfoKHR &
    return std::nullopt;
 }
 
-bool frame_boundary_handler::should_layer_handle_frame_boundary_events() const
+bool wsi_ext_frame_boundary::should_layer_handle_frame_boundary_events() const
 {
    return m_handle_frame_boundary_events;
 }
 
-VkFrameBoundaryEXT frame_boundary_handler::create_frame_boundary(VkImage *image)
+VkFrameBoundaryEXT wsi_ext_frame_boundary::create_frame_boundary(VkImage *image)
 {
    VkFrameBoundaryEXT frame_boundary{};
    frame_boundary.pNext = nullptr;
@@ -105,6 +105,18 @@ VkFrameBoundaryEXT frame_boundary_handler::create_frame_boundary(VkImage *image)
    frame_boundary.pTag = nullptr;
 
    return frame_boundary;
+}
+
+std::optional<VkFrameBoundaryEXT> handle_frame_boundary_event(const VkPresentInfoKHR *present_info,
+                                                              VkImage *current_image_to_be_presented,
+                                                              wsi::wsi_ext_frame_boundary *frame_boundary)
+{
+   if (frame_boundary)
+   {
+      return frame_boundary->handle_frame_boundary_event(present_info, current_image_to_be_presented);
+   }
+
+   return create_frame_boundary(*present_info);
 }
 
 }

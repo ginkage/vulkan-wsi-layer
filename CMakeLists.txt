@@ -65,7 +65,6 @@ set(EXTERNAL_WSIALLOC_LIBRARY "" CACHE STRING "External implementation of the ws
 set(WSIALLOC_MEMORY_HEAP_NAME "linux,cma" CACHE STRING "Heap name used by the dma_buf_heaps allocator")
 
 # Optional features
-option(BUILD_WSI_IMAGE_COMPRESSION_CONTROL_SWAPCHAIN "Build with support for VK_EXT_image_compression_control_swapchain" OFF)
 option(BUILD_WSI_DISPLAY_SUPPORT_FORMAT_MODIFIERS "Build with support for format modifiers in VK_KHR_display" ON)
 option(VULKAN_WSI_LAYER_EXPERIMENTAL "Enable the Vulkan WSI Experimental features" OFF)
 option(ENABLE_WAYLAND_FIFO_PRESENTATION_THREAD "Enable the non-conformant FIFO presentation thread implementation in the Wayland backend" OFF)
@@ -268,14 +267,18 @@ add_library(${PROJECT_NAME} SHARED
    util/log.cpp
    util/format_modifiers.cpp
    wsi/external_memory.cpp
-   wsi/frame_boundary.cpp
+   wsi/extensions/image_compression_control.cpp
+   wsi/extensions/present_id.cpp
+   wsi/extensions/frame_boundary.cpp
+   wsi/extensions/wsi_extension.cpp
+   wsi/extensions/swapchain_maintenance.cpp
    wsi/surface_properties.cpp
    wsi/swapchain_base.cpp
    wsi/synchronization.cpp
    wsi/wsi_factory.cpp)
 if (VULKAN_WSI_LAYER_EXPERIMENTAL)
-   target_sources(${PROJECT_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/layer/present_timing.cpp)
-   target_sources(${PROJECT_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/wsi/time_domains.cpp)
+   target_sources(${PROJECT_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/layer/present_timing_api.cpp)
+   target_sources(${PROJECT_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/wsi/extensions/present_timing.cpp)
    add_definitions("-DVULKAN_WSI_LAYER_EXPERIMENTAL=1")
 else()
    list(APPEND JSON_COMMANDS COMMAND sed -i '/VK_EXT_present_timing/d' ${CMAKE_CURRENT_BINARY_DIR}/VkLayer_window_system_integration.json)
@@ -286,13 +289,6 @@ endif()
 target_compile_definitions(${PROJECT_NAME} PRIVATE ${WSI_DEFINES})
 target_include_directories(${PROJECT_NAME} PRIVATE
         ${PROJECT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR} ${VULKAN_CXX_INCLUDE})
-
-if (BUILD_WSI_IMAGE_COMPRESSION_CONTROL_SWAPCHAIN)
-   add_definitions("-DWSI_IMAGE_COMPRESSION_CONTROL_SWAPCHAIN=1")
-else()
-   add_definitions("-DWSI_IMAGE_COMPRESSION_CONTROL_SWAPCHAIN=0")
-   list(APPEND JSON_COMMANDS COMMAND sed -i '/VK_EXT_image_compression_control_swapchain/d' ${CMAKE_CURRENT_BINARY_DIR}/VkLayer_window_system_integration.json)
-endif()
 
 if (BUILD_WSI_DISPLAY_SUPPORT_FORMAT_MODIFIERS)
    add_definitions("-DWSI_DISPLAY_SUPPORT_FORMAT_MODIFIERS=1")

@@ -31,11 +31,15 @@
 #include <cassert>
 #include <cstdlib>
 
+#include "swapchain.hpp"
+
+#include <util/custom_allocator.hpp>
 #include <util/timed_semaphore.hpp>
 
-#include "swapchain.hpp"
-#include "layer/wsi_layer_experimental.hpp"
-#include "util/custom_allocator.hpp"
+#include <wsi/extensions/present_id.hpp>
+#include <wsi/extensions/present_timing.hpp>
+#include <wsi/extensions/swapchain_maintenance.hpp>
+#include <wsi/extensions/image_compression_control.hpp>
 #include "util/macros.hpp"
 
 namespace wsi
@@ -52,9 +56,6 @@ struct image_data
 
 swapchain::swapchain(layer::device_private_data &dev_data, const VkAllocationCallbacks *pAllocator)
    : wsi::swapchain_base(dev_data, pAllocator)
-#if WSI_IMAGE_COMPRESSION_CONTROL_SWAPCHAIN
-   , m_image_compression_control{}
-#endif
 {
 }
 
@@ -62,6 +63,55 @@ swapchain::~swapchain()
 {
    /* Call the base's teardown */
    teardown();
+}
+
+VkResult swapchain::add_required_extensions(VkDevice device, const VkSwapchainCreateInfoKHR *swapchain_create_info)
+{
+   auto compression_control = wsi_ext_image_compression_control::create(device, swapchain_create_info);
+   if (compression_control)
+   {
+      if (!add_swapchain_extension(m_allocator.make_unique<wsi_ext_image_compression_control>(*compression_control)))
+      {
+         return VK_ERROR_OUT_OF_HOST_MEMORY;
+      }
+   }
+
+   if (m_device_data.is_present_id_enabled())
+   {
+      if (!add_swapchain_extension(m_allocator.make_unique<wsi_ext_present_id>()))
+      {
+         return VK_ERROR_OUT_OF_HOST_MEMORY;
+      }
+   }
+
+   if (m_device_data.is_swapchain_maintenance1_enabled())
+   {
+      if (!add_swapchain_extension(m_allocator.make_unique<wsi_ext_swapchain_maintenance1>(m_allocator)))
+      {
+         return VK_ERROR_OUT_OF_HOST_MEMORY;
+      }
+   }
+
+   if (m_device_data.should_layer_handle_frame_boundary_events())
+   {
+      if (!add_swapchain_extension(m_allocator.make_unique<wsi_ext_frame_boundary>(m_device_data)))
+      {
+         return VK_ERROR_OUT_OF_HOST_MEMORY;
+      }
+   }
+
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+   bool swapchain_support_enabled = swapchain_create_info->flags & VK_SWAPCHAIN_CREATE_PRESENT_TIMING_BIT_EXT;
+   if (swapchain_support_enabled)
+   {
+      if (!add_swapchain_extension(wsi_ext_present_timing_headless::create(m_allocator)))
+      {
+         return VK_ERROR_OUT_OF_HOST_MEMORY;
+      }
+   }
+#endif
+
+   return VK_SUCCESS;
 }
 
 VkResult swapchain::init_platform(VkDevice device, const VkSwapchainCreateInfoKHR *swapchain_create_info,
@@ -76,27 +126,6 @@ VkResult swapchain::init_platform(VkDevice device, const VkSwapchainCreateInfoKH
    {
       use_presentation_thread = true;
    }
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
-   std::array<util::unique_ptr<wsi::vulkan_time_domain>, 4> time_domains_array = {
-      m_allocator.make_unique<wsi::vulkan_time_domain>(VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT,
-                                                       VK_TIME_DOMAIN_DEVICE_KHR),
-      m_allocator.make_unique<wsi::vulkan_time_domain>(VK_PRESENT_STAGE_IMAGE_LATCHED_BIT_EXT,
-                                                       VK_TIME_DOMAIN_CLOCK_MONOTONIC_RAW_KHR),
-      m_allocator.make_unique<wsi::vulkan_time_domain>(VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_OUT_BIT_EXT,
-                                                       VK_TIME_DOMAIN_CLOCK_MONOTONIC_RAW_KHR),
-      m_allocator.make_unique<wsi::vulkan_time_domain>(VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_VISIBLE_BIT_EXT,
-                                                       VK_TIME_DOMAIN_CLOCK_MONOTONIC_RAW_KHR)
-   };
-
-   for (auto &time_domain : time_domains_array)
-   {
-      if (!m_time_domains.m_time_domains.try_push_back(std::move(time_domain)))
-      {
-         WSI_LOG_ERROR("Failed to add a time domain to m_time_domains.");
-         return VK_ERROR_OUT_OF_HOST_MEMORY;
-      }
-   }
-#endif
 
    return VK_SUCCESS;
 }
@@ -169,27 +198,32 @@ VkResult swapchain::allocate_and_bind_swapchain_image(VkImageCreateInfo image_cr
 VkResult swapchain::create_swapchain_image(VkImageCreateInfo image_create_info, swapchain_image &image)
 {
    m_image_create_info = image_create_info;
-#if WSI_IMAGE_COMPRESSION_CONTROL_SWAPCHAIN
+   VkImageCompressionControlEXT image_compression_control = {};
+
    if (m_device_data.is_swapchain_compression_control_enabled())
    {
-      /* Initialize compression control */
-      m_image_compression_control.sType = VK_STRUCTURE_TYPE_IMAGE_COMPRESSION_CONTROL_EXT;
-      m_image_compression_control.compressionControlPlaneCount =
-         m_image_compression_control_params.compression_control_plane_count;
-      m_image_compression_control.flags = m_image_compression_control_params.flags;
-      m_image_compression_control.pFixedRateFlags = m_image_compression_control_params.fixed_rate_flags.data();
-      m_image_compression_control.pNext = m_image_create_info.pNext;
-
-      m_image_create_info.pNext = &m_image_compression_control;
+      auto *ext = get_swapchain_extension<wsi_ext_image_compression_control>();
+      /* For image compression control, additional requirements to be satisfied such as
+       * existence of VkImageCompressionControlEXT in swaphain_create_info for
+       * the ext to be added to the list. So we check whether we got a valid pointer
+       * and proceed if yes. */
+      if (ext)
+      {
+         image_compression_control = ext->get_compression_control_properties();
+         image_compression_control.pNext = m_image_create_info.pNext;
+         m_image_create_info.pNext = &image_compression_control;
+      }
    }
-#endif
-
    return m_device_data.disp.CreateImage(m_device, &m_image_create_info, get_allocation_callbacks(), &image.image);
 }
 
 void swapchain::present_image(const pending_present_request &pending_present)
 {
-   set_present_id(pending_present.present_id);
+   if (m_device_data.is_present_id_enabled())
+   {
+      auto *ext = get_swapchain_extension<wsi_ext_present_id>(true);
+      ext->set_present_id(pending_present.present_id);
+   }
    unpresent_image(pending_present.image_index);
 }
 

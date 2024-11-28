@@ -31,17 +31,14 @@
 #pragma once
 
 #include <vulkan/vulkan.h>
-#include "util/extension_list.hpp"
+#include "layer/wsi_layer_experimental.hpp"
 #include "layer/private_data.hpp"
 #include "util/custom_allocator.hpp"
-#include "util/log.hpp"
-#include "util/format_modifiers.hpp"
 #include "util/drm/drm_utils.hpp"
+#include "util/extension_list.hpp"
+#include "util/format_modifiers.hpp"
+#include "util/log.hpp"
 #include "util/macros.hpp"
-
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
-#include "layer/wsi_layer_experimental.hpp"
-#endif
 
 namespace wsi
 {
@@ -135,10 +132,8 @@ class surface_format_properties
 public:
    surface_format_properties(VkFormat format)
       : m_surface_format{ format, VK_COLORSPACE_SRGB_NONLINEAR_KHR }
-#if WSI_IMAGE_COMPRESSION_CONTROL_SWAPCHAIN
       , m_compression{ VK_STRUCTURE_TYPE_IMAGE_COMPRESSION_PROPERTIES_EXT, nullptr, VK_IMAGE_COMPRESSION_DEFAULT_EXT,
                        VK_IMAGE_COMPRESSION_FIXED_RATE_NONE_EXT }
-#endif
    {
    }
 
@@ -149,10 +144,8 @@ public:
 
    VkResult check_device_support(VkPhysicalDevice phys_dev, VkPhysicalDeviceImageFormatInfo2 image_format_info);
 
-#if WSI_IMAGE_COMPRESSION_CONTROL_SWAPCHAIN
    VkResult add_device_compression_support(VkPhysicalDevice phys_dev,
                                            VkPhysicalDeviceImageFormatInfo2 image_format_info);
-#endif
 
    void fill_format_properties(VkSurfaceFormat2KHR &surf_format) const;
 
@@ -168,10 +161,8 @@ public:
 
    VkSurfaceFormatKHR m_surface_format;
 
-#if WSI_IMAGE_COMPRESSION_CONTROL_SWAPCHAIN
 private:
    VkImageCompressionPropertiesEXT m_compression;
-#endif
 };
 
 /**

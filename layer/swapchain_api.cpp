@@ -32,12 +32,14 @@
 #include <cstdlib>
 #include <new>
 
-#include <wsi/wsi_factory.hpp>
-
 #include "private_data.hpp"
 #include "swapchain_api.hpp"
+
 #include <util/helpers.hpp>
-#include "wsi/synchronization.hpp"
+
+#include <wsi/synchronization.hpp>
+#include <wsi/wsi_factory.hpp>
+#include <wsi/extensions/frame_boundary.hpp>
 #include "util/macros.hpp"
 
 VWL_VKAPI_CALL(VkResult)
@@ -226,7 +228,8 @@ wsi_layer_vkQueuePresentKHR(VkQueue queue, const VkPresentInfoKHR *pPresentInfo)
 #if VULKAN_WSI_LAYER_EXPERIMENTAL
       if (present_timings_info)
       {
-         present_params.present_timing_info = &(present_timings_info->pTimingInfos[i]);
+         present_params.m_present_timing_info = present_timings_info->pTimingInfos[i];
+         present_params.m_present_timing_info.pNext = nullptr;
       }
 #endif
       VkResult res = sc->queue_present(queue, present_info, present_params);

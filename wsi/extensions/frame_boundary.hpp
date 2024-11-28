@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Arm Limited.
+ * Copyright (c) 2024-2025 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -25,7 +25,7 @@
 /**
  * @file frame_boundary.hpp
  *
- * @brief Contains the functionality for frame boundary handling.
+ * @brief Contains the implementation for the VK_EXT_frame_boundary extension.
  */
 
 #pragma once
@@ -33,14 +33,31 @@
 #include <vulkan/vulkan.h>
 #include <layer/private_data.hpp>
 
+#include <util/custom_allocator.hpp>
+#include <util/macros.hpp>
+
 #include <optional>
+
+#include "wsi_extension.hpp"
 
 namespace wsi
 {
-class frame_boundary_handler
+
+/**
+ * @brief Frame boundary extension class
+ *
+ * This class defines the frame boundary extension
+ * features.
+ */
+class wsi_ext_frame_boundary : public wsi_ext
 {
 public:
-   frame_boundary_handler(const layer::device_private_data &device_data);
+   /**
+    * @brief The name of the extension.
+    */
+   WSI_DEFINE_EXTENSION(VK_EXT_FRAME_BOUNDARY_EXTENSION_NAME);
+
+   wsi_ext_frame_boundary(const layer::device_private_data &device_data);
 
    /**
     * @brief Handle frame boundary event at present time
@@ -86,4 +103,15 @@ private:
  */
 std::optional<VkFrameBoundaryEXT> create_frame_boundary(const VkPresentInfoKHR &present_info);
 
-}
+/**
+ * @brief Handle frame boundary event at present time
+ *
+ * @param present_info Information about the swapchain and image to be presented.
+ * @param current_image_to_be_presented Address to the currently to be presented image
+ * @param frame_boundary Frame boundary extension for current backend or nullptr if not enabled.
+ */
+std::optional<VkFrameBoundaryEXT> handle_frame_boundary_event(const VkPresentInfoKHR *present_info,
+                                                              VkImage *current_image_to_be_presented,
+                                                              wsi::wsi_ext_frame_boundary *frame_boundary);
+
+} /* namespace wsi */

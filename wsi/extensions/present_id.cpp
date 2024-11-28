@@ -23,36 +23,22 @@
  */
 
 /**
- * @file swapchain_maintenance_api.cpp
+ * @file present_id.cpp
  *
- * @brief Contains the Vulkan entrypoints for the swapchain maintenance.
+ * @brief Contains the implementation for the VK_KHR_present_id extension.
  */
+#include "present_id.hpp"
 
-#include <cassert>
-#include "private_data.hpp"
-#include "swapchain_maintenance_api.hpp"
-
-#include <wsi/wsi_factory.hpp>
-
-VWL_VKAPI_CALL(VkResult)
-wsi_layer_vkReleaseSwapchainImagesEXT(VkDevice device, const VkReleaseSwapchainImagesInfoEXT *pReleaseInfo) VWL_API_POST
+namespace wsi
 {
-   if (pReleaseInfo == nullptr || pReleaseInfo->imageIndexCount == 0)
+
+void wsi_ext_present_id::set_present_id(uint64_t value)
+{
+   if (value != 0)
    {
-      return VK_SUCCESS;
+      assert(value > m_present_id);
+      m_present_id = value;
    }
-
-   assert(pReleaseInfo->pImageIndices != nullptr);
-   assert(pReleaseInfo->swapchain != VK_NULL_HANDLE);
-
-   auto &device_data = layer::device_private_data::get(device);
-   if (!device_data.layer_owns_swapchain(pReleaseInfo->swapchain))
-   {
-      return device_data.disp.ReleaseSwapchainImagesEXT(device, pReleaseInfo);
-   }
-
-   auto *sc = reinterpret_cast<wsi::swapchain_base *>(pReleaseInfo->swapchain);
-   sc->release_images(pReleaseInfo->imageIndexCount, pReleaseInfo->pImageIndices);
-
-   return VK_SUCCESS;
 }
+
+};
