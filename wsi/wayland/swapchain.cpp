@@ -47,6 +47,8 @@
 #include <wsi/extensions/present_id.hpp>
 #include <wsi/extensions/swapchain_maintenance.hpp>
 
+#include "present_timing_handler.hpp"
+
 namespace wsi
 {
 namespace wayland

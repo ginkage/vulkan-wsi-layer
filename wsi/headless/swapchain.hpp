@@ -33,7 +33,6 @@
 #include <vulkan/vk_icd.h>
 #include <vulkan/vulkan.h>
 
-#include <wsi/extensions/present_timing.hpp>
 #include <wsi/swapchain_base.hpp>
 
 namespace wsi
@@ -137,40 +136,5 @@ private:
    VkResult add_required_extensions(VkDevice device, const VkSwapchainCreateInfoKHR *swapchain_create_info) override;
 };
 
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
-/**
- * @brief Present timing extension class
- *
- * This class implements present timing features declarations that are specific to the headless backend.
- */
-class wsi_ext_present_timing_headless : public wsi_ext_present_timing
-{
-public:
-   static util::unique_ptr<wsi_ext_present_timing_headless> create(const util::allocator &allocator)
-   {
-      std::array<util::unique_ptr<wsi::vulkan_time_domain>, 4> time_domains_array = {
-         allocator.make_unique<wsi::vulkan_time_domain>(VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT,
-                                                        VK_TIME_DOMAIN_DEVICE_KHR),
-         allocator.make_unique<wsi::vulkan_time_domain>(VK_PRESENT_STAGE_IMAGE_LATCHED_BIT_EXT,
-                                                        VK_TIME_DOMAIN_CLOCK_MONOTONIC_RAW_KHR),
-         allocator.make_unique<wsi::vulkan_time_domain>(VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_OUT_BIT_EXT,
-                                                        VK_TIME_DOMAIN_CLOCK_MONOTONIC_RAW_KHR),
-         allocator.make_unique<wsi::vulkan_time_domain>(VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_VISIBLE_BIT_EXT,
-                                                        VK_TIME_DOMAIN_CLOCK_MONOTONIC_RAW_KHR)
-      };
-
-      return wsi_ext_present_timing::create<wsi_ext_present_timing_headless>(allocator, time_domains_array);
-   }
-
-private:
-   wsi_ext_present_timing_headless(const util::allocator &allocator)
-      : wsi_ext_present_timing(allocator)
-   {
-   }
-
-   /* Allow util::allocator to access the private constructor */
-   friend util::allocator;
-};
-#endif
 } /* namespace headless */
 } /* namespace wsi */

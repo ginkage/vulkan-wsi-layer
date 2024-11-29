@@ -243,6 +243,17 @@ public:
     */
    swapchain_time_domains &get_swapchain_time_domains();
 
+   /**
+    * @brief Backend specific implementation of the vkGetSwapchainTimingPropertiesEXT
+    * entrypoint.
+    *
+    * @param timing_properties_counter Timing properties counter.
+    * @param timing_properties Timing properties.
+    * @return Vulkan result code.
+    */
+   virtual VkResult get_swapchain_timing_properties(uint64_t &timing_properties_counter,
+                                                    VkSwapchainTimingPropertiesEXT &timing_properties) = 0;
+
 protected:
    /**
     * @brief User provided memory allocation callbacks.

@@ -42,7 +42,6 @@ extern "C" {
 #include "wl_object_owner.hpp"
 
 #include <wsi/external_memory.hpp>
-#include <wsi/extensions/present_timing.hpp>
 
 namespace wsi
 {
@@ -233,34 +232,5 @@ private:
                                            util::vector<VkDrmFormatModifierPropertiesEXT> &drm_format_props);
 };
 
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
-/**
- * @brief Present timing extension class
- *
- * This class implements present timing features declarations that are specific to the wayland backend.
- */
-class wsi_ext_present_timing_wayland : public wsi_ext_present_timing
-{
-public:
-   static util::unique_ptr<wsi_ext_present_timing_wayland> create(const util::allocator &allocator)
-   {
-      std::array<util::unique_ptr<wsi::vulkan_time_domain>, 1> time_domains_array = {
-         allocator.make_unique<vulkan_time_domain>(VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT,
-                                                   VK_TIME_DOMAIN_DEVICE_KHR)
-      };
-
-      return wsi_ext_present_timing::create<wsi_ext_present_timing_wayland>(allocator, time_domains_array);
-   }
-
-private:
-   wsi_ext_present_timing_wayland(const util::allocator &allocator)
-      : wsi_ext_present_timing(allocator)
-   {
-   }
-
-   /* Allow util::allocator to access the private constructor */
-   friend util::allocator;
-};
-#endif
 } // namespace wayland
 } // namespace wsi

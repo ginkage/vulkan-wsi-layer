@@ -51,10 +51,6 @@ VkResult instance_dispatch_table::populate(VkInstance instance, PFN_vkGetInstanc
    { "vk" #name, ext_name, nullptr, api_version, false, required },
       INSTANCE_ENTRYPOINTS_LIST(DISPATCH_TABLE_ENTRY)
 #undef DISPATCH_TABLE_ENTRY
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
-         { "GetSwapchainTimeDomainPropertiesEXT", VK_EXT_PRESENT_TIMING_EXTENSION_NAME, nullptr, API_VERSION_MAX, false,
-           false }
-#endif /* VULKAN_WSI_LAYER_EXPERIMENTAL */
    };
 
    static constexpr auto num_entrypoints = std::distance(std::begin(entrypoints_init), std::end(entrypoints_init));

@@ -37,10 +37,11 @@
 #include <util/timed_semaphore.hpp>
 
 #include <wsi/extensions/present_id.hpp>
-#include <wsi/extensions/present_timing.hpp>
 #include <wsi/extensions/swapchain_maintenance.hpp>
 #include <wsi/extensions/image_compression_control.hpp>
 #include "util/macros.hpp"
+
+#include "present_timing_handler.hpp"
 
 namespace wsi
 {

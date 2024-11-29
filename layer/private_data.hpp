@@ -340,6 +340,19 @@ private:
  * api_version: Vulkan API version where the entrypoint is part of the core specification, or API_VERSION_MAX.
  * required: Boolean to indicate whether the entrypoint is required by the WSI layer or optional.
  */
+
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+#define DEVICE_ENTRYPOINTS_LIST_EXPERIMENTAL(EP)                                                         \
+   EP(GetSwapchainTimeDomainPropertiesEXT, VK_EXT_PRESENT_TIMING_EXTENSION_NAME, API_VERSION_MAX, false) \
+   EP(GetSwapchainTimingPropertiesEXT, VK_EXT_PRESENT_TIMING_EXTENSION_NAME, API_VERSION_MAX, false)     \
+   EP(SetSwapchainPresentTimingQueueSizeEXT, VK_EXT_PRESENT_TIMING_EXTENSION_NAME, API_VERSION_MAX, false)
+#else
+#define DEVICE_ENTRYPOINTS_LIST_EXPERIMENTAL(EP)
+#endif
+
+/* Define a list of custom entrypoints that might rely on preprocessor conditions and similar */
+#define DEVICE_ENTRYPOINTS_LIST_EXPANSION(EP) DEVICE_ENTRYPOINTS_LIST_EXPERIMENTAL(EP)
+
 #define DEVICE_ENTRYPOINTS_LIST(EP)                                                                                \
    /* Vulkan 1.0 */                                                                                                \
    EP(GetDeviceProcAddr, "", VK_API_VERSION_1_0, true)                                                             \
@@ -403,7 +416,9 @@ private:
    EP(GetBufferMemoryRequirements2KHR, VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME, VK_API_VERSION_1_1, false) \
    EP(GetImageSparseMemoryRequirements2KHR, VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME, VK_API_VERSION_1_1,   \
       false)                                                                                                       \
-   EP(ReleaseSwapchainImagesEXT, VK_EXT_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME, VK_API_VERSION_1_1, false)
+   EP(ReleaseSwapchainImagesEXT, VK_EXT_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME, VK_API_VERSION_1_1, false)         \
+   /* Custom entrypoints */                                                                                        \
+   DEVICE_ENTRYPOINTS_LIST_EXPANSION(EP)
 
 /**
  * @brief Struct representing the device dispatch table.
@@ -458,15 +473,6 @@ public:
 
    DEVICE_ENTRYPOINTS_LIST(DISPATCH_TABLE_SHORTCUT)
 #undef DISPATCH_TABLE_SHORTCUT
-
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
-   template <class... Args>
-   auto GetSwapchainTimeDomainPropertiesEXT(Args &&...args) const
-   {
-      return call_fn<PFN_vkGetSwapchainTimeDomainPropertiesEXT>("vkGetSwapchainTimeDomainPropertiesEXT",
-                                                                std::forward<Args>(args)...);
-   };
-#endif
 
 private:
    /**

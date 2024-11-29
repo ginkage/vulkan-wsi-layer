@@ -134,6 +134,10 @@ if(BUILD_WSI_WAYLAND)
       wsi/wayland/wl_helpers.cpp
       wsi/wayland/swapchain.cpp)
 
+   if(VULKAN_WSI_LAYER_EXPERIMENTAL)
+      target_sources(wayland_wsi PRIVATE wsi/wayland/present_timing_handler.cpp)
+   endif()
+
    pkg_check_modules(WAYLAND_CLIENT REQUIRED wayland-client)
    message(STATUS "Using Wayland client include directories: ${WAYLAND_CLIENT_INCLUDE_DIRS}")
    message(STATUS "Using Wayland client cflags: ${WAYLAND_CLIENT_CFLAGS}")
@@ -208,6 +212,10 @@ if(BUILD_WSI_HEADLESS)
       wsi/headless/surface_properties.cpp
       wsi/headless/surface.cpp
       wsi/headless/swapchain.cpp)
+
+   if(VULKAN_WSI_LAYER_EXPERIMENTAL)
+      target_sources(wsi_headless PRIVATE wsi/headless/present_timing_handler.cpp)
+   endif()
 
    target_include_directories(wsi_headless PRIVATE
       ${PROJECT_SOURCE_DIR}
