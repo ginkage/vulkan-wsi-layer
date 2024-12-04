@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2024 Arm Limited.
+ * Copyright (c) 2018-2025 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -396,6 +396,16 @@ VkResult instance_private_data::set_instance_enabled_extensions(const char *cons
 bool instance_private_data::is_instance_extension_enabled(const char *extension_name) const
 {
    return enabled_extensions.contains(extension_name);
+}
+
+void instance_private_data::set_maintainance1_support(bool enabled_unsupport_ext)
+{
+   enabled_unsupported_swapchain_maintenance1_extensions = enabled_unsupport_ext;
+}
+
+bool instance_private_data::get_maintainance1_support()
+{
+   return enabled_unsupported_swapchain_maintenance1_extensions;
 }
 
 device_private_data::device_private_data(instance_private_data &inst_data, VkPhysicalDevice phys_dev, VkDevice dev,

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2021, 2023 Arm Limited.
+ * Copyright (c) 2019, 2021, 2023-2025 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -123,5 +123,18 @@ VkResult add_instance_extensions_required_by_layer(const util::wsi_platform_set 
  *         function isn't implemented for any platform.
  */
 PFN_vkVoidFunction get_proc_addr(const char *name, const layer::instance_private_data &instance_data);
+
+/**
+ * @brief Set swapchain maintenance1 features state, true or false.
+ *
+ * Sets the state of the swapchain maintenance1 extensions
+ * according to the supported enabled extensions.
+ *
+ * @param physical_device                   Vulkan physical_device.
+ * @param swapchain_maintenance_features    address of Vulkan swapchain maintenance capabilities struct.
+ *
+ */
+void set_swapchain_maintenance1_state(
+   VkPhysicalDevice physicalDevice, VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT *swapchain_maintenance1_features);
 
 } // namespace wsi

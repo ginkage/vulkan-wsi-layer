@@ -50,6 +50,12 @@ The ICDs installed in the system are required to support the following extension
   * VK_KHR_external_fence_fd
 * Any dependencies of the above extensions
 
+### Vulkan Header Version
+
+The Vulkan WSI Layer has been validated against Vulkan header version 1.4.299.
+
+If you are using a Vulkan header version newer than this, a warning will appear during compilation.
+
 ### Building the Vulkan® loader
 
 This step is not necessary if your system already has a loader and associated

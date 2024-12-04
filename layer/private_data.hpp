@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2024 Arm Limited.
+ * Copyright (c) 2018-2025 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -637,6 +637,22 @@ public:
    const instance_dispatch_table disp;
    const uint32_t api_version;
 
+   /**
+    * @brief Set if swapchain maintainance1 support is enabled.
+    *
+    * @param enabled_unsupport_ext True if it is enabled, false otherwise.
+    *
+    */
+   void set_maintainance1_support(bool enabled_unsupport_ext);
+
+   /**
+    * @brief Check if swapchain maintainance1 support is enabled.
+    *
+    * @return true if it is enabled, false otherwise.
+    *
+    */
+   bool get_maintainance1_support();
+
 private:
    /* Allow util::allocator to access the private constructor */
    friend util::allocator;
@@ -687,6 +703,11 @@ private:
     * @brief List with the names of the enabled instance extensions.
     */
    util::extension_list enabled_extensions;
+
+   /**
+    * @brief True if unsupported extensions are enabled.
+    */
+   bool enabled_unsupported_swapchain_maintenance1_extensions;
 };
 
 /**
