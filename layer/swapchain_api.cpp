@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, 2021-2024 Arm Limited.
+ * Copyright (c) 2017, 2019, 2021-2025 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -38,6 +38,7 @@
 #include "swapchain_api.hpp"
 #include <util/helpers.hpp>
 #include "wsi/synchronization.hpp"
+#include "util/macros.hpp"
 
 VWL_VKAPI_CALL(VkResult)
 wsi_layer_vkCreateSwapchainKHR(VkDevice device, const VkSwapchainCreateInfoKHR *pSwapchainCreateInfo,
@@ -246,6 +247,7 @@ VWL_VKAPI_CALL(VkResult)
 wsi_layer_vkGetDeviceGroupPresentCapabilitiesKHR(
    VkDevice device, VkDeviceGroupPresentCapabilitiesKHR *pDeviceGroupPresentCapabilities) VWL_API_POST
 {
+   UNUSED(device);
    assert(pDeviceGroupPresentCapabilities != nullptr);
 
    pDeviceGroupPresentCapabilities->presentMask[0] = 1;

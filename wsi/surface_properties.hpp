@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2019, 2021-2024 Arm Limited.
+ * Copyright (c) 2017-2019, 2021-2025 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -37,6 +37,7 @@
 #include "util/log.hpp"
 #include "util/format_modifiers.hpp"
 #include "util/drm/drm_utils.hpp"
+#include "util/macros.hpp"
 
 #if VULKAN_WSI_LAYER_EXPERIMENTAL
 #include "layer/wsi_layer_experimental.hpp"
@@ -83,6 +84,7 @@ public:
    virtual VkResult get_required_device_extensions(util::extension_list &extension_list)
    {
       /* Requires no additional extensions */
+      UNUSED(extension_list);
       return VK_SUCCESS;
    }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Arm Limited.
+ * Copyright (c) 2024-2025 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -111,7 +111,7 @@ public:
    void destroy_image(swapchain_image &image) override;
 
 private:
-   VkResult allocate_image(VkImageCreateInfo &image_create_info, display_image_data *image_data);
+   VkResult allocate_image(display_image_data *image_data);
 
    VkResult allocate_wsialloc(VkImageCreateInfo &image_create_info, display_image_data *image_data,
                               util::vector<wsialloc_format> &importable_formats, wsialloc_format *allocated_format,
@@ -122,8 +122,7 @@ private:
                                            util::vector<uint64_t> &exportable_modifers,
                                            util::vector<VkDrmFormatModifierPropertiesEXT> &drm_format_props);
 
-   VkResult create_framebuffer(const VkImageCreateInfo &image_create_info, swapchain_image &image,
-                               display_image_data *image_data);
+   VkResult create_framebuffer(const VkImageCreateInfo &image_create_info, display_image_data *image_data);
 
    wsialloc_allocator *m_wsi_allocator;
    drm_display_mode *m_display_mode;

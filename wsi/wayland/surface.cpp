@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, 2024 Arm Limited.
+ * Copyright (c) 2021, 2024-2025 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -50,6 +50,9 @@ namespace
 VWL_CAPI_CALL(void)
 zwp_linux_dmabuf_v1_format_impl(void *data, struct zwp_linux_dmabuf_v1 *dma_buf, uint32_t drm_format) VWL_API_POST
 {
+   UNUSED(data);
+   UNUSED(dma_buf);
+   UNUSED(drm_format);
 }
 
 /* Handler for modifier event of the zwp_linux_dmabuf_v1 interface. */
@@ -57,6 +60,7 @@ VWL_CAPI_CALL(void)
 zwp_linux_dmabuf_v1_modifier_impl(void *data, struct zwp_linux_dmabuf_v1 *dma_buf, uint32_t drm_format,
                                   uint32_t modifier_hi, uint32_t modifier_low) VWL_API_POST
 {
+   UNUSED(dma_buf);
    auto *drm_supported_formats = reinterpret_cast<formats_vector *>(data);
 
    drm_format_pair format = {};
@@ -208,7 +212,7 @@ bool surface::init()
       return false;
    }
 
-   const wl_registry_listener registry_listener = { surface_registry_handler };
+   const wl_registry_listener registry_listener = { surface_registry_handler, nullptr };
    int res = wl_registry_add_listener(registry.get(), &registry_listener, this);
    if (res < 0)
    {
@@ -293,7 +297,8 @@ util::unique_ptr<swapchain_base> surface::allocate_swapchain(layer::device_priva
 
 static void frame_done(void *data, wl_callback *cb, uint32_t time)
 {
-   (void)time;
+   UNUSED(time);
+   UNUSED(cb);
 
    bool *present_pending = reinterpret_cast<bool *>(data);
    assert(present_pending);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022 Arm Limited.
+ * Copyright (c) 2022, 2025 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -31,7 +31,7 @@ namespace wsi
 VkResult surface_format_properties::check_device_support(VkPhysicalDevice phys_dev,
                                                          VkPhysicalDeviceImageFormatInfo2KHR image_format_info)
 {
-   VkImageFormatProperties2KHR image_format_props{ VK_STRUCTURE_TYPE_IMAGE_FORMAT_PROPERTIES_2_KHR, nullptr };
+   VkImageFormatProperties2KHR image_format_props = { VK_STRUCTURE_TYPE_IMAGE_FORMAT_PROPERTIES_2_KHR, nullptr, {} };
 
    auto &instance_data = layer::instance_private_data::get(phys_dev);
 
@@ -48,11 +48,12 @@ VkResult surface_format_properties::add_device_compression_support(
    VkImageCompressionPropertiesEXT compression_props = { VK_STRUCTURE_TYPE_IMAGE_COMPRESSION_PROPERTIES_EXT, nullptr, 0,
                                                          0 };
    VkImageFormatProperties2KHR image_format_props{ VK_STRUCTURE_TYPE_IMAGE_FORMAT_PROPERTIES_2_KHR,
-                                                   &compression_props };
+                                                   &compression_props,
+                                                   {} };
 
    VkImageCompressionControlEXT compression_control{ VK_STRUCTURE_TYPE_IMAGE_COMPRESSION_CONTROL_EXT,
                                                      image_format_info.pNext,
-                                                     VK_IMAGE_COMPRESSION_FIXED_RATE_DEFAULT_EXT };
+                                                     VK_IMAGE_COMPRESSION_FIXED_RATE_DEFAULT_EXT, 0, nullptr };
    image_format_info.pNext = &compression_control;
 
    VkResult res =
