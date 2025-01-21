@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2019, 2021-2024 Arm Limited.
+ * Copyright (c) 2017-2019, 2021-2025 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -250,6 +250,9 @@ VkResult surface_properties::get_surface_formats(VkPhysicalDevice physical_devic
 VkResult surface_properties::get_surface_present_modes(VkPhysicalDevice physical_device, VkSurfaceKHR surface,
                                                        uint32_t *pPresentModeCount, VkPresentModeKHR *pPresentModes)
 {
+   UNUSED(physical_device);
+   UNUSED(surface);
+
    return get_surface_present_modes_common(pPresentModeCount, pPresentModes, m_supported_modes);
 }
 
@@ -292,6 +295,8 @@ VWL_CAPI_CALL(void)
 check_required_protocols(void *data, struct wl_registry *registry, uint32_t name, const char *interface,
                          uint32_t version) VWL_API_POST
 {
+   UNUSED(registry);
+   UNUSED(name);
    auto supported = static_cast<required_properties *>(data);
 
    if (!strcmp(interface, zwp_linux_dmabuf_v1_interface.name) && version >= ZWP_LINUX_DMABUF_V1_MODIFIER_SINCE_VERSION)
@@ -304,7 +309,7 @@ check_required_protocols(void *data, struct wl_registry *registry, uint32_t name
    }
 }
 
-static const wl_registry_listener registry_listener = { check_required_protocols };
+static const wl_registry_listener registry_listener = { check_required_protocols, nullptr };
 
 static bool check_wl_protocols(struct wl_display *display)
 {
@@ -350,6 +355,7 @@ VWL_VKAPI_CALL(VkBool32)
 GetPhysicalDeviceWaylandPresentationSupportKHR(VkPhysicalDevice physical_device, uint32_t queue_index,
                                                struct wl_display *display)
 {
+   UNUSED(queue_index);
    bool dev_supports_sync =
       sync_fd_fence_sync::is_supported(layer::instance_private_data::get(physical_device), physical_device);
    if (!dev_supports_sync)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2024 Arm Limited.
+ * Copyright (c) 2017-2025 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -36,6 +36,7 @@
 #include "swapchain.hpp"
 #include "layer/wsi_layer_experimental.hpp"
 #include "util/custom_allocator.hpp"
+#include "util/macros.hpp"
 
 namespace wsi
 {
@@ -66,6 +67,7 @@ swapchain::~swapchain()
 VkResult swapchain::init_platform(VkDevice device, const VkSwapchainCreateInfoKHR *swapchain_create_info,
                                   bool &use_presentation_thread)
 {
+   UNUSED(device);
    if (swapchain_create_info->presentMode == VK_PRESENT_MODE_SHARED_DEMAND_REFRESH_KHR)
    {
       use_presentation_thread = false;
@@ -101,6 +103,7 @@ VkResult swapchain::init_platform(VkDevice device, const VkSwapchainCreateInfoKH
 
 VkResult swapchain::allocate_and_bind_swapchain_image(VkImageCreateInfo image_create, swapchain_image &image)
 {
+   UNUSED(image_create);
    VkResult res = VK_SUCCESS;
    const std::lock_guard<std::recursive_mutex> lock(m_image_status_mutex);
 

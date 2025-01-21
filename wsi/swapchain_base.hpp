@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2024 Arm Limited.
+ * Copyright (c) 2017-2025 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -46,12 +46,12 @@
 #include "util/helpers.hpp"
 #include "time_domains.hpp"
 #include "layer/wsi_layer_experimental.hpp"
+#include "util/macros.hpp"
 
 namespace wsi
 {
 
 using util::MAX_PLANES;
-
 struct swapchain_image
 {
    enum status
@@ -553,7 +553,7 @@ protected:
     *
     * @param image Handle to the image about to be released.
     */
-   virtual void destroy_image(swapchain_image &image){};
+   virtual void destroy_image([[maybe_unused]] swapchain_image &image){};
 
    /**
     * @brief Hook for any actions to free up a buffer for acquire
@@ -570,6 +570,7 @@ protected:
     */
    virtual VkResult get_free_buffer(uint64_t *timeout)
    {
+      UNUSED(timeout);
       return VK_SUCCESS;
    }
 

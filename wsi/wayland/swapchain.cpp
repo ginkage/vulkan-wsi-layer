@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2024 Arm Limited.
+ * Copyright (c) 2017-2025 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -81,6 +81,9 @@ swapchain::~swapchain()
 VkResult swapchain::init_platform(VkDevice device, const VkSwapchainCreateInfoKHR *swapchain_create_info,
                                   bool &use_presentation_thread)
 {
+   UNUSED(device);
+   UNUSED(swapchain_create_info);
+   UNUSED(use_presentation_thread);
 #if VULKAN_WSI_LAYER_EXPERIMENTAL
    std::array<util::unique_ptr<wsi::vulkan_time_domain>, 1> time_domains_array = {
       m_allocator.make_unique<wsi::vulkan_time_domain>(VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT,
@@ -292,7 +295,7 @@ VkResult swapchain::allocate_wsialloc(VkImageCreateInfo &image_create_info, wayl
                                          image_create_info.extent.width, image_create_info.extent.height,
                                          allocation_flags };
 
-   wsialloc_allocate_result alloc_result = { 0 };
+   wsialloc_allocate_result alloc_result = { {}, { 0 }, { 0 }, { -1 }, false };
    /* Clear buffer_fds and average_row_strides for error purposes */
    for (int i = 0; i < WSIALLOC_MAX_PLANES; ++i)
    {
@@ -360,7 +363,7 @@ static VkResult fill_image_create_info(VkImageCreateInfo &image_create_info,
    return VK_SUCCESS;
 }
 
-VkResult swapchain::allocate_image(VkImageCreateInfo &image_create_info, wayland_image_data *image_data)
+VkResult swapchain::allocate_image(wayland_image_data *image_data)
 {
    util::vector<wsialloc_format> importable_formats(util::allocator(m_allocator, VK_SYSTEM_ALLOCATION_SCOPE_COMMAND));
    auto &m_allocated_format = m_image_creation_parameters.m_allocated_format;
@@ -411,7 +414,7 @@ VkResult swapchain::allocate_and_bind_swapchain_image(VkImageCreateInfo image_cr
 
    assert(image.data != nullptr);
    auto image_data = static_cast<wayland_image_data *>(image.data);
-   TRY_LOG(allocate_image(image_create_info, image_data), "Failed to allocate image");
+   TRY_LOG(allocate_image(image_data), "Failed to allocate image");
    image_status_lock.unlock();
 
    TRY_LOG(create_wl_buffer(image_create_info, image, image_data), "Failed to create wl_buffer");
@@ -460,7 +463,7 @@ VkResult swapchain::create_swapchain_image(VkImageCreateInfo image_create_info, 
          return VK_ERROR_INITIALIZATION_FAILED;
       }
 
-      wsialloc_format allocated_format = { 0 };
+      wsialloc_format allocated_format = { 0, 0, 0 };
       TRY_LOG_CALL(allocate_wsialloc(image_create_info, image_data, importable_formats, &allocated_format, true));
 
       for (auto &prop : drm_format_props)
@@ -633,6 +636,7 @@ VkResult swapchain::image_wait_present(swapchain_image &, uint64_t)
 VkResult swapchain::bind_swapchain_image(VkDevice &device, const VkBindImageMemoryInfo *bind_image_mem_info,
                                          const VkBindImageMemorySwapchainInfoKHR *bind_sc_info)
 {
+   UNUSED(device);
    const wsi::swapchain_image &swapchain_image = m_swapchain_images[bind_sc_info->imageIndex];
    auto image_data = reinterpret_cast<wayland_image_data *>(swapchain_image.data);
    return image_data->external_mem.bind_swapchain_image_memory(bind_image_mem_info->image);

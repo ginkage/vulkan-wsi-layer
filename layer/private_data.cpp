@@ -30,6 +30,7 @@
 #include "util/unordered_map.hpp"
 #include "util/log.hpp"
 #include "util/helpers.hpp"
+#include "util/macros.hpp"
 
 namespace layer
 {
@@ -367,7 +368,7 @@ bool instance_private_data::has_image_compression_support(VkPhysicalDevice phys_
    VkPhysicalDeviceImageCompressionControlFeaturesEXT compression = {
       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_COMPRESSION_CONTROL_FEATURES_EXT, nullptr, VK_FALSE
    };
-   VkPhysicalDeviceFeatures2KHR features = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2_KHR, &compression };
+   VkPhysicalDeviceFeatures2KHR features = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2_KHR, &compression, {} };
 
    disp.GetPhysicalDeviceFeatures2KHR(phys_dev, &features);
 
@@ -380,7 +381,7 @@ bool instance_private_data::has_frame_boundary_support(VkPhysicalDevice phys_dev
    VkPhysicalDeviceFrameBoundaryFeaturesEXT frame_boundary = {
       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_COMPRESSION_CONTROL_FEATURES_EXT, nullptr, VK_FALSE
    };
-   VkPhysicalDeviceFeatures2KHR features = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2_KHR, &frame_boundary };
+   VkPhysicalDeviceFeatures2KHR features = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2_KHR, &frame_boundary, {} };
 
    disp.GetPhysicalDeviceFeatures2KHR(phys_dev, &features);
 
@@ -543,6 +544,7 @@ bool device_private_data::should_layer_create_swapchain(VkSurfaceKHR vk_surface)
 
 bool device_private_data::can_icds_create_swapchain(VkSurfaceKHR vk_surface)
 {
+   UNUSED(vk_surface);
    return disp.get_fn<PFN_vkCreateSwapchainKHR>("vkCreateSwapchainKHR").has_value();
 }
 

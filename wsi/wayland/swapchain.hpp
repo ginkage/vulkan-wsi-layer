@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2024 Arm Limited.
+ * Copyright (c) 2017-2025 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -183,7 +183,7 @@ protected:
 private:
    VkResult create_wl_buffer(const VkImageCreateInfo &image_create_info, swapchain_image &image,
                              wayland_image_data *image_data);
-   VkResult allocate_image(VkImageCreateInfo &image_create_info, wayland_image_data *image_data);
+   VkResult allocate_image(wayland_image_data *image_data);
    VkResult allocate_wsialloc(VkImageCreateInfo &image_create_info, wayland_image_data *image_data,
                               util::vector<wsialloc_format> &importable_formats, wsialloc_format *allocated_format,
                               bool avoid_allocation);

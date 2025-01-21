@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Arm Limited.
+ * Copyright (c) 2024-2025 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -78,7 +78,9 @@ static void page_flip_event(int fd, unsigned int sequence, unsigned int tv_sec, 
 VkResult swapchain::init_platform(VkDevice device, const VkSwapchainCreateInfoKHR *swapchain_create_info,
                                   bool &use_presentation_thread)
 {
-
+   UNUSED(device);
+   UNUSED(swapchain_create_info);
+   UNUSED(use_presentation_thread);
    WSIALLOC_ASSERT_VERSION();
    if (wsialloc_new(&m_wsi_allocator) != WSIALLOC_ERROR_NONE)
    {
@@ -92,6 +94,7 @@ VkResult swapchain::init_platform(VkDevice device, const VkSwapchainCreateInfoKH
 VkResult swapchain::bind_swapchain_image(VkDevice &device, const VkBindImageMemoryInfo *bind_image_mem_info,
                                          const VkBindImageMemorySwapchainInfoKHR *bind_sc_info)
 {
+   UNUSED(device);
    const wsi::swapchain_image &swapchain_image = m_swapchain_images[bind_sc_info->imageIndex];
    auto image_data = reinterpret_cast<display_image_data *>(swapchain_image.data);
    return image_data->external_mem.bind_swapchain_image_memory(bind_image_mem_info->image);
@@ -234,7 +237,12 @@ VkResult swapchain::allocate_wsialloc(VkImageCreateInfo &image_create_info, disp
    wsialloc_allocate_info alloc_info = { importable_formats.data(), static_cast<unsigned>(importable_formats.size()),
                                          image_create_info.extent.width, image_create_info.extent.height,
                                          allocation_flags };
-   wsialloc_allocate_result alloc_result = { 0 };
+   wsialloc_allocate_result alloc_result = { .format = { .fourcc = 0, .modifier = 0, .flags = 0 },
+                                             .average_row_strides = { 0 },
+                                             .offsets = { 0 },
+                                             .buffer_fds = { 0 },
+                                             .is_disjoint = false };
+
    /* Clear buffer_fds and average_row_strides for error purposes */
    for (int i = 0; i < WSIALLOC_MAX_PLANES; ++i)
    {
@@ -301,7 +309,7 @@ static VkResult fill_image_create_info(VkImageCreateInfo &image_create_info,
    return VK_SUCCESS;
 }
 
-VkResult swapchain::allocate_image(VkImageCreateInfo &image_create_info, display_image_data *image_data)
+VkResult swapchain::allocate_image(display_image_data *image_data)
 {
    util::vector<wsialloc_format> importable_formats(util::allocator(m_allocator, VK_SYSTEM_ALLOCATION_SCOPE_COMMAND));
    auto &m_allocated_format = m_image_creation_parameters.m_allocated_format;
@@ -314,8 +322,7 @@ VkResult swapchain::allocate_image(VkImageCreateInfo &image_create_info, display
    return VK_SUCCESS;
 }
 
-VkResult swapchain::create_framebuffer(const VkImageCreateInfo &image_create_info, swapchain_image &image,
-                                       display_image_data *image_data)
+VkResult swapchain::create_framebuffer(const VkImageCreateInfo &image_create_info, display_image_data *image_data)
 {
    VkResult ret_code = VK_SUCCESS;
    std::array<uint32_t, util::MAX_PLANES> strides{ 0, 0, 0, 0 };
@@ -381,11 +388,11 @@ VkResult swapchain::allocate_and_bind_swapchain_image(VkImageCreateInfo image_cr
    image.status = swapchain_image::FREE;
    assert(image.data != nullptr);
    auto image_data = static_cast<display_image_data *>(image.data);
-   TRY_LOG(allocate_image(image_create_info, image_data), "Failed to allocate image");
+   TRY_LOG(allocate_image(image_data), "Failed to allocate image");
 
    image_status_lock.unlock();
 
-   TRY_LOG(create_framebuffer(image_create_info, image, image_data), "Failed to create framebuffer");
+   TRY_LOG(create_framebuffer(image_create_info, image_data), "Failed to create framebuffer");
 
    TRY_LOG(image_data->external_mem.import_memory_and_bind_swapchain_image(image.image),
            "Failed to import memory and bind swapchain image");
@@ -431,7 +438,8 @@ VkResult swapchain::create_swapchain_image(VkImageCreateInfo image_create_info, 
          return VK_ERROR_INITIALIZATION_FAILED;
       }
 
-      wsialloc_format allocated_format = { 0 };
+      wsialloc_format allocated_format = { .fourcc = 0, .modifier = 0, .flags = 0 };
+
       TRY_LOG_CALL(allocate_wsialloc(image_create_info, image_data, importable_formats, &allocated_format, true));
 
       for (auto &prop : drm_format_props)

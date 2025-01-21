@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Arm Limited.
+ * Copyright (c) 2024-2025 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -30,6 +30,7 @@
 #include <cassert>
 #include "wsi_layer_experimental.hpp"
 #include "wsi/swapchain_base.hpp"
+#include "util/macros.hpp"
 
 #if VULKAN_WSI_LAYER_EXPERIMENTAL
 
@@ -39,6 +40,7 @@
 VWL_VKAPI_CALL(VkResult)
 wsi_layer_vkSetSwapchainPresentTimingQueueSizeEXT(VkDevice device, VkSwapchainKHR swapchain, uint32_t size) VWL_API_POST
 {
+   UNUSED(device);
    assert(swapchain != VK_NULL_HANDLE);
    auto *sc = reinterpret_cast<wsi::swapchain_base *>(swapchain);
    return sc->presentation_timing_queue_set_size(size);
@@ -52,6 +54,10 @@ wsi_layer_vkGetSwapchainTimingPropertiesEXT(VkDevice device, VkSwapchainKHR swap
                                             uint64_t *pSwapchainTimingPropertiesCounter,
                                             VkSwapchainTimingPropertiesEXT *pSwapchainTimingProperties) VWL_API_POST
 {
+   UNUSED(device);
+   UNUSED(swapchain);
+   UNUSED(pSwapchainTimingPropertiesCounter);
+   UNUSED(pSwapchainTimingProperties);
    VkResult result = VK_SUCCESS;
    return result;
 }
@@ -83,6 +89,9 @@ wsi_layer_vkGetPastPresentationTimingEXT(
    VkDevice device, const VkPastPresentationTimingInfoEXT *pPastPresentationTimingInfo,
    VkPastPresentationTimingPropertiesEXT *pPastPresentationTimingProperties) VWL_API_POST
 {
+   UNUSED(device);
+   UNUSED(pPastPresentationTimingInfo);
+   UNUSED(pPastPresentationTimingProperties);
    VkResult result = VK_SUCCESS;
    return result;
 }

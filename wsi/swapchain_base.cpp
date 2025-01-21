@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2024 Arm Limited.
+ * Copyright (c) 2017-2025 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -217,7 +217,7 @@ swapchain_base::swapchain_base(layer::device_private_data &dev_data, const VkAll
    , m_device(VK_NULL_HANDLE)
    , m_queue(VK_NULL_HANDLE)
 #if WSI_IMAGE_COMPRESSION_CONTROL_SWAPCHAIN
-   , m_image_compression_control_params({ VK_IMAGE_COMPRESSION_DEFAULT_EXT, 0 })
+   , m_image_compression_control_params({ VK_IMAGE_COMPRESSION_DEFAULT_EXT, 0, {} })
 #endif
    , m_image_create_info()
 #if VULKAN_WSI_LAYER_EXPERIMENTAL
