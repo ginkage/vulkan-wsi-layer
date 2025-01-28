@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021 Arm Limited.
+ * Copyright (c) 2021, 2025 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -56,6 +56,8 @@ const fmt_spec fourcc_format_table[] = {
    { DRM_FORMAT_ABGR8888, 1, { 32, 0, 0, 0 }, VK_FORMAT_R8G8B8A8_UNORM },
    { DRM_FORMAT_RGBA8888, 1, { 32, 0, 0, 0 }, VK_FORMAT_UNDEFINED },
    { DRM_FORMAT_BGRA8888, 1, { 32, 0, 0, 0 }, VK_FORMAT_UNDEFINED },
+
+   { DRM_FORMAT_ABGR2101010, 1, { 32, 0, 0, 0 }, VK_FORMAT_A2B10G10R10_UNORM_PACK32 },
 };
 
 const fmt_spec srgb_fourcc_format_table[] = {
