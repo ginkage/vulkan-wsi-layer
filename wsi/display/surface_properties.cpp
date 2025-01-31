@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Arm Limited.
+ * Copyright (c) 2024-2025 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -307,6 +307,8 @@ VWL_VKAPI_CALL(VkResult)
 GetDisplayPlaneCapabilitiesKHR(VkPhysicalDevice physicalDevice, VkDisplayModeKHR mode, uint32_t planeIndex,
                                VkDisplayPlaneCapabilitiesKHR *pCapabilities)
 {
+   UNUSED(physicalDevice);
+   UNUSED(planeIndex);
    assert(physicalDevice != VK_NULL_HANDLE);
    assert(mode != VK_NULL_HANDLE);
    assert(pCapabilities != nullptr);
@@ -355,6 +357,8 @@ VWL_VKAPI_CALL(VkResult)
 GetDisplayPlaneSupportedDisplaysKHR(VkPhysicalDevice physicalDevice, uint32_t planeIndex, uint32_t *pDisplayCount,
                                     VkDisplayKHR *pDisplays)
 {
+   UNUSED(physicalDevice);
+   UNUSED(planeIndex);
    assert(physicalDevice != VK_NULL_HANDLE);
    assert(pDisplayCount != nullptr);
 
@@ -392,6 +396,7 @@ VWL_VKAPI_CALL(VkResult)
 GetPhysicalDeviceDisplayPlanePropertiesKHR(VkPhysicalDevice physicalDevice, uint32_t *pPropertyCount,
                                            VkDisplayPlanePropertiesKHR *pProperties)
 {
+   UNUSED(physicalDevice);
    assert(physicalDevice != VK_NULL_HANDLE);
    assert(pPropertyCount != nullptr);
 
@@ -432,6 +437,7 @@ VWL_VKAPI_CALL(VkResult)
 GetPhysicalDeviceDisplayPropertiesKHR(VkPhysicalDevice physicalDevice, uint32_t *pPropertyCount,
                                       VkDisplayPropertiesKHR *pProperties)
 {
+   UNUSED(physicalDevice);
    assert(physicalDevice != VK_NULL_HANDLE);
    assert(pPropertyCount != nullptr);
 
