@@ -122,33 +122,24 @@ VkResult swapchain_time_domains::get_swapchain_time_domain_properties(
 {
    if (pTimeDomainsCounter != nullptr)
    {
-      if (pSwapchainTimeDomainProperties == nullptr)
-      {
-         *pTimeDomainsCounter = 1;
-         return VK_SUCCESS;
-      }
-      pSwapchainTimeDomainProperties->timeDomainCount = 1;
-      pSwapchainTimeDomainProperties->pTimeDomains[0] = VK_TIME_DOMAIN_PRESENT_STAGE_LOCAL_EXT;
-      pSwapchainTimeDomainProperties->pTimeDomainIds = 0;
-
-      return (*pTimeDomainsCounter < 1) ? VK_INCOMPLETE : VK_SUCCESS;
+      *pTimeDomainsCounter = 1;
    }
 
    if (pSwapchainTimeDomainProperties != nullptr)
    {
-      if (pSwapchainTimeDomainProperties->pTimeDomains == nullptr &&
-          pSwapchainTimeDomainProperties->pTimeDomainIds == nullptr)
+      if ((pSwapchainTimeDomainProperties->pTimeDomains == nullptr &&
+           pSwapchainTimeDomainProperties->pTimeDomainIds == nullptr) ||
+          pSwapchainTimeDomainProperties->timeDomainCount == 0)
       {
          pSwapchainTimeDomainProperties->timeDomainCount = 1;
-         return VK_SUCCESS;
       }
-      if (pSwapchainTimeDomainProperties->pTimeDomains != nullptr &&
-          pSwapchainTimeDomainProperties->pTimeDomainIds != nullptr)
+      else
       {
+         /* Since we only have a single time domain available we don't need to check
+          * timeDomainCount since it can only be >= 1 */
          pSwapchainTimeDomainProperties->timeDomainCount = 1;
          pSwapchainTimeDomainProperties->pTimeDomains[0] = VK_TIME_DOMAIN_PRESENT_STAGE_LOCAL_EXT;
-         pSwapchainTimeDomainProperties->pTimeDomainIds = 0;
-         return VK_SUCCESS;
+         pSwapchainTimeDomainProperties->pTimeDomainIds[0] = 0;
       }
    }
 
