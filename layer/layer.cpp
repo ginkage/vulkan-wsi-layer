@@ -41,10 +41,7 @@
 #include "util/macros.hpp"
 #include "util/helpers.hpp"
 #include "wsi/unsupported_surfaces.hpp"
-
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
 #include "wsi_layer_experimental.hpp"
-#endif
 
 #define VK_LAYER_API_VERSION VK_MAKE_VERSION(1, 2, VK_HEADER_VERSION)
 
@@ -382,7 +379,6 @@ VKAPI_ATTR VkResult create_device(VkPhysicalDevice physicalDevice, const VkDevic
       device_data.set_present_id_feature_enabled(present_id_features->presentId);
    }
 
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
    auto *physical_device_swapchain_maintenance1_features =
       util::find_extension<VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT>(
          VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_EXT, pCreateInfo->pNext);
@@ -391,7 +387,6 @@ VKAPI_ATTR VkResult create_device(VkPhysicalDevice physicalDevice, const VkDevic
       device_data.set_swapchain_maintenance1_enabled(
          physical_device_swapchain_maintenance1_features->swapchainMaintenance1);
    }
-#endif
 
    return VK_SUCCESS;
 }
@@ -484,7 +479,6 @@ wsi_layer_vkGetPhysicalDeviceFeatures2KHR(VkPhysicalDevice physicalDevice,
                                           VkPhysicalDeviceFeatures2 *pFeatures) VWL_API_POST
 {
    auto &instance = layer::instance_private_data::get(physicalDevice);
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
    auto *physical_device_swapchain_maintenance1_features =
       util::find_extension<VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT>(
          VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_EXT, pFeatures->pNext);
@@ -492,7 +486,6 @@ wsi_layer_vkGetPhysicalDeviceFeatures2KHR(VkPhysicalDevice physicalDevice,
    {
       physical_device_swapchain_maintenance1_features->swapchainMaintenance1 = false;
    }
-#endif
    instance.disp.GetPhysicalDeviceFeatures2KHR(physicalDevice, pFeatures);
 
 #if WSI_IMAGE_COMPRESSION_CONTROL_SWAPCHAIN
@@ -513,9 +506,9 @@ wsi_layer_vkGetPhysicalDeviceFeatures2KHR(VkPhysicalDevice physicalDevice,
       present_id_features->presentId = true;
    }
 
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
    wsi::set_swapchain_maintenance1_state(physicalDevice, physical_device_swapchain_maintenance1_features);
 
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
    auto *present_timing_features = util::find_extension<VkPhysicalDevicePresentTimingFeaturesEXT>(
       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_TIMING_FEATURES_EXT, pFeatures->pNext);
    if (present_timing_features != nullptr)
@@ -564,14 +557,12 @@ wsi_layer_vkGetDeviceProcAddr(VkDevice device, const char *funcName) VWL_API_POS
    GET_PROC_ADDR(vkCreateImage);
    GET_PROC_ADDR(vkBindImageMemory2);
 
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
    /* VK_EXT_swapchain_maintenance1 */
    if (layer::device_private_data::get(device).is_device_extension_enabled(
           VK_EXT_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME))
    {
       GET_PROC_ADDR(vkReleaseSwapchainImagesEXT);
    }
-#endif
 
    return layer::device_private_data::get(device).disp.get_user_enabled_entrypoint(
       device, layer::device_private_data::get(device).instance_data.api_version, funcName);
