@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024-2025 Arm Limited.
+ * Copyright (c) 2025 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -23,36 +23,34 @@
  */
 
 /**
- * @file swapchain_maintenance_api.cpp
+ * @file present_timing_handler.hpp
  *
- * @brief Contains the Vulkan entrypoints for the swapchain maintenance.
+ * @brief Contains the functionality to implement features for present timing extension.
  */
+#pragma once
 
-#include <cassert>
-#include "private_data.hpp"
-#include "swapchain_maintenance_api.hpp"
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
 
-#include <wsi/wsi_factory.hpp>
+#include <wsi/extensions/present_timing.hpp>
 
-VWL_VKAPI_CALL(VkResult)
-wsi_layer_vkReleaseSwapchainImagesEXT(VkDevice device, const VkReleaseSwapchainImagesInfoEXT *pReleaseInfo) VWL_API_POST
+/**
+ * @brief Present timing extension class
+ *
+ * This class implements present timing features declarations that are specific to the headless backend.
+ */
+class wsi_ext_present_timing_headless : public wsi::wsi_ext_present_timing
 {
-   if (pReleaseInfo == nullptr || pReleaseInfo->imageIndexCount == 0)
-   {
-      return VK_SUCCESS;
-   }
+public:
+   static util::unique_ptr<wsi_ext_present_timing_headless> create(const util::allocator &allocator);
 
-   assert(pReleaseInfo->pImageIndices != nullptr);
-   assert(pReleaseInfo->swapchain != VK_NULL_HANDLE);
+   VkResult get_swapchain_timing_properties(uint64_t &timing_properties_counter,
+                                            VkSwapchainTimingPropertiesEXT &timing_properties) override;
 
-   auto &device_data = layer::device_private_data::get(device);
-   if (!device_data.layer_owns_swapchain(pReleaseInfo->swapchain))
-   {
-      return device_data.disp.ReleaseSwapchainImagesEXT(device, pReleaseInfo);
-   }
+private:
+   wsi_ext_present_timing_headless(const util::allocator &allocator);
 
-   auto *sc = reinterpret_cast<wsi::swapchain_base *>(pReleaseInfo->swapchain);
-   sc->release_images(pReleaseInfo->imageIndexCount, pReleaseInfo->pImageIndices);
+   /* Allow util::allocator to access the private constructor */
+   friend util::allocator;
+};
 
-   return VK_SUCCESS;
-}
+#endif

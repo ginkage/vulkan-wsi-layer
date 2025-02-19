@@ -36,11 +36,12 @@ extern "C" {
 #endif
 #include <wayland-client.h>
 #include <linux-dmabuf-unstable-v1-client-protocol.h>
+#include "surface.hpp"
 #include "util/wsialloc/wsialloc.h"
 #include "util/custom_allocator.hpp"
 #include "wl_object_owner.hpp"
-#include "surface.hpp"
-#include "wsi/external_memory.hpp"
+
+#include <wsi/external_memory.hpp>
 
 namespace wsi
 {
@@ -188,6 +189,15 @@ private:
                               util::vector<wsialloc_format> &importable_formats, wsialloc_format *allocated_format,
                               bool avoid_allocation);
 
+   /**
+    * @brief Adds required extensions to the extension list of the swapchain
+    *
+    * @param device Vulkan device
+    * @param swapchain_create_info Swapchain create info
+    * @return VK_SUCCESS on success, other result codes on failure
+    */
+   VkResult add_required_extensions(VkDevice device, const VkSwapchainCreateInfoKHR *swapchain_create_info) override;
+
    struct wl_display *m_display;
    struct wl_surface *m_surface;
    /** Raw pointer to the WSI Surface that this swapchain was created from. The Vulkan specification ensures that the
@@ -221,5 +231,6 @@ private:
                                            util::vector<uint64_t> &exportable_modifers,
                                            util::vector<VkDrmFormatModifierPropertiesEXT> &drm_format_props);
 };
+
 } // namespace wayland
 } // namespace wsi

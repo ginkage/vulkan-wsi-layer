@@ -30,6 +30,7 @@
 #include <vulkan/vk_layer.h>
 #include <vulkan/vulkan.h>
 
+#include "wsi_layer_experimental.hpp"
 #include "private_data.hpp"
 #include "surface_api.hpp"
 #include "swapchain_api.hpp"
@@ -41,7 +42,6 @@
 #include "util/macros.hpp"
 #include "util/helpers.hpp"
 #include "wsi/unsupported_surfaces.hpp"
-#include "wsi_layer_experimental.hpp"
 
 #define VK_LAYER_API_VERSION VK_MAKE_VERSION(1, 2, VK_HEADER_VERSION)
 
@@ -361,7 +361,6 @@ VKAPI_ATTR VkResult create_device(VkPhysicalDevice physicalDevice, const VkDevic
       return result;
    }
 
-#if WSI_IMAGE_COMPRESSION_CONTROL_SWAPCHAIN
    const auto *swapchain_compression_feature =
       util::find_extension<VkPhysicalDeviceImageCompressionControlSwapchainFeaturesEXT>(
          VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_COMPRESSION_CONTROL_SWAPCHAIN_FEATURES_EXT, pCreateInfo->pNext);
@@ -370,7 +369,6 @@ VKAPI_ATTR VkResult create_device(VkPhysicalDevice physicalDevice, const VkDevic
       device_data.set_swapchain_compression_control_enabled(
          swapchain_compression_feature->imageCompressionControlSwapchain);
    }
-#endif
 
    const auto present_id_features = util::find_extension<VkPhysicalDevicePresentIdFeaturesKHR>(
       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_ID_FEATURES_KHR, pCreateInfo->pNext);
@@ -488,7 +486,6 @@ wsi_layer_vkGetPhysicalDeviceFeatures2KHR(VkPhysicalDevice physicalDevice,
    }
    instance.disp.GetPhysicalDeviceFeatures2KHR(physicalDevice, pFeatures);
 
-#if WSI_IMAGE_COMPRESSION_CONTROL_SWAPCHAIN
    auto *image_compression_control_swapchain_features =
       util::find_extension<VkPhysicalDeviceImageCompressionControlSwapchainFeaturesEXT>(
          VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_COMPRESSION_CONTROL_SWAPCHAIN_FEATURES_EXT, pFeatures->pNext);
@@ -497,7 +494,6 @@ wsi_layer_vkGetPhysicalDeviceFeatures2KHR(VkPhysicalDevice physicalDevice,
       image_compression_control_swapchain_features->imageCompressionControlSwapchain =
          instance.has_image_compression_support(physicalDevice);
    }
-#endif
 
    auto *present_id_features = util::find_extension<VkPhysicalDevicePresentIdFeaturesKHR>(
       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_ID_FEATURES_KHR, pFeatures->pNext);

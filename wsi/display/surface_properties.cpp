@@ -137,12 +137,10 @@ VkResult surface_properties::get_surface_formats(VkPhysicalDevice physical_devic
          VkResult res = formats[format_count].check_device_support(physical_device, format_info);
          if (VK_SUCCESS == res)
          {
-#if WSI_IMAGE_COMPRESSION_CONTROL_SWAPCHAIN
             if (layer::instance_private_data::get(physical_device).has_image_compression_support(physical_device))
             {
                formats[format_count].add_device_compression_support(physical_device, format_info);
             }
-#endif
             format_count++;
          }
       }
@@ -165,12 +163,10 @@ VkResult surface_properties::get_surface_formats(VkPhysicalDevice physical_devic
          VkResult res = formats[format_count].check_device_support(physical_device, format_info);
          if (VK_SUCCESS == res)
          {
-#if WSI_IMAGE_COMPRESSION_CONTROL_SWAPCHAIN
             if (layer::instance_private_data::get(physical_device).has_image_compression_support(physical_device))
             {
                formats[format_count].add_device_compression_support(physical_device, format_info);
             }
-#endif
             format_count++;
          }
       }

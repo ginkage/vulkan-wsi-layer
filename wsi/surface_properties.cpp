@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, 2025 Arm Limited.
+ * Copyright (c) 2022, 2024-2025 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -39,7 +39,6 @@ VkResult surface_format_properties::check_device_support(VkPhysicalDevice phys_d
                                                                         &image_format_props);
 }
 
-#if WSI_IMAGE_COMPRESSION_CONTROL_SWAPCHAIN
 VkResult surface_format_properties::add_device_compression_support(
    VkPhysicalDevice phys_dev, VkPhysicalDeviceImageFormatInfo2KHR image_format_info)
 {
@@ -70,12 +69,11 @@ VkResult surface_format_properties::add_device_compression_support(
 
    return VK_SUCCESS;
 }
-#endif
 
 void surface_format_properties::fill_format_properties(VkSurfaceFormat2KHR &surf_format) const
 {
    surf_format.surfaceFormat = m_surface_format;
-#if WSI_IMAGE_COMPRESSION_CONTROL_SWAPCHAIN
+
    auto *compression_properties = util::find_extension<VkImageCompressionPropertiesEXT>(
       VK_STRUCTURE_TYPE_IMAGE_COMPRESSION_PROPERTIES_EXT, surf_format.pNext);
    if (compression_properties != nullptr)
@@ -94,7 +92,6 @@ void surface_format_properties::fill_format_properties(VkSurfaceFormat2KHR &surf
          compression_properties->imageCompressionFixedRateFlags = m_compression.imageCompressionFixedRateFlags;
       }
    }
-#endif
 }
 
 void get_surface_capabilities_common(VkPhysicalDevice physical_device, VkSurfaceCapabilitiesKHR *surface_capabilities)

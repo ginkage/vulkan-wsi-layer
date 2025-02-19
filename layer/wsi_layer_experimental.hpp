@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Arm Limited.
+ * Copyright (c) 2024-2025 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -25,18 +25,18 @@
 /**
  * @file wsi_layer_experimental.hpp
  *
- * @brief Contains the Vulkan definitions for experimental features.
+ * @brief Contains the declarations of the structures and entry point APIs of experimental extensions.
+ *
  */
-#pragma once
 
-#include <vulkan/vulkan.h>
+#pragma once
 #include "util/macros.hpp"
 
 #if VULKAN_WSI_LAYER_EXPERIMENTAL
+
 #define VK_EXT_present_timing 1
 #define VK_EXT_PRESENT_TIMING_SPEC_VERSION 1
-#define VK_EXT_PRESENT_TIMING_EXTENSION_NAME "VK_KHR_present_timing"
-
+#define VK_EXT_PRESENT_TIMING_EXTENSION_NAME "VK_EXT_present_timing"
 #define VK_ERROR_PRESENT_TIMING_QUEUE_FULL_EXT ((VkResult)(-1000208000))
 #define VK_TIME_DOMAIN_PRESENT_STAGE_LOCAL_EXT ((VkTimeDomainEXT)(1000208000))
 #define VK_TIME_DOMAIN_SWAPCHAIN_LOCAL_EXT ((VkTimeDomainEXT)(1000208001))
@@ -51,6 +51,9 @@
 #define VK_STRUCTURE_TYPE_PRESENT_TIMING_INFO_EXT ((VkStructureType)1000208010)
 #define VK_STRUCTURE_TYPE_PRESENT_TIMINGS_INFO_EXT ((VkStructureType)1000208011)
 
+/* Placeholder. Need to get the real value. */
+#define VK_SWAPCHAIN_CREATE_PRESENT_TIMING_BIT_EXT ((VkSwapchainCreateFlagsKHR)0x00010000)
+
 typedef VkFlags VkPresentStageFlagsEXT;
 
 typedef struct VkPhysicalDevicePresentTimingFeaturesEXT
@@ -61,7 +64,6 @@ typedef struct VkPhysicalDevicePresentTimingFeaturesEXT
    VkBool32 presentAtAbsoluteTime;
    VkBool32 presentAtRelativeTime;
 } VkPhysicalDevicePresentTimingFeaturesEXT;
-
 typedef struct VkPresentTimingSurfaceCapabilitiesEXT
 {
    VkStructureType sType;
@@ -172,6 +174,13 @@ typedef VkResult(VKAPI_PTR *PFN_vkGetSwapchainTimeDomainPropertiesEXT)(
    VkDevice device, VkSwapchainKHR swapchain, uint64_t *pTimeDomainsCounter,
    VkSwapchainTimeDomainPropertiesEXT *pSwapchainTimeDomainProperties);
 
+typedef VkResult(VKAPI_PTR *PFN_vkGetSwapchainTimingPropertiesEXT)(
+   VkDevice device, VkSwapchainKHR swapchain, uint64_t *pSwapchainTimingPropertiesCounter,
+   VkSwapchainTimingPropertiesEXT *pSwapchainTimingProperties);
+
+typedef VkResult(VKAPI_PTR *PFN_vkSetSwapchainPresentTimingQueueSizeEXT)(VkDevice device, VkSwapchainKHR swapchain,
+                                                                         uint32_t size);
+
 VWL_VKAPI_CALL(VkResult)
 wsi_layer_vkSetSwapchainPresentTimingQueueSizeEXT(VkDevice device, VkSwapchainKHR swapchain,
                                                   uint32_t size) VWL_API_POST;
@@ -189,4 +198,5 @@ VWL_VKAPI_CALL(VkResult)
 wsi_layer_vkGetPastPresentationTimingEXT(
    VkDevice device, const VkPastPresentationTimingInfoEXT *pPastPresentationTimingInfo,
    VkPastPresentationTimingPropertiesEXT *pPastPresentationTimingProperties) VWL_API_POST;
+
 #endif

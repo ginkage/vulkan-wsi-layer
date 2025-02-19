@@ -24,11 +24,13 @@
 
 #pragma once
 
-#include "util/platform_set.hpp"
-#include "util/custom_allocator.hpp"
-#include "util/unordered_set.hpp"
-#include "util/unordered_map.hpp"
-#include "util/extension_list.hpp"
+#include <layer/wsi_layer_experimental.hpp>
+
+#include <util/platform_set.hpp>
+#include <util/custom_allocator.hpp>
+#include <util/unordered_set.hpp>
+#include <util/unordered_map.hpp>
+#include <util/extension_list.hpp>
 
 #include <vulkan/vulkan.h>
 #include <vulkan/vk_layer.h>
@@ -41,7 +43,6 @@
 #include <mutex>
 #include <limits>
 #include <cstring>
-#include "wsi_layer_experimental.hpp"
 using scoped_mutex = std::lock_guard<std::mutex>;
 
 /** Forward declare stored objects */
@@ -339,6 +340,19 @@ private:
  * api_version: Vulkan API version where the entrypoint is part of the core specification, or API_VERSION_MAX.
  * required: Boolean to indicate whether the entrypoint is required by the WSI layer or optional.
  */
+
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+#define DEVICE_ENTRYPOINTS_LIST_EXPERIMENTAL(EP)                                                         \
+   EP(GetSwapchainTimeDomainPropertiesEXT, VK_EXT_PRESENT_TIMING_EXTENSION_NAME, API_VERSION_MAX, false) \
+   EP(GetSwapchainTimingPropertiesEXT, VK_EXT_PRESENT_TIMING_EXTENSION_NAME, API_VERSION_MAX, false)     \
+   EP(SetSwapchainPresentTimingQueueSizeEXT, VK_EXT_PRESENT_TIMING_EXTENSION_NAME, API_VERSION_MAX, false)
+#else
+#define DEVICE_ENTRYPOINTS_LIST_EXPERIMENTAL(EP)
+#endif
+
+/* Define a list of custom entrypoints that might rely on preprocessor conditions and similar */
+#define DEVICE_ENTRYPOINTS_LIST_EXPANSION(EP) DEVICE_ENTRYPOINTS_LIST_EXPERIMENTAL(EP)
+
 #define DEVICE_ENTRYPOINTS_LIST(EP)                                                                                \
    /* Vulkan 1.0 */                                                                                                \
    EP(GetDeviceProcAddr, "", VK_API_VERSION_1_0, true)                                                             \
@@ -402,7 +416,9 @@ private:
    EP(GetBufferMemoryRequirements2KHR, VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME, VK_API_VERSION_1_1, false) \
    EP(GetImageSparseMemoryRequirements2KHR, VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME, VK_API_VERSION_1_1,   \
       false)                                                                                                       \
-   EP(ReleaseSwapchainImagesEXT, VK_EXT_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME, VK_API_VERSION_1_1, false)
+   EP(ReleaseSwapchainImagesEXT, VK_EXT_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME, VK_API_VERSION_1_1, false)         \
+   /* Custom entrypoints */                                                                                        \
+   DEVICE_ENTRYPOINTS_LIST_EXPANSION(EP)
 
 /**
  * @brief Struct representing the device dispatch table.
@@ -457,15 +473,6 @@ public:
 
    DEVICE_ENTRYPOINTS_LIST(DISPATCH_TABLE_SHORTCUT)
 #undef DISPATCH_TABLE_SHORTCUT
-
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
-   template <class... Args>
-   auto GetSwapchainTimeDomainPropertiesEXT(Args &&...args) const
-   {
-      return call_fn<PFN_vkGetSwapchainTimeDomainPropertiesEXT>("vkGetSwapchainTimeDomainPropertiesEXT",
-                                                                std::forward<Args>(args)...);
-   };
-#endif
 
 private:
    /**
@@ -593,7 +600,6 @@ public:
     */
    bool does_layer_support_surface(VkSurfaceKHR surface);
 
-#if WSI_IMAGE_COMPRESSION_CONTROL_SWAPCHAIN
    /**
     * @brief Check if a physical device supports controlling image compression.
     *
@@ -601,7 +607,6 @@ public:
     * @return Whether image compression control is supported by the ICD.
     */
    bool has_image_compression_support(VkPhysicalDevice phys_dev);
-#endif /* WSI_IMAGE_COMPRESSION_CONTROL_SWAPCHAIN */
 
    bool has_frame_boundary_support(VkPhysicalDevice phys_dev);
 
@@ -818,7 +823,6 @@ public:
    const VkPhysicalDevice physical_device;
    const VkDevice device;
 
-#if WSI_IMAGE_COMPRESSION_CONTROL_SWAPCHAIN
    /**
     * @brief Set whether the device supports controlling the swapchain image compression.
     *
@@ -832,7 +836,6 @@ public:
     * @return true if enabled, false otherwise.
     */
    bool is_swapchain_compression_control_enabled() const;
-#endif /* WSI_IMAGE_COMPRESSION_CONTROL_SWAPCHAIN */
 
    /**
     * @brief Set whether we should handle frame boundary events.
@@ -854,6 +857,13 @@ public:
     * @param enable Value to set m_present_id_enabled member variable.
     */
    void set_present_id_feature_enabled(bool enable);
+
+   /**
+    * @brief Check whether the device can support the present ID feature.
+    *
+    * @return true if supported, false otherwise.
+    */
+   bool is_present_id_enabled();
 
    /**
     * @brief Selectively enable/disable the swapchain maintenance1 features for this device.
@@ -904,13 +914,11 @@ private:
     */
    util::extension_list enabled_extensions;
 
-#if WSI_IMAGE_COMPRESSION_CONTROL_SWAPCHAIN
    /**
     * @brief Stores whether the device supports controlling the swapchain image compression.
     *
     */
    bool compression_control_enabled;
-#endif /* WSI_IMAGE_COMPRESSION_CONTROL_SWAPCHAIN */
 
    /**
     * @brief Stores whether the layer should handle frame boundary events.
@@ -927,6 +935,13 @@ private:
     * @brief Stores whether the device has enabled support for the swapchain maintenance1 features.
     */
    bool swapchain_maintenance1_enabled;
+
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+   /**
+    * @brief Stores whether the device has enabled support for the present timing features.
+    */
+   bool present_timing_enabled;
+#endif
 };
 
 } /* namespace layer */

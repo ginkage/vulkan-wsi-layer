@@ -118,12 +118,8 @@ VkResult surface_properties::get_surface_capabilities(VkPhysicalDevice physical_
 
 static VkResult surface_format_properties_add_modifier_support(VkPhysicalDevice phys_dev,
                                                                surface_format_properties &format_props,
-#if WSI_IMAGE_COMPRESSION_CONTROL_SWAPCHAIN
                                                                const drm_format_pair &drm_format,
                                                                bool add_compression = false)
-#else
-                                                               const drm_format_pair &drm_format)
-#endif
 {
    VkPhysicalDeviceExternalImageFormatInfoKHR external_info = {};
    external_info.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTERNAL_IMAGE_FORMAT_INFO_KHR;
@@ -143,12 +139,10 @@ static VkResult surface_format_properties_add_modifier_support(VkPhysicalDevice 
    image_info.tiling = VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT;
    image_info.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
-#if WSI_IMAGE_COMPRESSION_CONTROL_SWAPCHAIN
    if (add_compression)
    {
       return format_props.add_device_compression_support(phys_dev, image_info);
    }
-#endif
 
    return format_props.check_device_support(phys_dev, image_info);
 }
@@ -195,7 +189,6 @@ static VkResult surface_format_properties_map_init(VkPhysicalDevice phys_dev, su
    return VK_SUCCESS;
 }
 
-#if WSI_IMAGE_COMPRESSION_CONTROL_SWAPCHAIN
 static VkResult surface_format_properties_map_add_compression(VkPhysicalDevice phys_dev,
                                                               surface_format_properties_map &format_map,
                                                               const util::vector<drm_format_pair> &drm_format_list)
@@ -223,7 +216,6 @@ static VkResult surface_format_properties_map_add_compression(VkPhysicalDevice p
    }
    return VK_SUCCESS;
 }
-#endif
 
 VkResult surface_properties::get_surface_formats(VkPhysicalDevice physical_device, uint32_t *surfaceFormatCount,
                                                  VkSurfaceFormatKHR *surfaceFormats,
@@ -234,13 +226,11 @@ VkResult surface_properties::get_surface_formats(VkPhysicalDevice physical_devic
    {
       TRY_LOG_CALL(
          surface_format_properties_map_init(physical_device, supported_formats, specific_surface->get_formats()));
-#if WSI_IMAGE_COMPRESSION_CONTROL_SWAPCHAIN
       if (layer::instance_private_data::get(physical_device).has_image_compression_support(physical_device))
       {
          TRY_LOG_CALL(surface_format_properties_map_add_compression(physical_device, supported_formats,
                                                                     specific_surface->get_formats()));
       }
-#endif
    }
 
    return surface_properties_formats_helper(supported_formats.begin(), supported_formats.end(), surfaceFormatCount,

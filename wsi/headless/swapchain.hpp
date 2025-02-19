@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2024 Arm Limited.
+ * Copyright (c) 2017-2025 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -32,13 +32,13 @@
 
 #include <vulkan/vk_icd.h>
 #include <vulkan/vulkan.h>
+
 #include <wsi/swapchain_base.hpp>
 
 namespace wsi
 {
 namespace headless
 {
-
 /**
  * @brief Headless swapchain class.
  *
@@ -126,9 +126,14 @@ protected:
                                  const VkBindImageMemorySwapchainInfoKHR *bind_sc_info) override;
 
 private:
-#if WSI_IMAGE_COMPRESSION_CONTROL_SWAPCHAIN
-   VkImageCompressionControlEXT m_image_compression_control;
-#endif
+   /**
+    * @brief Adds required extensions to the extension list of the swapchain
+    *
+    * @param device Vulkan device
+    * @param swapchain_create_info Swapchain create info
+    * @return VK_SUCCESS on success, other result codes on failure
+    */
+   VkResult add_required_extensions(VkDevice device, const VkSwapchainCreateInfoKHR *swapchain_create_info) override;
 };
 
 } /* namespace headless */

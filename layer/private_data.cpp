@@ -51,10 +51,6 @@ VkResult instance_dispatch_table::populate(VkInstance instance, PFN_vkGetInstanc
    { "vk" #name, ext_name, nullptr, api_version, false, required },
       INSTANCE_ENTRYPOINTS_LIST(DISPATCH_TABLE_ENTRY)
 #undef DISPATCH_TABLE_ENTRY
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
-         { "GetSwapchainTimeDomainPropertiesEXT", VK_EXT_PRESENT_TIMING_EXTENSION_NAME, nullptr, API_VERSION_MAX, false,
-           false }
-#endif /* VULKAN_WSI_LAYER_EXPERIMENTAL */
    };
 
    static constexpr auto num_entrypoints = std::distance(std::begin(entrypoints_init), std::end(entrypoints_init));
@@ -362,7 +358,6 @@ bool instance_private_data::should_layer_handle_surface(VkPhysicalDevice phys_de
    return ret;
 }
 
-#if WSI_IMAGE_COMPRESSION_CONTROL_SWAPCHAIN
 bool instance_private_data::has_image_compression_support(VkPhysicalDevice phys_dev)
 {
    VkPhysicalDeviceImageCompressionControlFeaturesEXT compression = {
@@ -374,7 +369,6 @@ bool instance_private_data::has_image_compression_support(VkPhysicalDevice phys_
 
    return compression.imageCompressionControl != VK_FALSE;
 }
-#endif
 
 bool instance_private_data::has_frame_boundary_support(VkPhysicalDevice phys_dev)
 {
@@ -420,11 +414,12 @@ device_private_data::device_private_data(instance_private_data &inst_data, VkPhy
    , allocator{ alloc }
    , swapchains{ allocator } /* clang-format off */
    , enabled_extensions{ allocator }
-#if WSI_IMAGE_COMPRESSION_CONTROL_SWAPCHAIN
    , compression_control_enabled{ false }
-#endif /* WSI_IMAGE_COMPRESSION_CONTROL_SWAPCHAIN */
    , present_id_enabled { false }
    , swapchain_maintenance1_enabled{ false }
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+   , present_timing_enabled { true }
+#endif
 /* clang-format on */
 {
 }
@@ -566,7 +561,6 @@ void device_private_data::destroy(device_private_data *device_data)
    alloc.destroy<device_private_data>(1, device_data);
 }
 
-#if WSI_IMAGE_COMPRESSION_CONTROL_SWAPCHAIN
 void device_private_data::set_swapchain_compression_control_enabled(bool enable)
 {
    compression_control_enabled = enable;
@@ -576,7 +570,6 @@ bool device_private_data::is_swapchain_compression_control_enabled() const
 {
    return compression_control_enabled;
 }
-#endif /* WSI_IMAGE_COMPRESSION_CONTROL_SWAPCHAIN */
 
 void device_private_data::set_layer_frame_boundary_handling_enabled(bool enable)
 {
@@ -591,6 +584,11 @@ bool device_private_data::should_layer_handle_frame_boundary_events() const
 void device_private_data::set_present_id_feature_enabled(bool enable)
 {
    present_id_enabled = enable;
+}
+
+bool device_private_data::is_present_id_enabled()
+{
+   return present_id_enabled;
 }
 
 void device_private_data::set_swapchain_maintenance1_enabled(bool enable)

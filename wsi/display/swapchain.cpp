@@ -30,12 +30,15 @@
 
 #include <vulkan/vk_icd.h>
 #include <vulkan/vulkan.h>
-#include <wsi/swapchain_base.hpp>
-#include "swapchain.hpp"
-#include "surface.hpp"
-#include "util/macros.hpp"
-
 #include <errno.h>
+
+#include <util/macros.hpp>
+#include <wsi/extensions/image_compression_control.hpp>
+#include <wsi/extensions/present_id.hpp>
+#include <wsi/swapchain_base.hpp>
+
+#include "swapchain.hpp"
+
 namespace wsi
 {
 
@@ -73,6 +76,36 @@ static void page_flip_event(int fd, unsigned int sequence, unsigned int tv_sec, 
    UNUSED(tv_usec);
    bool *done = (bool *)user_data;
    *done = true;
+}
+
+VkResult swapchain::add_required_extensions(VkDevice device, const VkSwapchainCreateInfoKHR *swapchain_create_info)
+{
+   auto compression_control = wsi_ext_image_compression_control::create(device, swapchain_create_info);
+   if (compression_control)
+   {
+      if (!add_swapchain_extension(m_allocator.make_unique<wsi_ext_image_compression_control>(*compression_control)))
+      {
+         return VK_ERROR_OUT_OF_HOST_MEMORY;
+      }
+   }
+
+   if (m_device_data.is_present_id_enabled())
+   {
+      if (!add_swapchain_extension(m_allocator.make_unique<wsi_ext_present_id>()))
+      {
+         return VK_ERROR_OUT_OF_HOST_MEMORY;
+      }
+   }
+
+   if (m_device_data.should_layer_handle_frame_boundary_events())
+   {
+      if (!add_swapchain_extension(m_allocator.make_unique<wsi_ext_frame_boundary>(m_device_data)))
+      {
+         return VK_ERROR_OUT_OF_HOST_MEMORY;
+      }
+   }
+
+   return VK_SUCCESS;
 }
 
 VkResult swapchain::init_platform(VkDevice device, const VkSwapchainCreateInfoKHR *swapchain_create_info,
@@ -154,20 +187,22 @@ VkResult swapchain::get_surface_compatible_formats(const VkImageCreateInfo &info
          image_info.usage = info.usage;
          image_info.flags = info.flags;
 
-#if WSI_IMAGE_COMPRESSION_CONTROL_SWAPCHAIN
          VkImageCompressionControlEXT compression_control = {};
-         compression_control.sType = VK_STRUCTURE_TYPE_IMAGE_COMPRESSION_CONTROL_EXT;
-         compression_control.flags = m_image_compression_control_params.flags;
-         compression_control.compressionControlPlaneCount =
-            m_image_compression_control_params.compression_control_plane_count;
-         compression_control.pFixedRateFlags = m_image_compression_control_params.fixed_rate_flags.data();
 
          if (m_device_data.is_swapchain_compression_control_enabled())
          {
-            compression_control.pNext = image_info.pNext;
-            image_info.pNext = &compression_control;
+            auto *ext = get_swapchain_extension<wsi_ext_image_compression_control>();
+            /* For Image compression control, additional requirements to be satisfied such as
+               existence of VkImageCompressionControlEXT in swaphain_create_info for
+               the ext to be added to the list. so we check whether we got a valid pointer
+               and proceed if yes. */
+            if (ext)
+            {
+               compression_control = ext->get_compression_control_properties();
+               compression_control.pNext = image_info.pNext;
+               image_info.pNext = &compression_control;
+            }
          }
-#endif
          result = m_device_data.instance_data.disp.GetPhysicalDeviceImageFormatProperties2KHR(
             m_device_data.physical_device, &image_info, &format_props);
       }
@@ -227,12 +262,21 @@ VkResult swapchain::allocate_wsialloc(VkImageCreateInfo &image_create_info, disp
       allocation_flags |= WSIALLOC_ALLOCATE_NO_MEMORY;
    }
 
-#if WSI_IMAGE_COMPRESSION_CONTROL_SWAPCHAIN
-   if (m_image_compression_control_params.flags & VK_IMAGE_COMPRESSION_FIXED_RATE_EXPLICIT_EXT)
+   if (m_device_data.is_swapchain_compression_control_enabled())
    {
-      allocation_flags |= WSIALLOC_ALLOCATE_HIGHEST_FIXED_RATE_COMPRESSION;
+      auto *ext = get_swapchain_extension<wsi_ext_image_compression_control>();
+      /* For Image compression control, additional requirements to be satisfied such as
+         existence of VkImageCompressionControlEXT in swaphain_create_info for
+         the ext to be added to the list. so we check whether we got a valid pointer
+         and proceed if yes. */
+      if (ext)
+      {
+         if (ext->get_bitmask_for_image_compression_flags() & VK_IMAGE_COMPRESSION_FIXED_RATE_EXPLICIT_EXT)
+         {
+            allocation_flags |= WSIALLOC_ALLOCATE_HIGHEST_FIXED_RATE_COMPRESSION;
+         }
+      }
    }
-#endif
 
    wsialloc_allocate_info alloc_info = { importable_formats.data(), static_cast<unsigned>(importable_formats.size()),
                                          image_create_info.extent.width, image_create_info.extent.height,
@@ -561,7 +605,12 @@ void swapchain::present_image(const pending_present_request &pending_present)
    }
    /* The image is on screen, change the image status to PRESENTED. */
    m_swapchain_images[pending_present.image_index].status = swapchain_image::PRESENTED;
-   set_present_id(pending_present.present_id);
+
+   if (m_device_data.is_present_id_enabled())
+   {
+      auto *ext = get_swapchain_extension<wsi_ext_present_id>(true);
+      ext->set_present_id(pending_present.present_id);
+   }
 
    /* And release the old one. */
    if (presented_index < m_swapchain_images.size())

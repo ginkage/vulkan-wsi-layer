@@ -29,21 +29,30 @@
  */
 #include <cassert>
 #include "wsi_layer_experimental.hpp"
-#include "wsi/swapchain_base.hpp"
+
+#include <wsi/extensions/present_timing.hpp>
+#include <wsi/swapchain_base.hpp>
 #include "util/macros.hpp"
 
 #if VULKAN_WSI_LAYER_EXPERIMENTAL
-
 /**
  * @brief Implements vkSetSwapchainPresentTimingQueueSizeEXT Vulkan entrypoint.
  */
 VWL_VKAPI_CALL(VkResult)
 wsi_layer_vkSetSwapchainPresentTimingQueueSizeEXT(VkDevice device, VkSwapchainKHR swapchain, uint32_t size) VWL_API_POST
 {
-   UNUSED(device);
    assert(swapchain != VK_NULL_HANDLE);
+
+   auto &device_data = layer::device_private_data::get(device);
+   if (!device_data.layer_owns_swapchain(swapchain))
+   {
+      return device_data.disp.SetSwapchainPresentTimingQueueSizeEXT(device, swapchain, size);
+   }
+
    auto *sc = reinterpret_cast<wsi::swapchain_base *>(swapchain);
-   return sc->presentation_timing_queue_set_size(size);
+   auto *ext = sc->get_swapchain_extension<wsi::wsi_ext_present_timing>(true);
+
+   return ext->present_timing_queue_set_size(size);
 }
 
 /**
@@ -54,12 +63,19 @@ wsi_layer_vkGetSwapchainTimingPropertiesEXT(VkDevice device, VkSwapchainKHR swap
                                             uint64_t *pSwapchainTimingPropertiesCounter,
                                             VkSwapchainTimingPropertiesEXT *pSwapchainTimingProperties) VWL_API_POST
 {
-   UNUSED(device);
-   UNUSED(swapchain);
-   UNUSED(pSwapchainTimingPropertiesCounter);
-   UNUSED(pSwapchainTimingProperties);
-   VkResult result = VK_SUCCESS;
-   return result;
+   assert(swapchain != VK_NULL_HANDLE);
+
+   auto &device_data = layer::device_private_data::get(device);
+   if (!device_data.layer_owns_swapchain(swapchain))
+   {
+      return device_data.disp.GetSwapchainTimingPropertiesEXT(device, swapchain, pSwapchainTimingPropertiesCounter,
+                                                              pSwapchainTimingProperties);
+   }
+
+   auto *sc = reinterpret_cast<wsi::swapchain_base *>(swapchain);
+   auto *ext = sc->get_swapchain_extension<wsi::wsi_ext_present_timing>(true);
+
+   return ext->get_swapchain_timing_properties(*pSwapchainTimingPropertiesCounter, *pSwapchainTimingProperties);
 }
 
 /**
@@ -77,8 +93,11 @@ wsi_layer_vkGetSwapchainTimeDomainPropertiesEXT(
       return device_data.disp.GetSwapchainTimeDomainPropertiesEXT(device, swapchain, pTimeDomainsCounter,
                                                                   pSwapchainTimeDomainProperties);
    }
+
    auto *sc = reinterpret_cast<wsi::swapchain_base *>(swapchain);
-   return sc->set_swapchain_time_domain_properties(pSwapchainTimeDomainProperties, pTimeDomainsCounter);
+   auto *ext = sc->get_swapchain_extension<wsi::wsi_ext_present_timing>(true);
+   return ext->get_swapchain_time_domains().get_swapchain_time_domain_properties(pSwapchainTimeDomainProperties,
+                                                                                 pTimeDomainsCounter);
 }
 
 /**

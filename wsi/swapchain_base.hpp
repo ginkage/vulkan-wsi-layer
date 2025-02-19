@@ -36,16 +36,18 @@
 #include <thread>
 #include <array>
 
-#include <layer/private_data.hpp>
-#include <util/timed_semaphore.hpp>
 #include <util/custom_allocator.hpp>
+#include <util/helpers.hpp>
 #include <util/ring_buffer.hpp>
+#include <util/timed_semaphore.hpp>
+#include <util/log.hpp>
+#include <layer/private_data.hpp>
+
 #include "surface_properties.hpp"
-#include "wsi/synchronization.hpp"
-#include "wsi/frame_boundary.hpp"
-#include "util/helpers.hpp"
-#include "time_domains.hpp"
-#include "layer/wsi_layer_experimental.hpp"
+#include "synchronization.hpp"
+
+#include "extensions/frame_boundary.hpp"
+#include "extensions/wsi_extension.hpp"
 #include "util/macros.hpp"
 
 namespace wsi
@@ -115,34 +117,11 @@ struct swapchain_presentation_parameters
 
 #if VULKAN_WSI_LAYER_EXPERIMENTAL
    /**
-    * Pointer to the present timing info.
+    * The present timing info.
     */
-   const VkPresentTimingInfoEXT *present_timing_info{ nullptr };
+   VkPresentTimingInfoEXT m_present_timing_info;
 #endif
 };
-
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
-struct swapchain_presentation_entry
-{
-   /**
-    * Whether this entry is an outstanding result or not.
-    */
-   bool is_outstanding{ false };
-   /**
-    * The present id.
-    */
-   uint64_t present_id{ 0 };
-};
-#endif
-
-#if WSI_IMAGE_COMPRESSION_CONTROL_SWAPCHAIN
-struct image_compression_control_params
-{
-   VkImageCompressionFlagsEXT flags;
-   uint32_t compression_control_plane_count;
-   std::array<VkImageCompressionFixedRateFlagsEXT, MAX_PLANES> fixed_rate_flags;
-};
-#endif
 
 /**
  * @brief Base swapchain class
@@ -297,28 +276,33 @@ public:
     */
    VkResult is_bind_allowed(uint32_t image_index) const;
 
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
    /**
-    * @brief Set the size for the presentation timing queue
+    * @brief Get the swapchain extension's pointer.
     *
-    * @param queue_size The new queue size to set.
+    * @return Returns the pointer to the swapchain extensions of type T.
+    */
+   template <typename T>
+   T *get_swapchain_extension(bool required_to_be_present = false)
+   {
+      auto ext = m_extensions.get_extension<T>();
+      if (!ext && required_to_be_present)
+      {
+         WSI_LOG_ERROR("Extension required (%s) but missing.", typeid(T).name());
+         assert(false && "Extension required but missing");
+      }
+
+      return ext;
+   }
+
+   /**
+    * @brief Add a swapchain extension to the list of available swapchain extensions.
     *
-    * @return VK_SUCCESS on success, VK_ERROR_OUT_OF_HOST_MEMORY when there is not enough memory, VK_NOT_READY otherwise.
-    * .
+    * @param extension unique_ptr to the extension to be added.
+    *
+    * @return Returns true on success and false otherwise.
     */
 
-   VkResult presentation_timing_queue_set_size(size_t queue_size);
-   /**
-    * @brief Set swapchain time domain properties.
-    *
-    * @param pSwapchainTimeDomainProperties time domain struct to be set
-    * @param pTimeDomainsCounter size of the pSwapchainTimeDomainProperties
-    *
-    * @return Returns VK_SUCCESS on success, otherwise an appropriate error code.
-    */
-   VkResult set_swapchain_time_domain_properties(VkSwapchainTimeDomainPropertiesEXT *pSwapchainTimeDomainProperties,
-                                                 uint64_t *pTimeDomainsCounter);
-#endif
+   bool add_swapchain_extension(util::unique_ptr<wsi_ext> extension);
 
 protected:
    layer::device_private_data &m_device_data;
@@ -426,25 +410,10 @@ protected:
     */
    VkQueue m_queue;
 
-#if WSI_IMAGE_COMPRESSION_CONTROL_SWAPCHAIN
-   /**
-    * @brief Describes the image compression the swapchain will use
-    *
-    */
-   image_compression_control_params m_image_compression_control_params;
-#endif
-
    /**
     * @brief Image creation info used for all swapchain images.
     */
    VkImageCreateInfo m_image_create_info;
-
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
-   /**
-    *  @brief Handle the backend specific time domains for each present stage.
-    */
-   swapchain_time_domains m_time_domains;
-#endif
 
    /**
     * @brief Return the VkAllocationCallbacks passed in this object constructor.
@@ -493,6 +462,22 @@ protected:
     */
    virtual VkResult init_platform(VkDevice device, const VkSwapchainCreateInfoKHR *swapchain_create_info,
                                   bool &use_presentation_thread) = 0;
+
+   /**
+    * @brief Adds required extensions to the extension list of the swapchain
+    *
+    * @param device Vulkan device
+    * @param swapchain_create_info Swapchain create info
+    * @return VK_SUCCESS on success, other result codes on failure
+    */
+   virtual VkResult add_required_extensions(VkDevice device, const VkSwapchainCreateInfoKHR *swapchain_create_info)
+   {
+      UNUSED(device);
+      UNUSED(swapchain_create_info);
+
+      /* No extensions required by base class implementation */
+      return VK_SUCCESS;
+   }
 
    /**
     * @brief Base swapchain teardown.
@@ -628,13 +613,6 @@ protected:
       m_error_state = state;
    }
 
-   /**
-    * @brief Set the present ID for the swapchain.
-    *
-    * This feature is provided by the VK_KHR_present_id extension.
-    */
-   void set_present_id(uint64_t value);
-
 private:
    std::mutex m_image_acquire_lock;
    /**
@@ -728,56 +706,9 @@ private:
    bool m_started_presenting;
 
    /**
-    * @brief Handle presentation mode switching.
-    *
-    * If VkSwapchainPresentModeInfoEXT is supplied as part of the pNext chain of VkPresentInfoKHR
-    * then this function handles switching the swapchains(s)' presentation mode
-    * to the one(s) requested in VkSwapchainPresentModeInfoEXT structure.
-    *
-    * @param swapchain_present_mode         presentation mode to switch to.
-    *
-    * @return VK_SUCCESS on success or an error code otherwise.
+    * @brief Holds the swapchain extensions and related functionalities.
     */
-   virtual VkResult handle_switching_presentation_mode(VkPresentModeKHR swapchain_present_mode);
-
-   /**
-    * @brief Handle VkSwapchainPresentModesCreateInfoEXT .
-    *
-    * If VkSwapchainPresentModesCreateInfoEXT is supplied as part of the pNext chain of VkSwapchainCreateInfoKHR
-    * then this function handles setting up the presentation modes for the swapchain.
-    *
-    * @param device                  VkDevice object.
-    * @param swapchain_create_info   Pointer to the swapchain create info struct.
-    *
-    * @return VK_SUCCESS on success or an error code otherwise.
-    */
-   VkResult handle_swapchain_present_modes_create_info(VkDevice device,
-                                                       const VkSwapchainCreateInfoKHR *swapchain_create_info);
-
-   /**
-    * @brief Current present ID for this swapchain.
-    */
-   uint64_t m_present_id{ 0 };
-
-   /**
-    * @brief Handler for frame boundary events
-    *
-    */
-   frame_boundary_handler m_frame_boundary_handler;
-
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
-   /**
-    * @brief Queue for presentation timings.
-    */
-   util::vector<swapchain_presentation_entry> m_presentation_timing;
-
-   /**
-    * @brief Get the size of the presentation timing queue
-    *
-    * @return queue size of the presentation timestamp queue.
-    */
-   size_t presentation_timing_get_num_outstanding_results();
-#endif
+   wsi_ext_maintainer m_extensions;
 };
 
 } /* namespace wsi */

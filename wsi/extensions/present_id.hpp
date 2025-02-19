@@ -23,36 +23,47 @@
  */
 
 /**
- * @file swapchain_maintenance_api.cpp
+ * @file present_id.hpp
  *
- * @brief Contains the Vulkan entrypoints for the swapchain maintenance.
+ * @brief Contains the base class declaration for the VK_KHR_present_id extension.
  */
 
-#include <cassert>
-#include "private_data.hpp"
-#include "swapchain_maintenance_api.hpp"
+#pragma once
 
-#include <wsi/wsi_factory.hpp>
+#include <util/custom_allocator.hpp>
+#include <util/macros.hpp>
 
-VWL_VKAPI_CALL(VkResult)
-wsi_layer_vkReleaseSwapchainImagesEXT(VkDevice device, const VkReleaseSwapchainImagesInfoEXT *pReleaseInfo) VWL_API_POST
+#include "wsi_extension.hpp"
+
+namespace wsi
 {
-   if (pReleaseInfo == nullptr || pReleaseInfo->imageIndexCount == 0)
-   {
-      return VK_SUCCESS;
-   }
 
-   assert(pReleaseInfo->pImageIndices != nullptr);
-   assert(pReleaseInfo->swapchain != VK_NULL_HANDLE);
+/**
+ * @brief Present ID extension class
+ *
+ * This class defines the present ID extension
+ * features.
+ */
+class wsi_ext_present_id : public wsi_ext
+{
+public:
+   /**
+    * @brief The name of the extension.
+    */
+   WSI_DEFINE_EXTENSION(VK_KHR_PRESENT_ID_EXTENSION_NAME);
 
-   auto &device_data = layer::device_private_data::get(device);
-   if (!device_data.layer_owns_swapchain(pReleaseInfo->swapchain))
-   {
-      return device_data.disp.ReleaseSwapchainImagesEXT(device, pReleaseInfo);
-   }
+   /**
+    * @brief Set the present ID for the swapchain.
+    *
+    * @param value Value to set for the present_id.
+    */
+   void set_present_id(uint64_t value);
 
-   auto *sc = reinterpret_cast<wsi::swapchain_base *>(pReleaseInfo->swapchain);
-   sc->release_images(pReleaseInfo->imageIndexCount, pReleaseInfo->pImageIndices);
+private:
+   /**
+    * @brief Current present ID for this swapchain.
+    */
+   uint64_t m_present_id{ 0 };
+};
 
-   return VK_SUCCESS;
-}
+} /* namespace wsi */

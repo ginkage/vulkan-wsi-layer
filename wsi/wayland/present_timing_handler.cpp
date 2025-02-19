@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024-2025 Arm Limited.
+ * Copyright (c) 2025 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -23,36 +23,35 @@
  */
 
 /**
- * @file swapchain_maintenance_api.cpp
+ * @file present_timing_handler.cpp
  *
- * @brief Contains the Vulkan entrypoints for the swapchain maintenance.
+ * @brief Contains the functionality to implement features for present timing extension.
  */
 
-#include <cassert>
-#include "private_data.hpp"
-#include "swapchain_maintenance_api.hpp"
+#include "present_timing_handler.hpp"
 
-#include <wsi/wsi_factory.hpp>
-
-VWL_VKAPI_CALL(VkResult)
-wsi_layer_vkReleaseSwapchainImagesEXT(VkDevice device, const VkReleaseSwapchainImagesInfoEXT *pReleaseInfo) VWL_API_POST
+wsi_ext_present_timing_wayland::wsi_ext_present_timing_wayland(const util::allocator &allocator)
+   : wsi_ext_present_timing(allocator)
 {
-   if (pReleaseInfo == nullptr || pReleaseInfo->imageIndexCount == 0)
-   {
-      return VK_SUCCESS;
-   }
+}
 
-   assert(pReleaseInfo->pImageIndices != nullptr);
-   assert(pReleaseInfo->swapchain != VK_NULL_HANDLE);
+util::unique_ptr<wsi_ext_present_timing_wayland> wsi_ext_present_timing_wayland::create(
+   const util::allocator &allocator)
+{
+   std::array<util::unique_ptr<wsi::vulkan_time_domain>, 1> time_domains_array = {
+      allocator.make_unique<wsi::vulkan_time_domain>(VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT,
+                                                     VK_TIME_DOMAIN_DEVICE_KHR)
+   };
 
-   auto &device_data = layer::device_private_data::get(device);
-   if (!device_data.layer_owns_swapchain(pReleaseInfo->swapchain))
-   {
-      return device_data.disp.ReleaseSwapchainImagesEXT(device, pReleaseInfo);
-   }
+   return wsi_ext_present_timing::create<wsi_ext_present_timing_wayland>(allocator, time_domains_array);
+}
 
-   auto *sc = reinterpret_cast<wsi::swapchain_base *>(pReleaseInfo->swapchain);
-   sc->release_images(pReleaseInfo->imageIndexCount, pReleaseInfo->pImageIndices);
+VkResult wsi_ext_present_timing_wayland::get_swapchain_timing_properties(
+   uint64_t &timing_properties_counter, VkSwapchainTimingPropertiesEXT &timing_properties)
+{
+   timing_properties_counter = 0;
+   timing_properties.refreshDuration = 0;
+   timing_properties.variableRefreshDelay = 0;
 
    return VK_SUCCESS;
 }

@@ -46,6 +46,10 @@
 
 #include "swapchain_base.hpp"
 #include "wsi_factory.hpp"
+
+#include "extensions/present_timing.hpp"
+#include "extensions/swapchain_maintenance.hpp"
+
 namespace wsi
 {
 
@@ -216,80 +220,12 @@ swapchain_base::swapchain_base(layer::device_private_data &dev_data, const VkAll
    , m_ancestor(VK_NULL_HANDLE)
    , m_device(VK_NULL_HANDLE)
    , m_queue(VK_NULL_HANDLE)
-#if WSI_IMAGE_COMPRESSION_CONTROL_SWAPCHAIN
-   , m_image_compression_control_params({ VK_IMAGE_COMPRESSION_DEFAULT_EXT, 0, {} })
-#endif
    , m_image_create_info()
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
-   , m_time_domains(m_allocator)
-#endif
    , m_image_acquire_lock()
    , m_error_state(VK_NOT_READY)
    , m_started_presenting(false)
-   , m_frame_boundary_handler(m_device_data)
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
-   , m_presentation_timing(m_allocator)
-#endif
+   , m_extensions(m_allocator)
 {
-}
-
-static VkResult handle_scaling_create_info(VkDevice device, const VkSwapchainCreateInfoKHR *swapchain_create_info,
-                                           const VkSurfaceKHR &surface)
-{
-
-   auto present_scaling_create_info = util::find_extension<VkSwapchainPresentScalingCreateInfoEXT>(
-      VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_SCALING_CREATE_INFO_EXT, swapchain_create_info);
-   if (present_scaling_create_info != nullptr)
-   {
-      auto &device_data = layer::device_private_data::get(device);
-      auto &instance = device_data.instance_data;
-
-      VkSurfacePresentScalingCapabilitiesEXT scaling_capabilities = {};
-      wsi::surface_properties *props = wsi::get_surface_properties(instance, surface);
-      assert(props != nullptr);
-      props->get_surface_present_scaling_and_gravity(&scaling_capabilities);
-
-      if (((present_scaling_create_info->scalingBehavior != 0) &&
-           ((scaling_capabilities.supportedPresentScaling & present_scaling_create_info->scalingBehavior) == 0)) ||
-          ((present_scaling_create_info->presentGravityX != 0) &&
-           ((scaling_capabilities.supportedPresentGravityX & present_scaling_create_info->presentGravityX) == 0)) ||
-          ((present_scaling_create_info->presentGravityY != 0) &&
-           ((scaling_capabilities.supportedPresentGravityY & present_scaling_create_info->presentGravityY) == 0)))
-      {
-         return VK_ERROR_INITIALIZATION_FAILED;
-      }
-   }
-   return VK_SUCCESS;
-}
-
-VkResult swapchain_base::handle_swapchain_present_modes_create_info(
-   VkDevice device, const VkSwapchainCreateInfoKHR *swapchain_create_info)
-{
-   const auto *swapchain_present_modes_create_info = util::find_extension<VkSwapchainPresentModesCreateInfoEXT>(
-      VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_MODES_CREATE_INFO_EXT, swapchain_create_info->pNext);
-   if (swapchain_present_modes_create_info != nullptr)
-   {
-      if (!m_present_modes.try_resize(swapchain_present_modes_create_info->presentModeCount))
-      {
-         return VK_ERROR_OUT_OF_HOST_MEMORY;
-      }
-      layer::device_private_data &device_data = layer::device_private_data::get(device);
-      auto &instance = device_data.instance_data;
-      wsi::surface_properties *props = wsi::get_surface_properties(instance, m_surface);
-      assert(props != nullptr);
-      for (uint32_t i = 0; i < swapchain_present_modes_create_info->presentModeCount; i++)
-      {
-         auto res =
-            props->is_compatible_present_modes(m_present_mode, swapchain_present_modes_create_info->pPresentModes[i]);
-         if (!res)
-         {
-            WSI_LOG_ERROR("present modes incompatible");
-            return VK_ERROR_INITIALIZATION_FAILED;
-         }
-         m_present_modes[i] = swapchain_present_modes_create_info->pPresentModes[i];
-      }
-   }
-   return VK_SUCCESS;
 }
 
 VkResult swapchain_base::init(VkDevice device, const VkSwapchainCreateInfoKHR *swapchain_create_info)
@@ -300,33 +236,23 @@ VkResult swapchain_base::init(VkDevice device, const VkSwapchainCreateInfoKHR *s
 
    m_device = device;
    m_surface = swapchain_create_info->surface;
-
    m_present_mode = swapchain_create_info->presentMode;
 
-   TRY(handle_swapchain_present_modes_create_info(device, swapchain_create_info));
+   /* Register required extensions by the swapchain */
+   TRY_LOG_CALL(add_required_extensions(device, swapchain_create_info));
 
-#if WSI_IMAGE_COMPRESSION_CONTROL_SWAPCHAIN
-   const auto *image_compression_control = util::find_extension<VkImageCompressionControlEXT>(
-      VK_STRUCTURE_TYPE_IMAGE_COMPRESSION_CONTROL_EXT, swapchain_create_info->pNext);
-   if (m_device_data.is_swapchain_compression_control_enabled() && image_compression_control != nullptr)
+   auto *ext = get_swapchain_extension<wsi::wsi_ext_swapchain_maintenance1>();
+   if (ext)
    {
-      m_image_compression_control_params.compression_control_plane_count =
-         image_compression_control->compressionControlPlaneCount;
-      m_image_compression_control_params.flags = image_compression_control->flags;
-      for (uint32_t i = 0; i < image_compression_control->compressionControlPlaneCount; i++)
-      {
-         m_image_compression_control_params.fixed_rate_flags[i] = image_compression_control->pFixedRateFlags[i];
-      }
+      TRY_LOG_CALL(ext->handle_swapchain_present_modes_create_info(device, swapchain_create_info, m_surface));
+      TRY_LOG_CALL(ext->handle_scaling_create_info(device, swapchain_create_info, m_surface));
    }
-#endif
 
    /* Init image to invalid values. */
    if (!m_swapchain_images.try_resize(swapchain_create_info->minImageCount))
    {
       return VK_ERROR_OUT_OF_HOST_MEMORY;
    }
-
-   TRY_LOG_CALL(handle_scaling_create_info(device, swapchain_create_info, m_surface));
 
    /* We have allocated images, we can call the platform init function if something needs to be done. */
    bool use_presentation_thread = true;
@@ -414,7 +340,6 @@ VkResult swapchain_base::init(VkDevice device, const VkSwapchainCreateInfoKHR *s
    }
 
    set_error_state(VK_SUCCESS);
-
    return VK_SUCCESS;
 }
 
@@ -683,25 +608,23 @@ VkResult swapchain_base::queue_present(VkQueue queue, const VkPresentInfoKHR *pr
                                        const swapchain_presentation_parameters &submit_info)
 {
 #if VULKAN_WSI_LAYER_EXPERIMENTAL
-   if (submit_info.present_timing_info)
+   auto *ext = get_swapchain_extension<wsi::wsi_ext_present_timing>();
+   if (ext)
    {
       wsi::swapchain_presentation_entry presentation_entry = {};
       presentation_entry.present_id = submit_info.pending_present.present_id;
-      if ((m_presentation_timing.size()) >= m_presentation_timing.capacity())
-      {
-         return VK_ERROR_PRESENT_TIMING_QUEUE_FULL_EXT;
-      }
-
-      if (!m_presentation_timing.try_push_back(presentation_entry))
-      {
-         return VK_ERROR_OUT_OF_HOST_MEMORY;
-      }
+      TRY_LOG_CALL(ext->add_presentation_entry(presentation_entry));
    }
 #endif
 
    if (submit_info.switch_presentation_mode)
    {
-      TRY(handle_switching_presentation_mode(submit_info.present_mode));
+      /* Assert when a presentation mode switch is requested and the swapchain_maintenance1 extension which implements this is not available */
+      auto *ext = get_swapchain_extension<wsi::wsi_ext_swapchain_maintenance1>(true);
+      if (ext)
+      {
+         TRY_LOG_CALL(ext->handle_switching_presentation_mode(submit_info.present_mode));
+      }
    }
 
    const VkSemaphore *wait_semaphores = &m_swapchain_images[submit_info.pending_present.image_index].present_semaphore;
@@ -725,9 +648,11 @@ VkResult swapchain_base::queue_present(VkQueue queue, const VkPresentInfoKHR *pr
    /* Do not handle the event if it was handled before reaching this point */
    if (submit_info.handle_present_frame_boundary_event)
    {
-      frame_boundary = m_frame_boundary_handler.handle_frame_boundary_event(
-         present_info, &m_swapchain_images[submit_info.pending_present.image_index].image);
-      if (frame_boundary.has_value())
+      auto *ext = get_swapchain_extension<wsi::wsi_ext_frame_boundary>();
+      frame_boundary = handle_frame_boundary_event(
+         present_info, &m_swapchain_images[submit_info.pending_present.image_index].image, ext);
+
+      if (frame_boundary)
       {
          submission_pnext = &frame_boundary.value();
       }
@@ -854,77 +779,9 @@ VkResult swapchain_base::is_bind_allowed(uint32_t image_index) const
                                                                                    VK_ERROR_OUT_OF_HOST_MEMORY;
 }
 
-VkResult swapchain_base::handle_switching_presentation_mode(VkPresentModeKHR swapchain_present_mode)
+bool swapchain_base::add_swapchain_extension(util::unique_ptr<wsi_ext> extension)
 {
-   assert(m_present_modes.size() > 0);
-   auto it = std::find_if(m_present_modes.begin(), m_present_modes.end(),
-                          [swapchain_present_mode](VkPresentModeKHR p) { return p == swapchain_present_mode; });
-   if (it == m_present_modes.end())
-   {
-      WSI_LOG_ERROR("unable to switch presentation mode");
-      return VK_ERROR_SURFACE_LOST_KHR;
-   }
-   m_present_mode = swapchain_present_mode;
-   return VK_SUCCESS;
+   return m_extensions.add_extension(std::move(extension));
 }
-
-void swapchain_base::set_present_id(uint64_t value)
-{
-   if (value != 0)
-   {
-      assert(value > m_present_id);
-      m_present_id = value;
-   }
-}
-
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
-VkResult swapchain_base::presentation_timing_queue_set_size(size_t queue_size)
-{
-   if (presentation_timing_get_num_outstanding_results() > queue_size)
-   {
-      return VK_NOT_READY;
-   }
-
-   util::vector<swapchain_presentation_entry> presentation_timing(
-      util::allocator(m_allocator, VK_SYSTEM_ALLOCATION_SCOPE_DEVICE));
-   if (!presentation_timing.try_reserve(queue_size))
-   {
-      return VK_ERROR_OUT_OF_HOST_MEMORY;
-   }
-
-   for (auto iter : m_presentation_timing)
-   {
-      if (iter.is_outstanding)
-      {
-         if (!presentation_timing.try_push_back(iter))
-         {
-            return VK_ERROR_OUT_OF_HOST_MEMORY;
-         }
-      }
-   }
-   m_presentation_timing.swap(presentation_timing);
-   return VK_SUCCESS;
-}
-
-size_t swapchain_base::presentation_timing_get_num_outstanding_results()
-{
-   size_t num_outstanding = 0;
-
-   for (const auto &iter : m_presentation_timing)
-   {
-      if (iter.is_outstanding)
-      {
-         num_outstanding++;
-      }
-   }
-   return num_outstanding;
-}
-
-VkResult swapchain_base::set_swapchain_time_domain_properties(
-   VkSwapchainTimeDomainPropertiesEXT *pSwapchainTimeDomainProperties, uint64_t *pTimeDomainsCounter)
-{
-   return m_time_domains.set_swapchain_time_domain_properties(pSwapchainTimeDomainProperties, pTimeDomainsCounter);
-}
-#endif
 
 } /* namespace wsi */

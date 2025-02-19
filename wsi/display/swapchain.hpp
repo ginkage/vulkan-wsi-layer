@@ -32,11 +32,11 @@
 
 #include <vulkan/vk_icd.h>
 #include <vulkan/vulkan.h>
-#include <wsi/swapchain_base.hpp>
-#include "util/wsialloc/wsialloc.h"
+
 #include "drm_display.hpp"
-#include "wsi/external_memory.hpp"
 #include "surface.hpp"
+#include <util/wsialloc/wsialloc.h>
+#include <wsi/external_memory.hpp>
 
 namespace wsi
 {
@@ -124,11 +124,19 @@ private:
 
    VkResult create_framebuffer(const VkImageCreateInfo &image_create_info, display_image_data *image_data);
 
+   /**
+    * @brief Adds required extensions to the extension list of the swapchain
+    *
+    * @param device Vulkan device
+    * @param swapchain_create_info Swapchain create info
+    * @return VK_SUCCESS on success, other result codes on failure
+    */
+   VkResult add_required_extensions(VkDevice device, const VkSwapchainCreateInfoKHR *swapchain_create_info) override;
+
    wsialloc_allocator *m_wsi_allocator;
    drm_display_mode *m_display_mode;
    image_creation_parameters m_image_creation_parameters;
 };
-
 } /* namespace display */
 
 } /* namespace wsi*/
