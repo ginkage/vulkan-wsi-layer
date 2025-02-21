@@ -95,7 +95,7 @@ protected:
     *
     * @param image Handle to the image about to be released.
     */
-   void destroy_image(wsi::swapchain_image &image);
+   void destroy_image(wsi::swapchain_image &image) override;
 
    /**
     * @brief Sets the present payload for a swapchain image.
