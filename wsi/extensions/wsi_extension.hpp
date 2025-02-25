@@ -59,6 +59,8 @@ namespace wsi
 class wsi_ext
 {
 public:
+   virtual ~wsi_ext() = default;
+
    /**
     * @brief Get the name of the extension.
     *
