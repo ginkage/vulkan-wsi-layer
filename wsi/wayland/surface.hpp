@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2025 Arm Limited.
+ * Copyright (c) 2021, 2024-2025 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -31,6 +31,7 @@
 #ifndef __STDC_VERSION__
 #define __STDC_VERSION__ 0
 #endif
+#include <sys/types.h>
 #include <wayland-client.h>
 
 #include "wsi/surface.hpp"
@@ -149,6 +150,14 @@ public:
     */
    bool wait_next_frame_event();
 
+   /**
+    * @brief Return the clockid of the surface
+    */
+   clockid_t clockid()
+   {
+      return m_clockid;
+   }
+
 private:
    /**
     * @brief Initialize the WSI surface by creating Wayland queues and linking to Wayland protocols.
@@ -189,7 +198,7 @@ private:
    wayland_owner<wp_presentation> presentation_time_interface;
 
    /**
-    * Container for a callback object for the latest frame done event.
+    * @brief Container for a callback object for the latest frame done event.
     *
     * The callback object should be destroyed before the queue so any new events
     * on the queue will be discarded. If a proxy object is destroyed after a queue,
@@ -205,6 +214,11 @@ private:
     * callback to indicate the server is ready for the next buffer.
     */
    bool present_pending;
+
+   /**
+    * @brief Stores the clock ID reported by the wp_presentation interface
+    */
+   clockid_t m_clockid;
 };
 
 } // namespace wayland

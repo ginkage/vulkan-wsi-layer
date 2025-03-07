@@ -37,11 +37,13 @@ wsi_ext_present_timing_wayland::wsi_ext_present_timing_wayland(const util::alloc
 }
 
 util::unique_ptr<wsi_ext_present_timing_wayland> wsi_ext_present_timing_wayland::create(
-   const util::allocator &allocator)
+   VkTimeDomainKHR image_first_pixel_visible_time_domain, const util::allocator &allocator)
 {
-   std::array<util::unique_ptr<wsi::vulkan_time_domain>, 1> time_domains_array = {
+   std::array<util::unique_ptr<wsi::vulkan_time_domain>, 2> time_domains_array = {
       allocator.make_unique<wsi::vulkan_time_domain>(VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT,
-                                                     VK_TIME_DOMAIN_DEVICE_KHR)
+                                                     VK_TIME_DOMAIN_DEVICE_KHR),
+      allocator.make_unique<wsi::vulkan_time_domain>(VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_VISIBLE_BIT_EXT,
+                                                     image_first_pixel_visible_time_domain)
    };
 
    return wsi_ext_present_timing::create<wsi_ext_present_timing_wayland>(allocator, time_domains_array);
