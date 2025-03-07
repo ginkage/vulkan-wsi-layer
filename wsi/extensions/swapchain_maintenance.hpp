@@ -63,11 +63,14 @@ public:
     * then this function handles switching the swapchains(s)' presentation mode
     * to the one(s) requested in VkSwapchainPresentModeInfoEXT structure.
     *
-    * @param swapchain_present_mode presentation mode to switch to.
+    * @param present_mode_to_switch_to presentation mode to switch to.
+    * @param swapchain_present_mode presentation mode to amend to the new presentation mode if
+    *                               deemed possible.
     *
     * @return VK_SUCCESS on success or an error code otherwise.
     */
-   VkResult handle_switching_presentation_mode(VkPresentModeKHR swapchain_present_mode);
+   VkResult handle_switching_presentation_mode(VkPresentModeKHR present_mode_to_switch_to,
+                                               VkPresentModeKHR &swapchain_present_mode);
 
    /**
     * @brief If VkSwapchainPresentModesCreateInfoEXT is supplied as part of the pNext chain of VkSwapchainCreateInfoKHR
@@ -101,11 +104,6 @@ private:
     * @brief Possible presentation modes this swapchain is allowed to present with VkSwapchainPresentModesCreateInfoEXT
     */
    util::vector<VkPresentModeKHR> m_present_modes;
-
-   /**
-    * @brief Present mode currently being used for this swapchain
-    */
-   VkPresentModeKHR m_present_mode;
 };
 
 } /* namespace wsi */
