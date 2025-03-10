@@ -94,6 +94,8 @@ public:
    {
    }
 
+   virtual ~swapchain_time_domain() = default;
+
    virtual swapchain_calibrated_time calibrate() = 0;
 
    VkPresentStageFlagsEXT get_present_stages()
