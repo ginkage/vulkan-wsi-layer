@@ -12,7 +12,6 @@ Build-Depends:
  libwayland-bin [linux-any],
  libwayland-client0 [linux-any],
  libwayland-dev [linux-any], 
- linux-headers-legacy-rk35xx | linux-headers-vendor-rk35xx [linux-any],
  wayland-protocols [linux-any],
 Rules-Requires-Root: no
 Vcs-Git: git://github.com/ginkage/vulkan-wsi-layer.git

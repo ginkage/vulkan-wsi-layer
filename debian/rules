@@ -20,7 +20,6 @@ override_dh_auto_configure:
 		       -DCMAKE_INSTALL_PREFIX=/usr \
                        -DSELECT_EXTERNAL_ALLOCATOR=dma_buf_heaps \
                        -DWSIALLOC_MEMORY_HEAP_NAME=system-uncached \
-                       -DKERNEL_HEADER_DIR=/usr/src/linux-headers-*-rk35xx/arch/$(DEB_BUILD_ARCH)/include \
 		       $(EXTRA_CMAKE_ARGS)
 
 
