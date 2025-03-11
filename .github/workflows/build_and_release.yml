@@ -1,0 +1,69 @@
+name: Build and Release Debian Package
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+jobs:
+
+  build_and_release:
+    name: Build and Release Debian Package
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: write
+    steps:
+
+      - name: Fix Git Permissions
+        run: |
+          mkdir -p ~/.config/git
+          chmod -R 700 ~/.config
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y software-properties-common
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            debhelper \
+            devscripts \
+            cmake \
+            pkg-config \
+            libdrm-dev \
+            libx11-dev \
+            libxcb1-dev \
+            libvulkan-dev \
+            libwayland-bin \
+            libwayland-client0 \
+            libwayland-dev \
+            wayland-protocols
+          sudo apt-get clean autoclean --yes
+          sudo apt-get autoremove --yes
+          sudo rm -rf /var/cache/apt/archives* /var/lib/apt/lists/*
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build Debian package
+        run: |
+          debuild -us -uc -b && cp -a ../*.deb ./
+
+      - name: Get version
+        id: get_version
+        run: |
+          echo "version=$(dpkg-parsechangelog --show-field Version)" >> $GITHUB_OUTPUT
+
+      - name: Get commit hash
+        id: get_commit_hash
+        uses: prompt/actions-commit-hash@v3
+
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: v${{ steps.get_version.outputs.version }}-${{ steps.get_commit_hash.outputs.short }}
+          tag_name: v${{ steps.get_version.outputs.version }}-${{ steps.get_commit_hash.outputs.short }}
+          generate_release_notes: true
+          files: |
+            ./*.deb

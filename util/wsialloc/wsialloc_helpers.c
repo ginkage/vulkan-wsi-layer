@@ -138,8 +138,8 @@ wsialloc_error wsiallocp_alloc(wsialloc_allocator *allocator, wsiallocp_alloc_ca
       return WSIALLOC_ERROR_INVALID;
    }
 
-   int local_strides[WSIALLOC_MAX_PLANES];
-   int local_offsets[WSIALLOC_MAX_PLANES];
+   int local_strides[WSIALLOC_MAX_PLANES] = {};
+   int local_offsets[WSIALLOC_MAX_PLANES] = {};
    wsialloc_error err = WSIALLOC_ERROR_NONE;
    wsialloc_format_descriptor selected_format_desc = {};
 

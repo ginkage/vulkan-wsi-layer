@@ -3,15 +3,17 @@ Section: graphics
 Priority: optional
 Maintainer: Wang Haoyang <haoyangw@gmail.com>
 Standards-Version: 4.1.4
-Build-Depends: 
+Build-Depends:
  debhelper (>= 12),
  cmake (>= 3.4.3),
  pkg-config,
  libdrm-dev,
+ libx11-dev,
+ libxcb1-dev,
  libvulkan-dev (>= 1.3.275.0),
  libwayland-bin [linux-any],
  libwayland-client0 [linux-any],
- libwayland-dev [linux-any], 
+ libwayland-dev [linux-any],
  wayland-protocols [linux-any],
 Rules-Requires-Root: no
 Vcs-Git: git://github.com/ginkage/vulkan-wsi-layer.git
@@ -24,8 +26,6 @@ Architecture: arm64 armhf
 Pre-Depends: ${misc:Pre-Depends}
 Depends:
  libvulkan1,
- vulkan-icd,
- ${shlibs:Depends},
  ${misc:Depends}
 Multi-Arch: same
 Description: Vulkan Window System Integration Layer
