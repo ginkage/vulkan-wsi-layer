@@ -1,0 +1,8 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: vulkan-wsi-layer
+Source: https://github.com/ginkage/vulkan-wsi-layer
+
+Files: *
+Copyright: 2019 Arm Limited
+License: MIT
+
