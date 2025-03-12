@@ -138,22 +138,22 @@ VKAPI_ATTR VkResult create_instance(const VkInstanceCreateInfo *pCreateInfo, con
 
    /* Find all the platforms that the layer can handle based on pCreateInfo->ppEnabledExtensionNames. */
    auto layer_platforms_to_enable = wsi::find_enabled_layer_platforms(pCreateInfo);
+
+   /* Create a list of extensions to enable, including the provided extensions and those required by the layer. */
+   TRY_LOG_CALL(extensions.add(pCreateInfo->ppEnabledExtensionNames, pCreateInfo->enabledExtensionCount));
+
    if (!layer_platforms_to_enable.empty())
    {
-      /* Create a list of extensions to enable, including the provided extensions and those required by the layer. */
-      TRY_LOG_CALL(extensions.add(pCreateInfo->ppEnabledExtensionNames, pCreateInfo->enabledExtensionCount));
-
       if (!extensions.contains(VK_KHR_SURFACE_EXTENSION_NAME))
       {
          return VK_ERROR_EXTENSION_NOT_PRESENT;
       }
-
       TRY_LOG_CALL(wsi::add_instance_extensions_required_by_layer(layer_platforms_to_enable, extensions));
-      TRY_LOG_CALL(extensions.get_extension_strings(modified_enabled_extensions));
-
-      modified_info.ppEnabledExtensionNames = modified_enabled_extensions.data();
-      modified_info.enabledExtensionCount = modified_enabled_extensions.size();
    }
+
+   TRY_LOG_CALL(extensions.get_extension_strings(modified_enabled_extensions));
+   modified_info.ppEnabledExtensionNames = modified_enabled_extensions.data();
+   modified_info.enabledExtensionCount = modified_enabled_extensions.size();
 
    bool maintainance1_support = true;
    /* Loop through unsupported extensions and check if they exist in enabled extensions */
