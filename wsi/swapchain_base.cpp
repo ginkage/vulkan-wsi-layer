@@ -623,7 +623,7 @@ VkResult swapchain_base::queue_present(VkQueue queue, const VkPresentInfoKHR *pr
       auto *ext = get_swapchain_extension<wsi::wsi_ext_swapchain_maintenance1>(true);
       if (ext)
       {
-         TRY_LOG_CALL(ext->handle_switching_presentation_mode(submit_info.present_mode));
+         TRY_LOG_CALL(ext->handle_switching_presentation_mode(submit_info.present_mode, m_present_mode));
       }
    }
 

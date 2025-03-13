@@ -43,17 +43,18 @@ wsi_ext_swapchain_maintenance1::wsi_ext_swapchain_maintenance1(const util::alloc
 {
 }
 
-VkResult wsi_ext_swapchain_maintenance1::handle_switching_presentation_mode(VkPresentModeKHR swapchain_present_mode)
+VkResult wsi_ext_swapchain_maintenance1::handle_switching_presentation_mode(VkPresentModeKHR present_mode_to_switch_to,
+                                                                            VkPresentModeKHR &swapchain_present_mode)
 {
    assert(m_present_modes.size() > 0);
    auto it = std::find_if(m_present_modes.begin(), m_present_modes.end(),
-                          [swapchain_present_mode](VkPresentModeKHR p) { return p == swapchain_present_mode; });
+                          [present_mode_to_switch_to](VkPresentModeKHR p) { return p == present_mode_to_switch_to; });
    if (it == m_present_modes.end())
    {
       WSI_LOG_ERROR("unable to switch presentation mode");
       return VK_ERROR_SURFACE_LOST_KHR;
    }
-   m_present_mode = swapchain_present_mode;
+   swapchain_present_mode = present_mode_to_switch_to;
    return VK_SUCCESS;
 }
 
@@ -74,8 +75,8 @@ VkResult wsi_ext_swapchain_maintenance1::handle_swapchain_present_modes_create_i
       assert(props != nullptr);
       for (uint32_t i = 0; i < swapchain_present_modes_create_info->presentModeCount; i++)
       {
-         auto res =
-            props->is_compatible_present_modes(m_present_mode, swapchain_present_modes_create_info->pPresentModes[i]);
+         auto res = props->is_compatible_present_modes(swapchain_create_info->presentMode,
+                                                       swapchain_present_modes_create_info->pPresentModes[i]);
          if (!res)
          {
             WSI_LOG_ERROR("present modes incompatible");
