@@ -94,7 +94,7 @@ public:
     *
     * @tparam FunctionType The signature of the requested function.
     * @param fn_name The name of the function.
-    * @return the requested function pointer, or std::nullopt.
+    * @return the requested function pointer if valid pointer, or std::nullopt.
     */
    template <typename FunctionType>
    std::optional<FunctionType> get_fn(const char *fn_name) const
@@ -102,7 +102,10 @@ public:
       auto fn = m_entrypoints->find(fn_name);
       if (fn != m_entrypoints->end())
       {
-         return reinterpret_cast<FunctionType>(fn->second.fn);
+         if (fn->second.fn != nullptr)
+         {
+            return reinterpret_cast<FunctionType>(fn->second.fn);
+         }
       }
 
       return std::nullopt;
@@ -138,8 +141,7 @@ protected:
          return (*fn)(std::forward<Args>(args)...);
       }
 
-      WSI_LOG_WARNING("Call to %s failed, dispatch table does not contain the function.", fn_name);
-
+      WSI_LOG_ERROR("Call to %s failed, dispatch table does not contain the function.", fn_name);
       return std::nullopt;
    }
 
@@ -163,7 +165,7 @@ protected:
          return (*fn)(std::forward<Args>(args)...);
       }
 
-      WSI_LOG_WARNING("Call to %s failed, dispatch table does not contain the function.", fn_name);
+      WSI_LOG_ERROR("Call to %s failed, dispatch table does not contain the function.", fn_name);
    }
 
    /**
@@ -187,8 +189,7 @@ protected:
          return (*fn)(std::forward<Args>(args)...);
       }
 
-      WSI_LOG_WARNING("Call to %s failed, dispatch table does not contain the function.", fn_name);
-
+      WSI_LOG_ERROR("Call to %s failed, dispatch table does not contain the function.", fn_name);
       return VK_ERROR_EXTENSION_NOT_PRESENT;
    }
 

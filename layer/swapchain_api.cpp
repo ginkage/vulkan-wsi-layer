@@ -79,10 +79,15 @@ wsi_layer_vkDestroySwapchainKHR(VkDevice device, VkSwapchainKHR swapc,
                                 const VkAllocationCallbacks *pAllocator) VWL_API_POST
 {
    layer::device_private_data &device_data = layer::device_private_data::get(device);
+   if (swapc == VK_NULL_HANDLE)
+   {
+      return;
+   }
 
    if (!device_data.layer_owns_swapchain(swapc))
    {
-      return device_data.disp.DestroySwapchainKHR(device_data.device, swapc, pAllocator);
+      device_data.disp.DestroySwapchainKHR(device_data.device, swapc, pAllocator);
+      return;
    }
 
    assert(swapc != VK_NULL_HANDLE);
