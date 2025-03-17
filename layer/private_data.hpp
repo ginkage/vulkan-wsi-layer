@@ -418,6 +418,8 @@ private:
    EP(GetImageSparseMemoryRequirements2KHR, VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME, VK_API_VERSION_1_1,   \
       false)                                                                                                       \
    EP(ReleaseSwapchainImagesEXT, VK_EXT_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME, VK_API_VERSION_1_1, false)         \
+   EP(GetCalibratedTimestampsEXT, VK_EXT_CALIBRATED_TIMESTAMPS_EXTENSION_NAME, API_VERSION_MAX, false)             \
+   EP(GetCalibratedTimestampsKHR, VK_KHR_CALIBRATED_TIMESTAMPS_EXTENSION_NAME, API_VERSION_MAX, false)             \
    /* Custom entrypoints */                                                                                        \
    DEVICE_ENTRYPOINTS_LIST_EXPANSION(EP)
 

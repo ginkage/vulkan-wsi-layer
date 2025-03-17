@@ -23,41 +23,21 @@
  */
 
 /**
- * @file present_id_wayland.cpp
+ * @file calibrated_timestamps_api.hpp
  *
- * @brief Contains the functionality to implement Wayland specific features for present ID extension.
+ * @brief Contains the Vulkan entrypoints for Calibrated Timestamps extension.
+ *
  */
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
 
-#include "present_id_wayland.hpp"
+#pragma once
+#include "util/macros.hpp"
 
-namespace wsi
-{
-namespace wayland
-{
+VWL_VKAPI_CALL(VkResult)
+wsi_layer_vkGetCalibratedTimestampsEXT(VkDevice device, uint32_t timestampCount,
+                                       const VkCalibratedTimestampInfoKHR *pTimestampInfos, uint64_t *pTimestamps,
+                                       uint64_t *pMaxDeviation) VWL_API_POST;
 
-presentation_feedback *wsi_ext_present_id_wayland::insert_into_pending_present_feedback_list(
-   uint64_t present_id, struct wp_presentation_feedback *feedback_obj)
-{
-   scoped_mutex lock(m_pending_presents_lock);
-   bool ret = m_pending_presents.push_back(presentation_feedback(present_id, feedback_obj, this));
-   if (!ret)
-   {
-      return nullptr;
-   }
-   return m_pending_presents.back();
-}
-
-void wsi_ext_present_id_wayland::remove_from_pending_present_feedback_list(uint64_t present_id)
-{
-   scoped_mutex lock(m_pending_presents_lock);
-   while (m_pending_presents.size() > 0 && m_pending_presents.front()->present_id() <= present_id)
-   {
-      m_pending_presents.pop_front();
-   }
-}
-
-} // namespace wayland
-} // namespace wsi
-
-#endif /* VULKAN_WSI_LAYER_EXPERIMENTAL */
+VWL_VKAPI_CALL(VkResult)
+wsi_layer_vkGetCalibratedTimestampsKHR(VkDevice device, uint32_t timestampCount,
+                                       const VkCalibratedTimestampInfoKHR *pTimestampInfos, uint64_t *pTimestamps,
+                                       uint64_t *pMaxDeviation) VWL_API_POST;
