@@ -26,7 +26,7 @@
 #include <vulkan/vulkan.h>
 #include <array>
 /* Define the patch version directly as macros */
-#define WSI_LAYER_VK_PATCH 299
+#define WSI_LAYER_VK_PATCH 305
 
 /* Convert macros to string */
 #define STRINGIFY(x) #x
