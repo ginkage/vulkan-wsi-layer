@@ -37,6 +37,7 @@
 
 #include <iterator>
 #include <type_traits>
+#include <array>
 
 #include "wsi_extension.hpp"
 

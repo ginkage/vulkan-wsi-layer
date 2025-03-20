@@ -29,6 +29,7 @@
  */
 
 #include "present_timing_handler.hpp"
+#include <array>
 
 wsi_ext_present_timing_wayland::wsi_ext_present_timing_wayland(const util::allocator &allocator)
    : wsi_ext_present_timing(allocator)
