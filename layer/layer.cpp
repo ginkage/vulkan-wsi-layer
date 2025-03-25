@@ -523,6 +523,7 @@ wsi_layer_vkGetPhysicalDeviceFeatures2KHR(VkPhysicalDevice physicalDevice,
 VWL_VKAPI_CALL(PFN_vkVoidFunction)
 wsi_layer_vkGetDeviceProcAddr(VkDevice device, const char *funcName) VWL_API_POST
 {
+   uint64_t api_version = layer::device_private_data::get(device).instance_data.api_version;
    if (layer::device_private_data::get(device).is_device_extension_enabled(VK_KHR_SWAPCHAIN_EXTENSION_NAME))
    {
       GET_PROC_ADDR(vkCreateSwapchainKHR);
@@ -552,6 +553,13 @@ wsi_layer_vkGetDeviceProcAddr(VkDevice device, const char *funcName) VWL_API_POS
 
    GET_PROC_ADDR(vkCreateImage);
    GET_PROC_ADDR(vkBindImageMemory2);
+
+   if (!strcmp(funcName, "vkBindImageMemory2KHR") &&
+       layer::device_private_data::get(device).disp.get_user_enabled_entrypoint(device, api_version, funcName) !=
+          nullptr)
+   {
+      return (PFN_vkVoidFunction)&wsi_layer_vkBindImageMemory2;
+   }
 
    /* VK_EXT_swapchain_maintenance1 */
    if (layer::device_private_data::get(device).is_device_extension_enabled(
