@@ -47,6 +47,8 @@
 #include <wsi/extensions/present_id.hpp>
 #include <wsi/extensions/swapchain_maintenance.hpp>
 
+#include <wsi/swapchain_image_create_extensions/external_memory_extension.hpp>
+
 #include "present_timing_handler.hpp"
 
 namespace wsi
@@ -61,7 +63,7 @@ swapchain::swapchain(layer::device_private_data &dev_data, const VkAllocationCal
    , m_surface(wsi_surface.get_wl_surface())
    , m_wsi_surface(&wsi_surface)
    , m_buffer_queue(nullptr)
-   , m_wsi_allocator(nullptr)
+   , m_wsi_allocator()
    , m_image_creation_parameters({}, m_allocator, {}, {})
 {
    m_image_create_info.format = VK_FORMAT_UNDEFINED;
@@ -71,11 +73,6 @@ swapchain::~swapchain()
 {
    teardown();
 
-   if (m_wsi_allocator != nullptr)
-   {
-      wsialloc_delete(m_wsi_allocator);
-   }
-   m_wsi_allocator = nullptr;
    if (m_buffer_queue != nullptr)
    {
       wl_event_queue_destroy(m_buffer_queue);
@@ -150,12 +147,7 @@ VkResult swapchain::init_platform(VkDevice device, const VkSwapchainCreateInfoKH
       return VK_ERROR_INITIALIZATION_FAILED;
    }
 
-   WSIALLOC_ASSERT_VERSION();
-   if (wsialloc_new(&m_wsi_allocator) != WSIALLOC_ERROR_NONE)
-   {
-      WSI_LOG_ERROR("Failed to create wsi allocator.");
-      return VK_ERROR_INITIALIZATION_FAILED;
-   }
+   TRY(m_wsi_allocator.init());
 
    /*
     * When VK_PRESENT_MODE_MAILBOX_KHR has been chosen by the application we don't
@@ -314,13 +306,7 @@ VkResult swapchain::allocate_wsialloc(VkImageCreateInfo &image_create_info, wayl
                                       util::vector<wsialloc_format> &importable_formats,
                                       wsialloc_format *allocated_format, bool avoid_allocation)
 {
-   bool is_protected_memory = (image_create_info.flags & VK_IMAGE_CREATE_PROTECTED_BIT) != 0;
-   uint64_t allocation_flags = is_protected_memory ? WSIALLOC_ALLOCATE_PROTECTED : 0;
-   if (avoid_allocation)
-   {
-      allocation_flags |= WSIALLOC_ALLOCATE_NO_MEMORY;
-   }
-
+   bool enable_fixed_rate = false;
    if (m_device_data.is_swapchain_compression_control_enabled())
    {
       auto *ext = get_swapchain_extension<wsi_ext_image_compression_control>();
@@ -332,33 +318,18 @@ VkResult swapchain::allocate_wsialloc(VkImageCreateInfo &image_create_info, wayl
       {
          if (ext->get_bitmask_for_image_compression_flags() & VK_IMAGE_COMPRESSION_FIXED_RATE_EXPLICIT_EXT)
          {
-            allocation_flags |= WSIALLOC_ALLOCATE_HIGHEST_FIXED_RATE_COMPRESSION;
+            enable_fixed_rate = true;
          }
       }
    }
 
-   wsialloc_allocate_info alloc_info = { importable_formats.data(), static_cast<unsigned>(importable_formats.size()),
-                                         image_create_info.extent.width, image_create_info.extent.height,
-                                         allocation_flags };
-
+   allocation_params params = { (image_create_info.flags & VK_IMAGE_CREATE_PROTECTED_BIT) != 0,
+                                image_create_info.extent, importable_formats, enable_fixed_rate, avoid_allocation };
    wsialloc_allocate_result alloc_result = { {}, { 0 }, { 0 }, { -1 }, false };
-   /* Clear buffer_fds and average_row_strides for error purposes */
-   for (int i = 0; i < WSIALLOC_MAX_PLANES; ++i)
-   {
-      alloc_result.buffer_fds[i] = -1;
-      alloc_result.average_row_strides[i] = -1;
-   }
-   const auto res = wsialloc_alloc(m_wsi_allocator, &alloc_info, &alloc_result);
-   if (res != WSIALLOC_ERROR_NONE)
-   {
-      WSI_LOG_ERROR("Failed allocation of DMA Buffer. WSI error: %d", static_cast<int>(res));
-      if (res == WSIALLOC_ERROR_NOT_SUPPORTED)
-      {
-         return VK_ERROR_FORMAT_NOT_SUPPORTED;
-      }
-      return VK_ERROR_OUT_OF_HOST_MEMORY;
-   }
+   TRY(m_wsi_allocator.allocate(params, &alloc_result));
+
    *allocated_format = alloc_result.format;
+
    auto &external_memory = image_data->external_mem;
    external_memory.set_strides(alloc_result.average_row_strides);
    external_memory.set_buffer_fds(alloc_result.buffer_fds);

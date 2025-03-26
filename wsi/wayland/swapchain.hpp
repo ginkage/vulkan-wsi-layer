@@ -41,6 +41,8 @@ extern "C" {
 #include "util/custom_allocator.hpp"
 #include "wl_object_owner.hpp"
 
+#include <wsi/wsi_alloc_utils.hpp>
+
 #include <wsi/external_memory.hpp>
 
 namespace wsi
@@ -220,7 +222,7 @@ private:
    /**
     * @brief Handle to the WSI allocator.
     */
-   wsialloc_allocator *m_wsi_allocator;
+   swapchain_wsialloc_allocator m_wsi_allocator;
 
    /**
     * @brief Image creation parameters used for all swapchain images.

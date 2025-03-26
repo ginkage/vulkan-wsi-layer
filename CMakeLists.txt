@@ -76,6 +76,7 @@ option(ENABLE_INSTRUMENTATION "Pass frame boundary events by using VK_EXT_frame_
 
 if(BUILD_WSI_WAYLAND OR BUILD_WSI_DISPLAY)
    set(BUILD_DRM_UTILS true)
+   set(BUILD_WSIALLOC_UTILS true)
    if(SELECT_EXTERNAL_ALLOCATOR STREQUAL "none")
       message(FATAL_ERROR "WSI only supported with an external allocator.")
    endif()
@@ -124,6 +125,18 @@ if(NOT SELECT_EXTERNAL_ALLOCATOR STREQUAL "none" AND EXTERNAL_WSIALLOC_LIBRARY S
    target_include_directories(wsialloc PRIVATE ${VULKAN_CXX_INCLUDE})
    target_include_directories(wsialloc PRIVATE util/drm)
    target_include_directories(wsialloc PRIVATE util/)
+endif()
+
+if(BUILD_WSIALLOC_UTILS)
+   add_library(wsi_utils STATIC wsi/wsi_alloc_utils.cpp)
+
+   target_include_directories(wsi_utils PRIVATE
+      ${PROJECT_SOURCE_DIR}
+      ${VULKAN_CXX_INCLUDE}
+      ${CMAKE_CURRENT_BINARY_DIR})
+   target_link_libraries(wsi_utils drm_utils)
+   target_include_directories(wsi_utils PRIVATE util/wsialloc)
+   target_compile_definitions(wsi_utils PRIVATE ${WSI_DEFINES})
 endif()
 
 # Wayland WSI
@@ -196,6 +209,7 @@ if(BUILD_WSI_WAYLAND)
       target_link_libraries(wayland_wsi wsialloc)
    endif()
    target_link_libraries(wayland_wsi drm_utils ${WAYLAND_CLIENT_LDFLAGS})
+   target_link_libraries(wayland_wsi wsi_utils)
    list(APPEND LINK_WSI_LIBS wayland_wsi)
    if(ENABLE_WAYLAND_FIFO_PRESENTATION_THREAD)
       target_compile_definitions(wayland_wsi PRIVATE "-DWAYLAND_FIFO_PRESENTATION_THREAD_ENABLED=1")
@@ -252,6 +266,7 @@ if (BUILD_WSI_DISPLAY)
    target_compile_options(wsi_display INTERFACE "-DBUILD_WSI_DISPLAY=1")
    target_link_libraries(wsi_display ${LIBDRM_LDFLAGS} drm)
    target_link_libraries(wsi_display drm_utils)
+   target_link_libraries(wsi_display wsi_utils)
    if(NOT EXTERNAL_WSIALLOC_LIBRARY STREQUAL "")
       target_link_libraries(wsi_display ${EXTERNAL_WSIALLOC_LIBRARY})
    else()

@@ -38,6 +38,8 @@
 #include <util/wsialloc/wsialloc.h>
 #include <wsi/external_memory.hpp>
 
+#include <wsi/wsi_alloc_utils.hpp>
+
 namespace wsi
 {
 
@@ -144,7 +146,8 @@ private:
     */
    VkResult add_required_extensions(VkDevice device, const VkSwapchainCreateInfoKHR *swapchain_create_info) override;
 
-   wsialloc_allocator *m_wsi_allocator;
+   swapchain_wsialloc_allocator m_wsi_allocator;
+
    drm_display_mode *m_display_mode;
    image_creation_parameters m_image_creation_parameters;
 };
