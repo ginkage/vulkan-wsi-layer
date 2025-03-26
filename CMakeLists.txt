@@ -284,7 +284,8 @@ add_library(${PROJECT_NAME} SHARED
    wsi/swapchain_base.cpp
    wsi/synchronization.cpp
    wsi/wsi_factory.cpp
-   wsi/swapchain_image_creator.cpp)
+   wsi/swapchain_image_creator.cpp
+   wsi/swapchain_image_create_extensions/image_compression_control.cpp)
 if (VULKAN_WSI_LAYER_EXPERIMENTAL)
    target_sources(${PROJECT_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/layer/present_timing_api.cpp)
    target_sources(${PROJECT_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/wsi/extensions/present_timing.cpp)

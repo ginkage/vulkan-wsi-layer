@@ -38,10 +38,11 @@
 
 #include <wsi/extensions/present_id.hpp>
 #include <wsi/extensions/swapchain_maintenance.hpp>
-#include <wsi/extensions/image_compression_control.hpp>
 #include "util/macros.hpp"
 
 #include "present_timing_handler.hpp"
+
+#include <wsi/swapchain_image_create_extensions/image_compression_control.hpp>
 
 namespace wsi
 {
@@ -68,14 +69,8 @@ swapchain::~swapchain()
 
 VkResult swapchain::add_required_extensions(VkDevice device, const VkSwapchainCreateInfoKHR *swapchain_create_info)
 {
-   auto compression_control = wsi_ext_image_compression_control::create(device, swapchain_create_info);
-   if (compression_control)
-   {
-      if (!add_swapchain_extension(m_allocator.make_unique<wsi_ext_image_compression_control>(*compression_control)))
-      {
-         return VK_ERROR_OUT_OF_HOST_MEMORY;
-      }
-   }
+   UNUSED(device);
+   UNUSED(swapchain_create_info);
 
    if (m_device_data.is_present_id_enabled())
    {
@@ -198,24 +193,7 @@ VkResult swapchain::allocate_and_bind_swapchain_image(VkImageCreateInfo image_cr
 
 VkResult swapchain::create_swapchain_image(VkImageCreateInfo image_create_info, swapchain_image &image)
 {
-   m_image_create_info = image_create_info;
-   VkImageCompressionControlEXT image_compression_control = {};
-
-   if (m_device_data.is_swapchain_compression_control_enabled())
-   {
-      auto *ext = get_swapchain_extension<wsi_ext_image_compression_control>();
-      /* For image compression control, additional requirements to be satisfied such as
-       * existence of VkImageCompressionControlEXT in swaphain_create_info for
-       * the ext to be added to the list. So we check whether we got a valid pointer
-       * and proceed if yes. */
-      if (ext)
-      {
-         image_compression_control = ext->get_compression_control_properties();
-         image_compression_control.pNext = m_image_create_info.pNext;
-         m_image_create_info.pNext = &image_compression_control;
-      }
-   }
-   return m_device_data.disp.CreateImage(m_device, &m_image_create_info, get_allocation_callbacks(), &image.image);
+   return m_device_data.disp.CreateImage(m_device, &image_create_info, get_allocation_callbacks(), &image.image);
 }
 
 void swapchain::present_image(const pending_present_request &pending_present)
@@ -285,8 +263,18 @@ VkResult swapchain::get_required_image_creator_extensions(
    const VkSwapchainCreateInfoKHR &swapchain_create_info,
    util::vector<util::unique_ptr<swapchain_image_create_info_extension>> *extensions)
 {
-   UNUSED(swapchain_create_info);
-   UNUSED(extensions);
+   assert(extensions != nullptr);
+
+   auto compression_control = swapchain_image_create_compression_control::create(
+      m_device_data.is_swapchain_compression_control_enabled(), swapchain_create_info);
+   if (compression_control)
+   {
+      if (!extensions->try_push_back(
+             m_allocator.make_unique<swapchain_image_create_compression_control>(*compression_control)))
+      {
+         return VK_ERROR_OUT_OF_HOST_MEMORY;
+      }
+   }
 
    return VK_SUCCESS;
 }
