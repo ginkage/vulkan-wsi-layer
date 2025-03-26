@@ -48,6 +48,7 @@
 
 #include "extensions/frame_boundary.hpp"
 #include "extensions/wsi_extension.hpp"
+#include "swapchain_image_creator.hpp"
 #include "util/macros.hpp"
 
 namespace wsi
@@ -480,11 +481,21 @@ protected:
    }
 
    /**
+    * @brief Get backend specific image create info extensions.
+    *
+    * @param      swapchain_create_info Swapchain create info.
+    * @param[out] extensions            Backend specific swapchain image create info extensions.
+    */
+   virtual VkResult get_required_image_creator_extensions(
+      const VkSwapchainCreateInfoKHR &swapchain_create_info,
+      util::vector<util::unique_ptr<swapchain_image_create_info_extension>> *extensions) = 0;
+
+   /**
     * @brief Base swapchain teardown.
     *
     * Even though the inheritance gives us a nice way to defer display specific allocation
     * and presentation outside of the base class, it however robs the children classes - which
-    * also happen to do some of their state setting - the oppurtunity to do the last clean up
+    * also happen to do some of their state setting - the opportunity to do the last clean up
     * call, as the base class' destructor is called at the end. This method provides a way to do it.
     * The destructor is a virtual function and much of the swapchain teardown happens in this method
     * which gets called from the child's destructor.
@@ -709,6 +720,18 @@ private:
     * @brief Holds the swapchain extensions and related functionalities.
     */
    wsi_ext_maintainer m_extensions;
+
+   /**
+    * @brief Holds the VkImageCreateInfo and backend specific image create info extensions.
+    */
+   swapchain_image_creator m_image_creator;
+
+   /**
+    * @brief Initialize m_image_creator.
+    *
+    * @param swapchain_create_info Swapchain create info.
+    */
+   VkResult image_creator_init(const VkSwapchainCreateInfoKHR &swapchain_create_info);
 };
 
 } /* namespace wsi */

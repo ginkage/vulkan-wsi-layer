@@ -225,6 +225,7 @@ swapchain_base::swapchain_base(layer::device_private_data &dev_data, const VkAll
    , m_error_state(VK_NOT_READY)
    , m_started_presenting(false)
    , m_extensions(m_allocator)
+   , m_image_creator(m_allocator)
 {
 }
 
@@ -263,23 +264,8 @@ VkResult swapchain_base::init(VkDevice device, const VkSwapchainCreateInfoKHR *s
       TRY_LOG_CALL(init_page_flip_thread());
    }
 
-   VkImageCreateInfo image_create_info = {};
-   image_create_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-   image_create_info.pNext = nullptr;
-   image_create_info.imageType = VK_IMAGE_TYPE_2D;
-   image_create_info.format = swapchain_create_info->imageFormat;
-   image_create_info.extent = { swapchain_create_info->imageExtent.width, swapchain_create_info->imageExtent.height,
-                                1 };
-   image_create_info.mipLevels = 1;
-   image_create_info.arrayLayers = swapchain_create_info->imageArrayLayers;
-   image_create_info.samples = VK_SAMPLE_COUNT_1_BIT;
-   image_create_info.tiling = VK_IMAGE_TILING_OPTIMAL;
-   image_create_info.usage = swapchain_create_info->imageUsage;
-   image_create_info.flags = 0;
-   image_create_info.sharingMode = swapchain_create_info->imageSharingMode;
-   image_create_info.queueFamilyIndexCount = swapchain_create_info->queueFamilyIndexCount;
-   image_create_info.pQueueFamilyIndices = swapchain_create_info->pQueueFamilyIndices;
-   image_create_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+   TRY_LOG_CALL(image_creator_init(*swapchain_create_info));
+   m_image_create_info = m_image_creator.get_image_create_info();
 
    VkResult result = m_free_image_semaphore.init(m_swapchain_images.size());
    if (result != VK_SUCCESS)
@@ -292,7 +278,7 @@ VkResult swapchain_base::init(VkDevice device, const VkSwapchainCreateInfoKHR *s
       swapchain_create_info->flags & VK_SWAPCHAIN_CREATE_DEFERRED_MEMORY_ALLOCATION_BIT_EXT;
    for (auto &img : m_swapchain_images)
    {
-      TRY(create_swapchain_image(image_create_info, img));
+      TRY(create_swapchain_image(m_image_create_info, img));
 
       if (image_deferred_allocation)
       {
@@ -300,7 +286,7 @@ VkResult swapchain_base::init(VkDevice device, const VkSwapchainCreateInfoKHR *s
       }
       else
       {
-         TRY_LOG_CALL(allocate_and_bind_swapchain_image(image_create_info, img));
+         TRY_LOG_CALL(allocate_and_bind_swapchain_image(m_image_create_info, img));
       }
 
       VkSemaphoreCreateInfo semaphore_info = {};
@@ -782,6 +768,17 @@ VkResult swapchain_base::is_bind_allowed(uint32_t image_index) const
 bool swapchain_base::add_swapchain_extension(util::unique_ptr<wsi_ext> extension)
 {
    return m_extensions.add_extension(std::move(extension));
+}
+
+VkResult swapchain_base::image_creator_init(const VkSwapchainCreateInfoKHR &swapchain_create_info)
+{
+   m_image_creator.init(swapchain_create_info);
+
+   util::vector<util::unique_ptr<swapchain_image_create_info_extension>> extensions(m_allocator);
+   TRY_LOG_CALL(get_required_image_creator_extensions(swapchain_create_info, &extensions));
+   TRY_LOG_CALL(m_image_creator.add_extensions(&extensions));
+
+   return VK_SUCCESS;
 }
 
 } /* namespace wsi */

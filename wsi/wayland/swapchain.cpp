@@ -692,5 +692,15 @@ VkResult swapchain::bind_swapchain_image(VkDevice &device, const VkBindImageMemo
    return image_data->external_mem.bind_swapchain_image_memory(bind_image_mem_info->image);
 }
 
+VkResult swapchain::get_required_image_creator_extensions(
+   const VkSwapchainCreateInfoKHR &swapchain_create_info,
+   util::vector<util::unique_ptr<swapchain_image_create_info_extension>> *extensions)
+{
+   UNUSED(swapchain_create_info);
+   UNUSED(extensions);
+
+   return VK_SUCCESS;
+}
+
 } // namespace wayland
 } // namespace wsi
