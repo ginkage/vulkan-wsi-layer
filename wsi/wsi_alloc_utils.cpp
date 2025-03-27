@@ -33,15 +33,16 @@
 namespace wsi
 {
 
-VkResult swapchain_wsialloc_allocator::init()
+std::optional<swapchain_wsialloc_allocator> swapchain_wsialloc_allocator::create()
 {
+   wsialloc_allocator *allocator = nullptr;
    WSIALLOC_ASSERT_VERSION();
-   if (wsialloc_new(&m_allocator) != WSIALLOC_ERROR_NONE)
+   if (wsialloc_new(&allocator) != WSIALLOC_ERROR_NONE)
    {
       WSI_LOG_ERROR("Failed to create wsi allocator.");
-      return VK_ERROR_INITIALIZATION_FAILED;
+      return std::nullopt;
    }
-   return VK_SUCCESS;
+   return swapchain_wsialloc_allocator(allocator);
 }
 
 VkResult swapchain_wsialloc_allocator::allocate(const allocation_params &input, wsialloc_allocate_result *alloc_result)

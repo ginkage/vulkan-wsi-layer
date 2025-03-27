@@ -222,7 +222,7 @@ private:
    /**
     * @brief Handle to the WSI allocator.
     */
-   swapchain_wsialloc_allocator m_wsi_allocator;
+   util::unique_ptr<swapchain_wsialloc_allocator> m_wsi_allocator;
 
    /**
     * @brief Image creation parameters used for all swapchain images.

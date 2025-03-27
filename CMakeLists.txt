@@ -145,7 +145,8 @@ if(BUILD_WSI_WAYLAND)
       wsi/wayland/surface_properties.cpp
       wsi/wayland/surface.cpp
       wsi/wayland/wl_helpers.cpp
-      wsi/wayland/swapchain.cpp)
+      wsi/wayland/swapchain.cpp
+      wsi/swapchain_image_create_extensions/external_memory_extension.cpp)
 
    if(VULKAN_WSI_LAYER_EXPERIMENTAL)
       target_sources(wayland_wsi PRIVATE wsi/wayland/present_timing_handler.cpp)
@@ -249,7 +250,8 @@ if (BUILD_WSI_DISPLAY)
       wsi/display/drm_display.cpp
       wsi/display/surface_properties.cpp
       wsi/display/swapchain.cpp
-      wsi/display/surface.cpp)
+      wsi/display/surface.cpp
+      wsi/swapchain_image_create_extensions/external_memory_extension.cpp)
 
    pkg_check_modules(LIBDRM REQUIRED libdrm)
    message(STATUS "Using libdrm include directories: ${LIBDRM_INCLUDE_DIRS}")

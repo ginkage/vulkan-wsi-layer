@@ -63,10 +63,9 @@ swapchain::swapchain(layer::device_private_data &dev_data, const VkAllocationCal
    , m_surface(wsi_surface.get_wl_surface())
    , m_wsi_surface(&wsi_surface)
    , m_buffer_queue(nullptr)
-   , m_wsi_allocator()
+   , m_wsi_allocator(nullptr)
    , m_image_creation_parameters({}, m_allocator, {}, {})
 {
-   m_image_create_info.format = VK_FORMAT_UNDEFINED;
 }
 
 swapchain::~swapchain()
@@ -147,7 +146,17 @@ VkResult swapchain::init_platform(VkDevice device, const VkSwapchainCreateInfoKH
       return VK_ERROR_INITIALIZATION_FAILED;
    }
 
-   TRY(m_wsi_allocator.init());
+   auto wsi_allocator = swapchain_wsialloc_allocator::create();
+   if (!wsi_allocator.has_value())
+   {
+      return VK_ERROR_INITIALIZATION_FAILED;
+   }
+
+   m_wsi_allocator = m_allocator.make_unique<swapchain_wsialloc_allocator>(std::move(*wsi_allocator));
+   if (m_wsi_allocator == nullptr)
+   {
+      return VK_ERROR_OUT_OF_HOST_MEMORY;
+   }
 
    /*
     * When VK_PRESENT_MODE_MAILBOX_KHR has been chosen by the application we don't
@@ -196,7 +205,7 @@ VkResult swapchain::get_surface_compatible_formats(const VkImageCreateInfo &info
    for (const auto &prop : drm_format_props)
    {
       bool is_supported = false;
-      drm_format_pair drm_format{ util::drm::vk_to_drm_format(info.format), prop.drmFormatModifier };
+      util::drm::drm_format_pair drm_format{ util::drm::vk_to_drm_format(info.format), prop.drmFormatModifier };
 
       for (const auto &format : m_wsi_surface->get_formats())
       {
@@ -326,7 +335,7 @@ VkResult swapchain::allocate_wsialloc(VkImageCreateInfo &image_create_info, wayl
    allocation_params params = { (image_create_info.flags & VK_IMAGE_CREATE_PROTECTED_BIT) != 0,
                                 image_create_info.extent, importable_formats, enable_fixed_rate, avoid_allocation };
    wsialloc_allocate_result alloc_result = { {}, { 0 }, { 0 }, { -1 }, false };
-   TRY(m_wsi_allocator.allocate(params, &alloc_result));
+   TRY(m_wsi_allocator->allocate(params, &alloc_result));
 
    *allocated_format = alloc_result.format;
 
@@ -357,26 +366,6 @@ VkResult swapchain::allocate_wsialloc(VkImageCreateInfo &image_create_info, wayl
 
    external_memory.set_format_info(alloc_result.is_disjoint, num_planes);
    external_memory.set_memory_handle_type(VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT);
-   return VK_SUCCESS;
-}
-
-static VkResult fill_image_create_info(VkImageCreateInfo &image_create_info,
-                                       util::vector<VkSubresourceLayout> &image_plane_layouts,
-                                       VkImageDrmFormatModifierExplicitCreateInfoEXT &drm_mod_info,
-                                       VkExternalMemoryImageCreateInfoKHR &external_info,
-                                       wayland_image_data &image_data, uint64_t modifier)
-{
-   TRY_LOG_CALL(image_data.external_mem.fill_image_plane_layouts(image_plane_layouts));
-
-   if (image_data.external_mem.is_disjoint())
-   {
-      image_create_info.flags |= VK_IMAGE_CREATE_DISJOINT_BIT;
-   }
-
-   image_data.external_mem.fill_drm_mod_info(image_create_info.pNext, drm_mod_info, image_plane_layouts, modifier);
-   image_data.external_mem.fill_external_info(external_info, &drm_mod_info);
-   image_create_info.pNext = &external_info;
-   image_create_info.tiling = VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT;
    return VK_SUCCESS;
 }
 
@@ -460,13 +449,13 @@ VkResult swapchain::create_swapchain_image(VkImageCreateInfo image_create_info, 
    }
    image.data = image_data;
 
-   if (m_image_create_info.format == VK_FORMAT_UNDEFINED)
+   if (m_image_creation_parameters.m_allocated_format.fourcc == DRM_FORMAT_INVALID)
    {
       util::vector<wsialloc_format> importable_formats(
          util::allocator(m_allocator, VK_SYSTEM_ALLOCATION_SCOPE_COMMAND));
       util::vector<uint64_t> exportable_modifiers(util::allocator(m_allocator, VK_SYSTEM_ALLOCATION_SCOPE_COMMAND));
 
-      /* Query supported modifers. */
+      /* Query supported modifiers. */
       util::vector<VkDrmFormatModifierPropertiesEXT> drm_format_props(
          util::allocator(m_allocator, VK_SYSTEM_ALLOCATION_SCOPE_COMMAND));
 
@@ -491,11 +480,6 @@ VkResult swapchain::create_swapchain_image(VkImageCreateInfo image_create_info, 
          }
       }
 
-      TRY_LOG_CALL(fill_image_create_info(
-         image_create_info, m_image_creation_parameters.m_image_layout, m_image_creation_parameters.m_drm_mod_info,
-         m_image_creation_parameters.m_external_info, *image_data, allocated_format.modifier));
-
-      m_image_create_info = image_create_info;
       m_image_creation_parameters.m_allocated_format = allocated_format;
    }
 
@@ -667,8 +651,15 @@ VkResult swapchain::get_required_image_creator_extensions(
    const VkSwapchainCreateInfoKHR &swapchain_create_info,
    util::vector<util::unique_ptr<swapchain_image_create_info_extension>> *extensions)
 {
-   UNUSED(swapchain_create_info);
-   UNUSED(extensions);
+   auto compression_control = swapchain_image_create_compression_control::create(
+      m_device_data.is_swapchain_compression_control_enabled(), swapchain_create_info);
+
+   if (!extensions->try_push_back(m_allocator.make_unique<swapchain_image_create_external_memory>(
+          compression_control, m_wsi_allocator.get(), &m_wsi_surface->get_formats(), m_device_data.physical_device,
+          m_allocator)))
+   {
+      return VK_ERROR_OUT_OF_HOST_MEMORY;
+   }
 
    return VK_SUCCESS;
 }

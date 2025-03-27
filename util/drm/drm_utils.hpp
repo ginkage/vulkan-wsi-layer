@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2021-2022, 2024 Arm Limited.
+ * Copyright (c) 2019-2025 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -30,6 +30,15 @@ namespace util
 {
 namespace drm
 {
+
+/**
+ * @brief Struct describing a DRM format with modifier.
+ */
+struct drm_format_pair
+{
+   uint32_t fourcc;
+   uint64_t modifier;
+};
 
 uint32_t vk_to_drm_format(VkFormat vk_format);
 VkFormat drm_to_vk_format(uint32_t drm_format);

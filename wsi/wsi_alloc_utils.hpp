@@ -30,6 +30,7 @@
 
 #include <optional>
 #include "util/wsialloc/wsialloc.h"
+#include <util/helpers.hpp>
 
 #include "util/custom_allocator.hpp"
 
@@ -50,13 +51,31 @@ struct allocation_params
 class swapchain_wsialloc_allocator
 {
 public:
-   swapchain_wsialloc_allocator(wsialloc_allocator *allocator)
-      : m_allocator(allocator)
+   static std::optional<swapchain_wsialloc_allocator> create();
+
+   swapchain_wsialloc_allocator(swapchain_wsialloc_allocator &other) = delete;
+   swapchain_wsialloc_allocator &operator=(swapchain_wsialloc_allocator &other) = delete;
+
+   swapchain_wsialloc_allocator(swapchain_wsialloc_allocator &&other)
+      : m_allocator(other.m_allocator)
    {
+      other.m_allocator = nullptr;
    }
 
-   swapchain_wsialloc_allocator()
-      : m_allocator(nullptr){};
+   swapchain_wsialloc_allocator &operator=(swapchain_wsialloc_allocator &&other)
+   {
+      if (this == &other)
+      {
+         return *this;
+      }
+
+      if (m_allocator != nullptr)
+      {
+         wsialloc_delete(m_allocator);
+         m_allocator = nullptr;
+      }
+      std::swap(m_allocator, other.m_allocator);
+   }
 
    ~swapchain_wsialloc_allocator()
    {
@@ -71,7 +90,6 @@ public:
       return m_allocator;
    }
 
-   VkResult init();
    VkResult allocate(const allocation_params &input, wsialloc_allocate_result *alloc_result);
 
 private:
@@ -79,6 +97,11 @@ private:
     * @brief Handle to the WSI allocator.
     */
    wsialloc_allocator *m_allocator;
+
+   swapchain_wsialloc_allocator(wsialloc_allocator *allocator)
+      : m_allocator(allocator)
+   {
+   }
 };
 
 } /* namespace wsi */

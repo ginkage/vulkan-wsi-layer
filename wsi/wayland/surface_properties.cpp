@@ -118,7 +118,7 @@ VkResult surface_properties::get_surface_capabilities(VkPhysicalDevice physical_
 
 static VkResult surface_format_properties_add_modifier_support(VkPhysicalDevice phys_dev,
                                                                surface_format_properties &format_props,
-                                                               const drm_format_pair &drm_format,
+                                                               const util::drm::drm_format_pair &drm_format,
                                                                bool add_compression = false)
 {
    VkPhysicalDeviceExternalImageFormatInfoKHR external_info = {};
@@ -148,7 +148,7 @@ static VkResult surface_format_properties_add_modifier_support(VkPhysicalDevice 
 }
 
 static VkResult surface_format_properties_map_add(VkPhysicalDevice phys_dev, surface_format_properties_map &format_map,
-                                                  VkFormat format, const drm_format_pair &drm_format)
+                                                  VkFormat format, const util::drm::drm_format_pair &drm_format)
 {
    surface_format_properties format_props{ format };
    VkResult res = surface_format_properties_add_modifier_support(phys_dev, format_props, drm_format);
@@ -170,7 +170,7 @@ static VkResult surface_format_properties_map_add(VkPhysicalDevice phys_dev, sur
 }
 
 static VkResult surface_format_properties_map_init(VkPhysicalDevice phys_dev, surface_format_properties_map &format_map,
-                                                   const util::vector<drm_format_pair> &drm_format_list)
+                                                   const util::vector<util::drm::drm_format_pair> &drm_format_list)
 {
    for (const auto &drm_format : drm_format_list)
    {
@@ -189,9 +189,9 @@ static VkResult surface_format_properties_map_init(VkPhysicalDevice phys_dev, su
    return VK_SUCCESS;
 }
 
-static VkResult surface_format_properties_map_add_compression(VkPhysicalDevice phys_dev,
-                                                              surface_format_properties_map &format_map,
-                                                              const util::vector<drm_format_pair> &drm_format_list)
+static VkResult surface_format_properties_map_add_compression(
+   VkPhysicalDevice phys_dev, surface_format_properties_map &format_map,
+   const util::vector<util::drm::drm_format_pair> &drm_format_list)
 {
    for (const auto &drm_format : drm_format_list)
    {

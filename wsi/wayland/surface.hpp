@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, 2024 Arm Limited.
+ * Copyright (c) 2021-2025 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -37,6 +37,8 @@
 #include "surface_properties.hpp"
 #include "wl_object_owner.hpp"
 #include "util/macros.hpp"
+
+#include <util/drm/drm_utils.hpp>
 
 namespace wsi
 {
@@ -116,7 +118,7 @@ public:
     *
     * The reference is valid throughout the lifetime of this surface.
     */
-   const util::vector<drm_format_pair> &get_formats() const
+   const util::vector<util::drm::drm_format_pair> &get_formats() const
    {
       return supported_formats;
    }
@@ -162,7 +164,7 @@ private:
    /** The native Wayland surface */
    wl_surface *wayland_surface;
    /** A list of DRM formats supported by the Wayland compositor on this surface */
-   util::vector<drm_format_pair> supported_formats;
+   util::vector<util::drm::drm_format_pair> supported_formats;
    /** Surface properties specific to the Wayland surface. */
    surface_properties properties;
 

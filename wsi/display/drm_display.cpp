@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Arm Limited.
+ * Copyright (c) 2024-2025 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -44,7 +44,7 @@ namespace display
 const std::string default_dri_device_name{ "/dev/dri/card0" };
 
 drm_display::drm_display(util::fd_owner drm_fd, int crtc_id, drm_connector_owner drm_connector,
-                         util::unique_ptr<util::vector<drm_format_pair>> supported_formats,
+                         util::unique_ptr<util::vector<util::drm::drm_format_pair>> supported_formats,
                          util::unique_ptr<drm_display_mode> display_modes, size_t num_display_modes, uint32_t max_width,
                          uint32_t max_height, bool supports_fb_modifiers)
    : m_drm_fd(std::move(drm_fd))
@@ -147,11 +147,12 @@ static bool find_primary_plane(const util::fd_owner &drm_fd, const drm_plane_res
 }
 
 static bool fill_supported_formats(const drm_plane_owner &primary_plane,
-                                   util::vector<drm_format_pair> &supported_formats)
+                                   util::vector<util::drm::drm_format_pair> &supported_formats)
 {
    for (uint32_t i = 0; i < primary_plane->count_formats; i++)
    {
-      if (!supported_formats.try_push_back(drm_format_pair{ primary_plane->formats[i], DRM_FORMAT_MOD_LINEAR }))
+      if (!supported_formats.try_push_back(
+             util::drm::drm_format_pair{ primary_plane->formats[i], DRM_FORMAT_MOD_LINEAR }))
       {
          WSI_LOG_ERROR("Out of host memory.");
          return false;
@@ -163,7 +164,7 @@ static bool fill_supported_formats(const drm_plane_owner &primary_plane,
 
 static bool fill_supported_formats_with_modifiers(uint32_t primary_plane_index, const util::fd_owner &drm_fd,
                                                   const drm_plane_resources_owner &plane_res,
-                                                  util::vector<drm_format_pair> &supported_formats)
+                                                  util::vector<util::drm::drm_format_pair> &supported_formats)
 {
    drm_object_properties_owner object_properties{ drmModeObjectGetProperties(
       drm_fd.get(), plane_res->planes[primary_plane_index], DRM_MODE_OBJECT_PLANE) };
@@ -191,7 +192,7 @@ static bool fill_supported_formats_with_modifiers(uint32_t primary_plane_index, 
 
          while (drmModeFormatModifierBlobIterNext(blob.get(), &iter))
          {
-            if (!supported_formats.try_push_back(drm_format_pair{ iter.fmt, iter.mod }))
+            if (!supported_formats.try_push_back(util::drm::drm_format_pair{ iter.fmt, iter.mod }))
             {
                return false;
             }
@@ -317,7 +318,7 @@ std::optional<drm_display> drm_display::make_display(const util::allocator &allo
    }
 #endif
 
-   auto supported_formats = allocator.make_unique<util::vector<drm_format_pair>>(allocator);
+   auto supported_formats = allocator.make_unique<util::vector<util::drm::drm_format_pair>>(allocator);
 
    if (supports_fb_modifiers)
    {
@@ -365,12 +366,12 @@ std::optional<drm_display> &drm_display::get_display()
    return display;
 }
 
-const util::vector<drm_format_pair> *drm_display::get_supported_formats() const
+const util::vector<util::drm::drm_format_pair> *drm_display::get_supported_formats() const
 {
    return m_supported_formats.get();
 }
 
-bool drm_display::is_format_supported(const drm_format_pair &format) const
+bool drm_display::is_format_supported(const util::drm::drm_format_pair &format) const
 {
    auto supported_format =
       std::find_if(m_supported_formats->begin(), m_supported_formats->end(), [format](const auto &supported_format) {
