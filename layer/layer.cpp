@@ -41,7 +41,6 @@
 #include "util/log.hpp"
 #include "util/macros.hpp"
 #include "util/helpers.hpp"
-#include "wsi/unsupported_surfaces.hpp"
 
 #define VK_LAYER_API_VERSION VK_MAKE_VERSION(1, 2, VK_HEADER_VERSION)
 
@@ -155,18 +154,6 @@ VKAPI_ATTR VkResult create_instance(const VkInstanceCreateInfo *pCreateInfo, con
    modified_info.ppEnabledExtensionNames = modified_enabled_extensions.data();
    modified_info.enabledExtensionCount = modified_enabled_extensions.size();
 
-   bool maintainance1_support = true;
-   /* Loop through unsupported extensions and check if they exist in enabled extensions */
-   for (const auto &unsupported_surface_ext : wsi::unsupported_surfaces_ext_array)
-   {
-      if (extensions.contains(unsupported_surface_ext))
-      {
-         maintainance1_support = false;
-         WSI_LOG_ERROR(
-            "Warning: Swapchain maintenance feature is unsupported for the current surface and ICD configuration.\n");
-      }
-   }
-
    /* Advance the link info for the next element on the chain. */
    layer_link_info->u.pLayerInfo = layer_link_info->u.pLayerInfo->pNext;
 
@@ -201,8 +188,6 @@ VKAPI_ATTR VkResult create_instance(const VkInstanceCreateInfo *pCreateInfo, con
    TRY_LOG_CALL(instance_private_data::associate(*pInstance, std::move(*table), loader_callback,
                                                  layer_platforms_to_enable, api_version, instance_allocator));
 
-   /* Set the swapchain maintenance flag to true or false based on the enabled extensions checked above*/
-   instance_private_data::get(*pInstance).set_maintainance1_support(maintainance1_support);
    /*
     * Store the enabled instance extensions in order to return nullptr in
     * vkGetInstanceProcAddr for functions of disabled extensions.
@@ -477,13 +462,23 @@ wsi_layer_vkGetPhysicalDeviceFeatures2KHR(VkPhysicalDevice physicalDevice,
                                           VkPhysicalDeviceFeatures2 *pFeatures) VWL_API_POST
 {
    auto &instance = layer::instance_private_data::get(physicalDevice);
-   auto *physical_device_swapchain_maintenance1_features =
-      util::find_extension<VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT>(
-         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_EXT, pFeatures->pNext);
-   if (physical_device_swapchain_maintenance1_features != nullptr)
+
+   auto *swapchain_maintenance1_features = util::find_extension<VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT>(
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_EXT, pFeatures->pNext);
+   if (swapchain_maintenance1_features != nullptr)
    {
-      physical_device_swapchain_maintenance1_features->swapchainMaintenance1 = false;
+      swapchain_maintenance1_features->swapchainMaintenance1 = VK_FALSE;
    }
+
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+   auto *present_wait_features = util::find_extension<VkPhysicalDevicePresentWaitFeaturesKHR>(
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_WAIT_FEATURES_KHR, pFeatures->pNext);
+   if (present_wait_features != nullptr)
+   {
+      present_wait_features->presentWait = VK_FALSE;
+   }
+#endif
+
    instance.disp.GetPhysicalDeviceFeatures2KHR(physicalDevice, pFeatures);
 
    auto *image_compression_control_swapchain_features =
@@ -499,12 +494,21 @@ wsi_layer_vkGetPhysicalDeviceFeatures2KHR(VkPhysicalDevice physicalDevice,
       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_ID_FEATURES_KHR, pFeatures->pNext);
    if (present_id_features != nullptr)
    {
-      present_id_features->presentId = true;
+      present_id_features->presentId = VK_TRUE;
    }
 
-   wsi::set_swapchain_maintenance1_state(physicalDevice, physical_device_swapchain_maintenance1_features);
+   wsi::set_swapchain_maintenance1_state(physicalDevice, swapchain_maintenance1_features);
 
 #if VULKAN_WSI_LAYER_EXPERIMENTAL
+   if (present_wait_features != nullptr)
+   {
+      /* If there is an surface extension in use that is unsupported by the layer, defer to the ICD */
+      if (!instance.is_unsupported_surface_extension_enabled())
+      {
+         present_wait_features->presentWait = VK_TRUE;
+      }
+   }
+
    auto *present_timing_features = util::find_extension<VkPhysicalDevicePresentTimingFeaturesEXT>(
       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_TIMING_FEATURES_EXT, pFeatures->pNext);
    if (present_timing_features != nullptr)

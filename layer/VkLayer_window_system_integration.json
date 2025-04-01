@@ -53,6 +53,13 @@
                     "vkGetSwapchainTimeDomainPropertiesEXT",
                     "vkGetPastPresentationTimingEXT"
                 ]
+            },
+            {
+                "name": "VK_KHR_present_wait",
+                "spec_version": "1",
+                "entrypoints": [
+                    "vkWaitForPresentKHR"
+                ]
             }
         ],
         "disable_environment": {
