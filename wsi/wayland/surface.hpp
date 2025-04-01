@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, 2024 Arm Limited.
+ * Copyright (c) 2021-2025 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -109,6 +109,17 @@ public:
    zwp_linux_surface_synchronization_v1 *get_surface_sync_interface()
    {
       return surface_sync_interface.get();
+   }
+
+   /**
+    * @brief Returns a pointer to the Wayland wp_presentation interface obtained for the wayland
+    *        surface.
+    *
+    * The raw pointer is valid for the lifetime of the surface.
+    */
+   struct wp_presentation *get_presentation_time_interface()
+   {
+      return presentation_time_interface.get();
    }
 
    /**

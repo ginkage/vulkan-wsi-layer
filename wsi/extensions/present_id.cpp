@@ -27,17 +27,18 @@
  *
  * @brief Contains the implementation for the VK_KHR_present_id extension.
  */
+
 #include "present_id.hpp"
 
 namespace wsi
 {
 
-void wsi_ext_present_id::set_present_id(uint64_t value)
+void wsi_ext_present_id::mark_delivered(uint64_t present_id)
 {
-   if (value != 0)
+   /* Stale reads are acceptable as we only care that the ID is increasing */
+   if (present_id > m_last_delivered_id.load(std::memory_order_relaxed))
    {
-      assert(value > m_present_id);
-      m_present_id = value;
+      m_last_delivered_id.store(present_id, std::memory_order_relaxed);
    }
 }
 

@@ -609,7 +609,7 @@ void swapchain::present_image(const pending_present_request &pending_present)
    if (m_device_data.is_present_id_enabled())
    {
       auto *ext = get_swapchain_extension<wsi_ext_present_id>(true);
-      ext->set_present_id(pending_present.present_id);
+      ext->mark_delivered(pending_present.present_id);
    }
 
    /* And release the old one. */

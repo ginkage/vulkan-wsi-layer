@@ -135,7 +135,9 @@ if(BUILD_WSI_WAYLAND)
       wsi/wayland/swapchain.cpp)
 
    if(VULKAN_WSI_LAYER_EXPERIMENTAL)
+      target_sources(wayland_wsi PRIVATE wsi/wayland/present_id_wayland.cpp)
       target_sources(wayland_wsi PRIVATE wsi/wayland/present_timing_handler.cpp)
+      target_sources(wayland_wsi PRIVATE wsi/wayland/wp_presentation_feedback.cpp)
    endif()
 
    pkg_check_modules(WAYLAND_CLIENT REQUIRED wayland-client)
