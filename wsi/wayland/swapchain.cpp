@@ -44,10 +44,12 @@
 #include "wl_helpers.hpp"
 
 #include <wsi/extensions/image_compression_control.hpp>
-#include <wsi/extensions/present_id.hpp>
 #include <wsi/extensions/swapchain_maintenance.hpp>
+#include <wsi/extensions/present_id.hpp>
 
 #include "present_timing_handler.hpp"
+#include "present_id_wayland.hpp"
+#include "wp_presentation_feedback.hpp"
 
 namespace wsi
 {
@@ -95,7 +97,11 @@ VkResult swapchain::add_required_extensions(VkDevice device, const VkSwapchainCr
 
    if (m_device_data.is_present_id_enabled())
    {
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+      if (!add_swapchain_extension(m_allocator.make_unique<wsi_ext_present_id_wayland>()))
+#else
       if (!add_swapchain_extension(m_allocator.make_unique<wsi_ext_present_id>()))
+#endif
       {
          return VK_ERROR_OUT_OF_HOST_MEMORY;
       }
@@ -568,6 +574,28 @@ void swapchain::present_image(const pending_present_request &pending_present)
       }
    }
 
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+   if (m_device_data.is_present_id_enabled())
+   {
+      auto *ext = get_swapchain_extension<wsi_ext_present_id_wayland>(true);
+      if (m_wsi_surface->get_presentation_time_interface() != nullptr)
+      {
+         wp_presentation *pres = m_wsi_surface->get_presentation_time_interface();
+         struct wp_presentation_feedback *feedback = wp_presentation_feedback(pres, m_wsi_surface->get_wl_surface());
+         wl_proxy_set_queue(reinterpret_cast<wl_proxy *>(feedback), m_buffer_queue);
+         presentation_feedback *feedback_obj =
+            ext->insert_into_pending_present_feedback_list(pending_present.present_id, feedback);
+         if (feedback_obj == nullptr)
+         {
+            WSI_LOG_ERROR("Error adding to pending present feedback list");
+            set_error_state(VK_ERROR_SURFACE_LOST_KHR);
+            return;
+         }
+         register_wp_presentation_feedback_listener(feedback, feedback_obj);
+      }
+   }
+#endif
+
    wl_surface_commit(m_surface);
    res = wl_display_flush(m_display);
    if (res < 0)
@@ -579,8 +607,15 @@ void swapchain::present_image(const pending_present_request &pending_present)
 
    if (m_device_data.is_present_id_enabled())
    {
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+      auto *ext = get_swapchain_extension<wsi_ext_present_id_wayland>(true);
+      if (m_wsi_surface->get_presentation_time_interface() == nullptr)
+#else
       auto *ext = get_swapchain_extension<wsi_ext_present_id>(true);
-      ext->set_present_id(pending_present.present_id);
+#endif
+      {
+         ext->mark_delivered(pending_present.present_id);
+      }
    }
 }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024-2025 Arm Limited.
+ * Copyright (c) 2025 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -23,46 +23,41 @@
  */
 
 /**
- * @file present_id.hpp
+ * @file present_id_wayland.cpp
  *
- * @brief Contains the base class declaration for the VK_KHR_present_id extension.
+ * @brief Contains the functionality to implement Wayland specific features for present ID extension.
  */
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
 
-#pragma once
-
-#include <util/custom_allocator.hpp>
-#include <util/macros.hpp>
-#include <atomic>
-
-#include "wsi_extension.hpp"
+#include "present_id_wayland.hpp"
 
 namespace wsi
 {
-
-/**
- * @brief Present ID extension class
- *
- * This class defines the present ID extension
- * features.
- */
-class wsi_ext_present_id : public wsi_ext
+namespace wayland
 {
-public:
-   /**
-    * @brief The name of the extension.
-    */
-   WSI_DEFINE_EXTENSION(VK_KHR_PRESENT_ID_EXTENSION_NAME);
 
-   /**
-    * @brief Marks the given present ID delivered (i.e. its image has been displayed).
-    */
-   void mark_delivered(uint64_t present_id);
+presentation_feedback *wsi_ext_present_id_wayland::insert_into_pending_present_feedback_list(
+   uint64_t present_id, struct wp_presentation_feedback *feedback_obj)
+{
+   scoped_mutex lock(m_pending_presents_lock);
+   bool ret = m_pending_presents.push_back(presentation_feedback(present_id, feedback_obj, this));
+   if (!ret)
+   {
+      return nullptr;
+   }
+   return m_pending_presents.back();
+}
 
-private:
-   /**
-    * @brief Most recently delivered present ID for this swapchain.
-    */
-   std::atomic<uint64_t> m_last_delivered_id{ 0 };
-};
+void wsi_ext_present_id_wayland::remove_from_pending_present_feedback_list(uint64_t present_id)
+{
+   scoped_mutex lock(m_pending_presents_lock);
+   while (m_pending_presents.size() > 0 && m_pending_presents.front()->present_id() <= present_id)
+   {
+      m_pending_presents.pop_front();
+   }
+}
 
-} /* namespace wsi */
+} // namespace wayland
+} // namespace wsi
+
+#endif // VULKAN_WSI_LAYER_EXPERIMENTAL
