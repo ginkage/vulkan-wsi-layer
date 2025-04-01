@@ -634,7 +634,7 @@ public:
    /**
     * @brief Check whether an instance extension is enabled.
     *
-    * param extension_name Extension's name.
+    * @param extension_name Extension's name.
     *
     * @return true if is enabled, false otherwise.
     */
@@ -644,12 +644,14 @@ public:
    const uint32_t api_version;
 
    /**
-    * @brief Set if swapchain maintainance1 support is enabled.
+    * @brief Check whether there is an enabled surface extension that is not supported by the layer.
     *
-    * @param enabled_unsupport_ext True if it is enabled, false otherwise.
-    *
+    * @return true if there is an unsupported, enabled surface extension
     */
-   void set_maintainance1_support(bool enabled_unsupport_ext);
+   bool is_unsupported_surface_extension_enabled() const
+   {
+      return has_enabled_unsupported_extension;
+   }
 
    /**
     * @brief Check if swapchain maintainance1 support is enabled.
@@ -657,7 +659,10 @@ public:
     * @return true if it is enabled, false otherwise.
     *
     */
-   bool get_maintainance1_support();
+   bool get_maintainance1_support() const
+   {
+      return !has_enabled_unsupported_extension;
+   }
 
 private:
    /* Allow util::allocator to access the private constructor */
@@ -711,9 +716,9 @@ private:
    util::extension_list enabled_extensions;
 
    /**
-    * @brief True if unsupported extensions are enabled.
+    * @brief True if any unsupported extensions are enabled.
     */
-   bool enabled_unsupported_swapchain_maintenance1_extensions;
+   bool has_enabled_unsupported_extension;
 };
 
 /**

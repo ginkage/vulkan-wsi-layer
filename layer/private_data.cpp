@@ -27,6 +27,7 @@
 #include "private_data.hpp"
 #include "wsi/wsi_factory.hpp"
 #include "wsi/surface.hpp"
+#include "wsi/unsupported_surfaces.hpp"
 #include "util/unordered_map.hpp"
 #include "util/log.hpp"
 #include "util/helpers.hpp"
@@ -385,22 +386,27 @@ bool instance_private_data::has_frame_boundary_support(VkPhysicalDevice phys_dev
 VkResult instance_private_data::set_instance_enabled_extensions(const char *const *extension_names,
                                                                 size_t extension_count)
 {
-   return enabled_extensions.add(extension_names, extension_count);
+   VkResult result = enabled_extensions.add(extension_names, extension_count);
+
+   /* Check for unsupported surface extension */
+   has_enabled_unsupported_extension = false;
+   for (const auto &unsupported_surface_ext : wsi::unsupported_surfaces_ext_array)
+   {
+      if (enabled_extensions.contains(unsupported_surface_ext))
+      {
+         has_enabled_unsupported_extension = true;
+         WSI_LOG_ERROR(
+            "Warning: Swapchain maintenance feature is unsupported for the current surface and ICD configuration.\n");
+         break;
+      }
+   }
+
+   return result;
 }
 
 bool instance_private_data::is_instance_extension_enabled(const char *extension_name) const
 {
    return enabled_extensions.contains(extension_name);
-}
-
-void instance_private_data::set_maintainance1_support(bool enabled_unsupport_ext)
-{
-   enabled_unsupported_swapchain_maintenance1_extensions = enabled_unsupport_ext;
-}
-
-bool instance_private_data::get_maintainance1_support()
-{
-   return enabled_unsupported_swapchain_maintenance1_extensions;
 }
 
 device_private_data::device_private_data(instance_private_data &inst_data, VkPhysicalDevice phys_dev, VkDevice dev,
