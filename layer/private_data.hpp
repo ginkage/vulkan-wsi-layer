@@ -211,6 +211,7 @@ static constexpr uint32_t API_VERSION_MAX = UINT32_MAX;
  * extension_name: Name of the extension that provides the entrypoint.
  * api_version: Vulkan API version where the entrypoint is part of the core specification, or API_VERSION_MAX.
  * required: Boolean to indicate whether the entrypoint is required by the WSI layer or optional.
+ * alias: Name of the promoted entrypoint alias if different to entrypoint_name.
  */
 #define INSTANCE_ENTRYPOINTS_LIST(EP)                                                                                     \
    /* Vulkan 1.0 */                                                                                                       \
@@ -344,6 +345,7 @@ private:
  * extension_name: Name of the extension that provides the entrypoint.
  * api_version: Vulkan API version where the entrypoint is part of the core specification, or API_VERSION_MAX.
  * required: Boolean to indicate whether the entrypoint is required by the WSI layer or optional.
+ * alias: Name of the promoted entrypoint alias if different to entrypoint_name.
  */
 
 #if VULKAN_WSI_LAYER_EXPERIMENTAL
