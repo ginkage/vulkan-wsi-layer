@@ -65,6 +65,7 @@ struct entrypoint
    uint32_t api_version;
    bool user_visible;
    bool required;
+   const char *alias;
 };
 
 /**
@@ -210,55 +211,58 @@ static constexpr uint32_t API_VERSION_MAX = UINT32_MAX;
  * extension_name: Name of the extension that provides the entrypoint.
  * api_version: Vulkan API version where the entrypoint is part of the core specification, or API_VERSION_MAX.
  * required: Boolean to indicate whether the entrypoint is required by the WSI layer or optional.
+ * alias: Name of the promoted entrypoint alias if different to entrypoint_name.
  */
-#define INSTANCE_ENTRYPOINTS_LIST(EP)                                                                                \
-   /* Vulkan 1.0 */                                                                                                  \
-   EP(GetInstanceProcAddr, "", VK_API_VERSION_1_0, true)                                                             \
-   EP(DestroyInstance, "", VK_API_VERSION_1_0, true)                                                                 \
-   EP(GetPhysicalDeviceProperties, "", VK_API_VERSION_1_0, true)                                                     \
-   EP(GetPhysicalDeviceImageFormatProperties, "", VK_API_VERSION_1_0, true)                                          \
-   EP(EnumerateDeviceExtensionProperties, "", VK_API_VERSION_1_0, true)                                              \
-   /* VK_KHR_surface */                                                                                              \
-   EP(DestroySurfaceKHR, VK_KHR_SURFACE_EXTENSION_NAME, API_VERSION_MAX, false)                                      \
-   EP(GetPhysicalDeviceSurfaceCapabilitiesKHR, VK_KHR_SURFACE_EXTENSION_NAME, API_VERSION_MAX, false)                \
-   EP(GetPhysicalDeviceSurfaceFormatsKHR, VK_KHR_SURFACE_EXTENSION_NAME, API_VERSION_MAX, false)                     \
-   EP(GetPhysicalDeviceSurfacePresentModesKHR, VK_KHR_SURFACE_EXTENSION_NAME, API_VERSION_MAX, false)                \
-   EP(GetPhysicalDeviceSurfaceSupportKHR, VK_KHR_SURFACE_EXTENSION_NAME, API_VERSION_MAX, false)                     \
-   /* VK_EXT_headless_surface */                                                                                     \
-   EP(CreateHeadlessSurfaceEXT, VK_EXT_HEADLESS_SURFACE_EXTENSION_NAME, API_VERSION_MAX, false)                      \
-   /* VK_KHR_wayland_surface */                                                                                      \
-   EP(CreateWaylandSurfaceKHR, VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME, API_VERSION_MAX, false)                        \
-   /* VK_KHR_display */                                                                                              \
-   EP(CreateDisplayPlaneSurfaceKHR, VK_KHR_DISPLAY_EXTENSION_NAME, API_VERSION_MAX, false)                           \
-   /* VK_KHR_get_surface_capabilities2 */                                                                            \
-   EP(GetPhysicalDeviceSurfaceCapabilities2KHR, VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME, API_VERSION_MAX,   \
-      false)                                                                                                         \
-   EP(GetPhysicalDeviceSurfaceFormats2KHR, VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME, API_VERSION_MAX, false) \
-   /* VK_KHR_get_physical_device_properties2 or */                                                                   \
-   /* 1.1 (without KHR suffix) */                                                                                    \
-   EP(GetPhysicalDeviceImageFormatProperties2KHR, VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,            \
-      VK_API_VERSION_1_1, false)                                                                                     \
-   EP(GetPhysicalDeviceFormatProperties2KHR, VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,                 \
-      VK_API_VERSION_1_1, false)                                                                                     \
-   EP(GetPhysicalDeviceFeatures2KHR, VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME, VK_API_VERSION_1_1,     \
-      false)                                                                                                         \
-   EP(GetPhysicalDeviceProperties2KHR, VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME, VK_API_VERSION_1_1,   \
-      false)                                                                                                         \
-   EP(GetPhysicalDeviceQueueFamilyProperties2KHR, VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,            \
-      VK_API_VERSION_1_1, false)                                                                                     \
-   EP(GetPhysicalDeviceMemoryProperties2KHR, VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,                 \
-      VK_API_VERSION_1_1, false)                                                                                     \
-   EP(GetPhysicalDeviceSparseImageFormatProperties2KHR, VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,      \
-      VK_API_VERSION_1_1, false)                                                                                     \
-   /* VK_KHR_device_group + VK_KHR_surface or */                                                                     \
-   /* 1.1 with VK_KHR_swapchain */                                                                                   \
-   EP(GetPhysicalDevicePresentRectanglesKHR, VK_KHR_DEVICE_GROUP_EXTENSION_NAME, VK_API_VERSION_1_1, false)          \
-   /* VK_KHR_external_fence_capabilities or */                                                                       \
-   /* 1.1 (without KHR suffix) */                                                                                    \
-   EP(GetPhysicalDeviceExternalFencePropertiesKHR, VK_KHR_EXTERNAL_FENCE_CAPABILITIES_EXTENSION_NAME,                \
-      VK_API_VERSION_1_1, false)                                                                                     \
-   EP(GetPhysicalDeviceExternalBufferPropertiesKHR, VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME,              \
-      VK_API_VERSION_1_1, false)
+#define INSTANCE_ENTRYPOINTS_LIST(EP)                                                                                     \
+   /* Vulkan 1.0 */                                                                                                       \
+   EP(GetInstanceProcAddr, "", VK_API_VERSION_1_0, true, )                                                                \
+   EP(DestroyInstance, "", VK_API_VERSION_1_0, true, )                                                                    \
+   EP(GetPhysicalDeviceProperties, "", VK_API_VERSION_1_0, true, )                                                        \
+   EP(GetPhysicalDeviceImageFormatProperties, "", VK_API_VERSION_1_0, true, )                                             \
+   EP(EnumerateDeviceExtensionProperties, "", VK_API_VERSION_1_0, true, )                                                 \
+   /* VK_KHR_surface */                                                                                                   \
+   EP(DestroySurfaceKHR, VK_KHR_SURFACE_EXTENSION_NAME, API_VERSION_MAX, false, )                                         \
+   EP(GetPhysicalDeviceSurfaceCapabilitiesKHR, VK_KHR_SURFACE_EXTENSION_NAME, API_VERSION_MAX, false, )                   \
+   EP(GetPhysicalDeviceSurfaceFormatsKHR, VK_KHR_SURFACE_EXTENSION_NAME, API_VERSION_MAX, false, )                        \
+   EP(GetPhysicalDeviceSurfacePresentModesKHR, VK_KHR_SURFACE_EXTENSION_NAME, API_VERSION_MAX, false, )                   \
+   EP(GetPhysicalDeviceSurfaceSupportKHR, VK_KHR_SURFACE_EXTENSION_NAME, API_VERSION_MAX, false, )                        \
+   /* VK_EXT_headless_surface */                                                                                          \
+   EP(CreateHeadlessSurfaceEXT, VK_EXT_HEADLESS_SURFACE_EXTENSION_NAME, API_VERSION_MAX, false, )                         \
+   /* VK_KHR_wayland_surface */                                                                                           \
+   EP(CreateWaylandSurfaceKHR, VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME, API_VERSION_MAX, false, )                           \
+   /* VK_KHR_display */                                                                                                   \
+   EP(CreateDisplayPlaneSurfaceKHR, VK_KHR_DISPLAY_EXTENSION_NAME, API_VERSION_MAX, false, )                              \
+   /* VK_KHR_get_surface_capabilities2 */                                                                                 \
+   EP(GetPhysicalDeviceSurfaceCapabilities2KHR, VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME, API_VERSION_MAX,        \
+      false, )                                                                                                            \
+   EP(GetPhysicalDeviceSurfaceFormats2KHR, VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME, API_VERSION_MAX, false, )    \
+   /* VK_KHR_get_physical_device_properties2 or 1.1 (without KHR suffix) */                                               \
+   /* Not all of these entrypoints are used by the layer but need to be listed here to hide them from the application. */ \
+   EP(GetPhysicalDeviceImageFormatProperties2KHR, VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,                 \
+      VK_API_VERSION_1_1, false, GetPhysicalDeviceImageFormatProperties2)                                                 \
+   EP(GetPhysicalDeviceFormatProperties2KHR, VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,                      \
+      VK_API_VERSION_1_1, false, GetPhysicalDeviceFormatProperties2)                                                      \
+   EP(GetPhysicalDeviceFeatures2KHR, VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME, VK_API_VERSION_1_1,          \
+      false, GetPhysicalDeviceFeatures2)                                                                                  \
+   EP(GetPhysicalDeviceProperties2KHR, VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME, VK_API_VERSION_1_1,        \
+      false, GetPhysicalDeviceProperties2)                                                                                \
+   EP(GetPhysicalDeviceQueueFamilyProperties2KHR, VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,                 \
+      VK_API_VERSION_1_1, false, GetPhysicalDeviceQueueFamilyProperties2)                                                 \
+   EP(GetPhysicalDeviceMemoryProperties2KHR, VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,                      \
+      VK_API_VERSION_1_1, false, GetPhysicalDeviceMemoryProperties2)                                                      \
+   EP(GetPhysicalDeviceSparseImageFormatProperties2KHR, VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,           \
+      VK_API_VERSION_1_1, false, GetPhysicalDeviceSparseImageFormatProperties2)                                           \
+   /* VK_KHR_device_group + VK_KHR_surface or */                                                                          \
+   /* 1.1 with VK_KHR_swapchain */                                                                                        \
+   EP(GetPhysicalDevicePresentRectanglesKHR, VK_KHR_DEVICE_GROUP_EXTENSION_NAME, VK_API_VERSION_1_1, false, )             \
+   /* VK_KHR_external_fence_capabilities or 1.1 (without KHR suffix) */                                                   \
+   EP(GetPhysicalDeviceExternalFencePropertiesKHR, VK_KHR_EXTERNAL_FENCE_CAPABILITIES_EXTENSION_NAME,                     \
+      VK_API_VERSION_1_1, false, GetPhysicalDeviceExternalFenceProperties)                                                \
+   /* VK_KHR_external_memory_capabilities or 1.1 (without KHR suffix) */                                                  \
+   /* The layer does not use these entrypoints directly but does use VkExternalImageFormatPropertiesKHR introduced by */  \
+   /* this extension. These are listed here in order to hide them from the application. */                                \
+   EP(GetPhysicalDeviceExternalBufferPropertiesKHR, VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME,                   \
+      VK_API_VERSION_1_1, false, GetPhysicalDeviceExternalBufferProperties)
 
 /**
  * @brief Struct representing the instance dispatch table.
@@ -284,9 +288,10 @@ public:
     *
     * @param instance The instance for which the dispatch table will be populated.
     * @param get_proc The pointer to vkGetInstanceProcAddr function.
+    * @param api_version The Vulkan API version being used.
     * @return VkResult VK_SUCCESS if successful, otherwise an error.
     */
-   VkResult populate(VkInstance instance, PFN_vkGetInstanceProcAddr get_proc);
+   VkResult populate(VkInstance instance, PFN_vkGetInstanceProcAddr get_proc, uint32_t api_version);
 
    /**
     * @brief Get the user enabled instance extension entrypoint by name
@@ -304,7 +309,7 @@ public:
     *    disp.GetInstanceProcAddr(instance, fn_name);
     * The result type will be matching the function signature, so there is no need for casting.
     */
-#define DISPATCH_TABLE_SHORTCUT(name, unused1, unused2, unused3)             \
+#define DISPATCH_TABLE_SHORTCUT(name, unused1, unused2, unused3, unused4)    \
    template <class... Args>                                                  \
    auto name(Args &&...args) const                                           \
    {                                                                         \
@@ -340,13 +345,14 @@ private:
  * extension_name: Name of the extension that provides the entrypoint.
  * api_version: Vulkan API version where the entrypoint is part of the core specification, or API_VERSION_MAX.
  * required: Boolean to indicate whether the entrypoint is required by the WSI layer or optional.
+ * alias: Name of the promoted entrypoint alias if different to entrypoint_name.
  */
 
 #if VULKAN_WSI_LAYER_EXPERIMENTAL
-#define DEVICE_ENTRYPOINTS_LIST_EXPERIMENTAL(EP)                                                         \
-   EP(GetSwapchainTimeDomainPropertiesEXT, VK_EXT_PRESENT_TIMING_EXTENSION_NAME, API_VERSION_MAX, false) \
-   EP(GetSwapchainTimingPropertiesEXT, VK_EXT_PRESENT_TIMING_EXTENSION_NAME, API_VERSION_MAX, false)     \
-   EP(SetSwapchainPresentTimingQueueSizeEXT, VK_EXT_PRESENT_TIMING_EXTENSION_NAME, API_VERSION_MAX, false)
+#define DEVICE_ENTRYPOINTS_LIST_EXPERIMENTAL(EP)                                                           \
+   EP(GetSwapchainTimeDomainPropertiesEXT, VK_EXT_PRESENT_TIMING_EXTENSION_NAME, API_VERSION_MAX, false, ) \
+   EP(GetSwapchainTimingPropertiesEXT, VK_EXT_PRESENT_TIMING_EXTENSION_NAME, API_VERSION_MAX, false, )     \
+   EP(SetSwapchainPresentTimingQueueSizeEXT, VK_EXT_PRESENT_TIMING_EXTENSION_NAME, API_VERSION_MAX, false, )
 #else
 #define DEVICE_ENTRYPOINTS_LIST_EXPERIMENTAL(EP)
 #endif
@@ -354,73 +360,84 @@ private:
 /* Define a list of custom entrypoints that might rely on preprocessor conditions and similar */
 #define DEVICE_ENTRYPOINTS_LIST_EXPANSION(EP) DEVICE_ENTRYPOINTS_LIST_EXPERIMENTAL(EP)
 
-#define DEVICE_ENTRYPOINTS_LIST(EP)                                                                                \
-   /* Vulkan 1.0 */                                                                                                \
-   EP(GetDeviceProcAddr, "", VK_API_VERSION_1_0, true)                                                             \
-   EP(GetDeviceQueue, "", VK_API_VERSION_1_0, true)                                                                \
-   EP(QueueSubmit, "", VK_API_VERSION_1_0, true)                                                                   \
-   EP(QueueWaitIdle, "", VK_API_VERSION_1_0, true)                                                                 \
-   EP(CreateCommandPool, "", VK_API_VERSION_1_0, true)                                                             \
-   EP(DestroyCommandPool, "", VK_API_VERSION_1_0, true)                                                            \
-   EP(AllocateCommandBuffers, "", VK_API_VERSION_1_0, true)                                                        \
-   EP(FreeCommandBuffers, "", VK_API_VERSION_1_0, true)                                                            \
-   EP(ResetCommandBuffer, "", VK_API_VERSION_1_0, true)                                                            \
-   EP(BeginCommandBuffer, "", VK_API_VERSION_1_0, true)                                                            \
-   EP(EndCommandBuffer, "", VK_API_VERSION_1_0, true)                                                              \
-   EP(CreateImage, "", VK_API_VERSION_1_0, true)                                                                   \
-   EP(DestroyImage, "", VK_API_VERSION_1_0, true)                                                                  \
-   EP(GetImageMemoryRequirements, "", VK_API_VERSION_1_0, true)                                                    \
-   EP(BindImageMemory, "", VK_API_VERSION_1_0, true)                                                               \
-   EP(AllocateMemory, "", VK_API_VERSION_1_0, true)                                                                \
-   EP(FreeMemory, "", VK_API_VERSION_1_0, true)                                                                    \
-   EP(CreateFence, "", VK_API_VERSION_1_0, true)                                                                   \
-   EP(DestroyFence, "", VK_API_VERSION_1_0, true)                                                                  \
-   EP(CreateSemaphore, "", VK_API_VERSION_1_0, true)                                                               \
-   EP(DestroySemaphore, "", VK_API_VERSION_1_0, true)                                                              \
-   EP(ResetFences, "", VK_API_VERSION_1_0, true)                                                                   \
-   EP(WaitForFences, "", VK_API_VERSION_1_0, true)                                                                 \
-   EP(DestroyDevice, "", VK_API_VERSION_1_0, true)                                                                 \
-   /* VK_KHR_swapchain */                                                                                          \
-   EP(CreateSwapchainKHR, VK_KHR_SWAPCHAIN_EXTENSION_NAME, API_VERSION_MAX, false)                                 \
-   EP(DestroySwapchainKHR, VK_KHR_SWAPCHAIN_EXTENSION_NAME, API_VERSION_MAX, false)                                \
-   EP(GetSwapchainImagesKHR, VK_KHR_SWAPCHAIN_EXTENSION_NAME, API_VERSION_MAX, false)                              \
-   EP(AcquireNextImageKHR, VK_KHR_SWAPCHAIN_EXTENSION_NAME, API_VERSION_MAX, false)                                \
-   EP(QueuePresentKHR, VK_KHR_SWAPCHAIN_EXTENSION_NAME, API_VERSION_MAX, false)                                    \
-   /* VK_KHR_shared_presentable_image */                                                                           \
-   EP(GetSwapchainStatusKHR, VK_KHR_SHARED_PRESENTABLE_IMAGE_EXTENSION_NAME, API_VERSION_MAX, false)               \
-   /* VK_KHR_device_group + VK_KHR_swapchain or */ /* 1.1 with VK_KHR_swapchain */                                 \
-   EP(AcquireNextImage2KHR, VK_KHR_DEVICE_GROUP_EXTENSION_NAME, VK_API_VERSION_1_1, false)                         \
-   /* VK_KHR_device_group + VK_KHR_surface or */ /* 1.1 with VK_KHR_swapchain */                                   \
-   EP(GetDeviceGroupSurfacePresentModesKHR, VK_KHR_DEVICE_GROUP_EXTENSION_NAME, VK_API_VERSION_1_1, false)         \
-   EP(GetDeviceGroupPresentCapabilitiesKHR, VK_KHR_DEVICE_GROUP_EXTENSION_NAME, VK_API_VERSION_1_1,                \
-      false) /* VK_KHR_external_memory_fd */                                                                       \
-   EP(GetMemoryFdKHR, VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME, API_VERSION_MAX, false)                            \
-   EP(GetMemoryFdPropertiesKHR, VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME, API_VERSION_MAX, false)                  \
-   /* VK_KHR_bind_memory2 or */ /* 1.1 (without KHR suffix) */                                                     \
-   EP(BindImageMemory2KHR, VK_KHR_BIND_MEMORY_2_EXTENSION_NAME, VK_API_VERSION_1_1, false)                         \
-   EP(BindBufferMemory2KHR, VK_KHR_BIND_MEMORY_2_EXTENSION_NAME, VK_API_VERSION_1_1,                               \
-      false) /* VK_KHR_external_fence_fd */                                                                        \
-   EP(GetFenceFdKHR, VK_KHR_EXTERNAL_FENCE_FD_EXTENSION_NAME, API_VERSION_MAX, false)                              \
-   EP(ImportFenceFdKHR, VK_KHR_EXTERNAL_FENCE_FD_EXTENSION_NAME, API_VERSION_MAX,                                  \
-      false) /* VK_KHR_external_semaphore_fd */                                                                    \
-   EP(ImportSemaphoreFdKHR, VK_KHR_EXTERNAL_SEMAPHORE_FD_EXTENSION_NAME, API_VERSION_MAX, false)                   \
-   EP(GetSemaphoreFdKHR, VK_KHR_EXTERNAL_SEMAPHORE_FD_EXTENSION_NAME, API_VERSION_MAX,                             \
-      false) /* VK_KHR_image_drm_format_modifier */                                                                \
-   EP(GetImageDrmFormatModifierPropertiesEXT, VK_EXT_IMAGE_DRM_FORMAT_MODIFIER_EXTENSION_NAME, API_VERSION_MAX,    \
-      false) /* VK_KHR_sampler_ycbcr_conversion */                                                                 \
-   EP(CreateSamplerYcbcrConversionKHR, VK_KHR_SAMPLER_YCBCR_CONVERSION_EXTENSION_NAME, VK_API_VERSION_1_1, false)  \
-   EP(DestroySamplerYcbcrConversionKHR, VK_KHR_SAMPLER_YCBCR_CONVERSION_EXTENSION_NAME, VK_API_VERSION_1_1,        \
-      false) /* VK_KHR_maintenance1 */                                                                             \
-   EP(TrimCommandPoolKHR, VK_KHR_MAINTENANCE1_EXTENSION_NAME, VK_API_VERSION_1_1,                                  \
-      false) /* VK_KHR_get_memory_requirements2 */                                                                 \
-   EP(GetImageMemoryRequirements2KHR, VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME, VK_API_VERSION_1_1, false)  \
-   EP(GetBufferMemoryRequirements2KHR, VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME, VK_API_VERSION_1_1, false) \
-   EP(GetImageSparseMemoryRequirements2KHR, VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME, VK_API_VERSION_1_1,   \
-      false)                                                                                                       \
-   EP(ReleaseSwapchainImagesEXT, VK_EXT_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME, VK_API_VERSION_1_1, false)         \
-   EP(GetCalibratedTimestampsEXT, VK_EXT_CALIBRATED_TIMESTAMPS_EXTENSION_NAME, API_VERSION_MAX, false)             \
-   EP(GetCalibratedTimestampsKHR, VK_KHR_CALIBRATED_TIMESTAMPS_EXTENSION_NAME, API_VERSION_MAX, false)             \
-   /* Custom entrypoints */                                                                                        \
+#define DEVICE_ENTRYPOINTS_LIST(EP)                                                                                         \
+   /* Vulkan 1.0 */                                                                                                         \
+   EP(GetDeviceProcAddr, "", VK_API_VERSION_1_0, true, )                                                                    \
+   EP(GetDeviceQueue, "", VK_API_VERSION_1_0, true, )                                                                       \
+   EP(QueueSubmit, "", VK_API_VERSION_1_0, true, )                                                                          \
+   EP(QueueWaitIdle, "", VK_API_VERSION_1_0, true, )                                                                        \
+   EP(CreateCommandPool, "", VK_API_VERSION_1_0, true, )                                                                    \
+   EP(DestroyCommandPool, "", VK_API_VERSION_1_0, true, )                                                                   \
+   EP(AllocateCommandBuffers, "", VK_API_VERSION_1_0, true, )                                                               \
+   EP(FreeCommandBuffers, "", VK_API_VERSION_1_0, true, )                                                                   \
+   EP(ResetCommandBuffer, "", VK_API_VERSION_1_0, true, )                                                                   \
+   EP(BeginCommandBuffer, "", VK_API_VERSION_1_0, true, )                                                                   \
+   EP(EndCommandBuffer, "", VK_API_VERSION_1_0, true, )                                                                     \
+   EP(CreateImage, "", VK_API_VERSION_1_0, true, )                                                                          \
+   EP(DestroyImage, "", VK_API_VERSION_1_0, true, )                                                                         \
+   EP(GetImageMemoryRequirements, "", VK_API_VERSION_1_0, true, )                                                           \
+   EP(BindImageMemory, "", VK_API_VERSION_1_0, true, )                                                                      \
+   EP(AllocateMemory, "", VK_API_VERSION_1_0, true, )                                                                       \
+   EP(FreeMemory, "", VK_API_VERSION_1_0, true, )                                                                           \
+   EP(CreateFence, "", VK_API_VERSION_1_0, true, )                                                                          \
+   EP(DestroyFence, "", VK_API_VERSION_1_0, true, )                                                                         \
+   EP(CreateSemaphore, "", VK_API_VERSION_1_0, true, )                                                                      \
+   EP(DestroySemaphore, "", VK_API_VERSION_1_0, true, )                                                                     \
+   EP(ResetFences, "", VK_API_VERSION_1_0, true, )                                                                          \
+   EP(WaitForFences, "", VK_API_VERSION_1_0, true, )                                                                        \
+   EP(DestroyDevice, "", VK_API_VERSION_1_0, true, )                                                                        \
+   /* VK_KHR_swapchain */                                                                                                   \
+   EP(CreateSwapchainKHR, VK_KHR_SWAPCHAIN_EXTENSION_NAME, API_VERSION_MAX, false, )                                        \
+   EP(DestroySwapchainKHR, VK_KHR_SWAPCHAIN_EXTENSION_NAME, API_VERSION_MAX, false, )                                       \
+   EP(GetSwapchainImagesKHR, VK_KHR_SWAPCHAIN_EXTENSION_NAME, API_VERSION_MAX, false, )                                     \
+   EP(AcquireNextImageKHR, VK_KHR_SWAPCHAIN_EXTENSION_NAME, API_VERSION_MAX, false, )                                       \
+   EP(QueuePresentKHR, VK_KHR_SWAPCHAIN_EXTENSION_NAME, API_VERSION_MAX, false, )                                           \
+   /* VK_KHR_shared_presentable_image */                                                                                    \
+   EP(GetSwapchainStatusKHR, VK_KHR_SHARED_PRESENTABLE_IMAGE_EXTENSION_NAME, API_VERSION_MAX, false, )                      \
+   /* VK_KHR_device_group + VK_KHR_swapchain or 1.1 with VK_KHR_swapchain */                                                \
+   EP(AcquireNextImage2KHR, VK_KHR_DEVICE_GROUP_EXTENSION_NAME, VK_API_VERSION_1_1, false, )                                \
+   /* VK_KHR_device_group + VK_KHR_surface or 1.1 with VK_KHR_swapchain */                                                  \
+   EP(GetDeviceGroupSurfacePresentModesKHR, VK_KHR_DEVICE_GROUP_EXTENSION_NAME, VK_API_VERSION_1_1, false, )                \
+   EP(GetDeviceGroupPresentCapabilitiesKHR, VK_KHR_DEVICE_GROUP_EXTENSION_NAME, VK_API_VERSION_1_1, false, )                \
+   /* VK_KHR_external_memory_fd */                                                                                          \
+   EP(GetMemoryFdKHR, VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME, API_VERSION_MAX, false, )                                   \
+   EP(GetMemoryFdPropertiesKHR, VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME, API_VERSION_MAX, false, )                         \
+   /* VK_KHR_bind_memory2 or 1.1 (without KHR suffix) */                                                                    \
+   EP(BindImageMemory2KHR, VK_KHR_BIND_MEMORY_2_EXTENSION_NAME, VK_API_VERSION_1_1, false, BindImageMemory2)                \
+   EP(BindBufferMemory2KHR, VK_KHR_BIND_MEMORY_2_EXTENSION_NAME, VK_API_VERSION_1_1, false, BindBufferMemory2)              \
+   /* VK_KHR_external_fence_fd */                                                                                           \
+   EP(GetFenceFdKHR, VK_KHR_EXTERNAL_FENCE_FD_EXTENSION_NAME, API_VERSION_MAX, false, )                                     \
+   EP(ImportFenceFdKHR, VK_KHR_EXTERNAL_FENCE_FD_EXTENSION_NAME, API_VERSION_MAX, false, )                                  \
+   /* VK_KHR_external_semaphore_fd */                                                                                       \
+   EP(ImportSemaphoreFdKHR, VK_KHR_EXTERNAL_SEMAPHORE_FD_EXTENSION_NAME, API_VERSION_MAX, false, )                          \
+   EP(GetSemaphoreFdKHR, VK_KHR_EXTERNAL_SEMAPHORE_FD_EXTENSION_NAME, API_VERSION_MAX, false, )                             \
+   /* VK_EXT_image_drm_format_modifier */                                                                                   \
+   /* Note the layer doesn't use these entrypoints directly but does use the structures introduced */                       \
+   /* by this extension. These entrypoints are listed to hide the entrypoints from the application. */                      \
+   EP(GetImageDrmFormatModifierPropertiesEXT, VK_EXT_IMAGE_DRM_FORMAT_MODIFIER_EXTENSION_NAME, API_VERSION_MAX,             \
+      false, )                                                                                                              \
+   /* VK_KHR_sampler_ycbcr_conversion (promoted in 1.1 with KHR suffix removed but the samplerYcbcrConversion capability */ \
+   /* is still optional). */                                                                                                \
+   /* Note the layer doesn't use these entrypoints directly but does use VK_IMAGE_CREATE_DISJOINT_BIT_KHR introduced */     \
+   /* by this extension. These entrypoints are listed to hide the entrypoints from the application. */                      \
+   EP(CreateSamplerYcbcrConversionKHR, VK_KHR_SAMPLER_YCBCR_CONVERSION_EXTENSION_NAME, VK_API_VERSION_1_1, false, )         \
+   EP(DestroySamplerYcbcrConversionKHR, VK_KHR_SAMPLER_YCBCR_CONVERSION_EXTENSION_NAME, VK_API_VERSION_1_1, false, )        \
+   /* VK_KHR_maintenance1 */                                                                                                \
+   /* This extension is not used directly by the layer but is a dependency of VK_KHR_sampler_ycbcr_conversion */            \
+   EP(TrimCommandPoolKHR, VK_KHR_MAINTENANCE1_EXTENSION_NAME, VK_API_VERSION_1_1, false, )                                  \
+   /* VK_KHR_get_memory_requirements2 or 1.1 (without KHR suffix)                                                           \
+    * This extension is not used directly by the layer but is a dependency of VK_KHR_sampler_ycbcr_conversion */            \
+   EP(GetImageMemoryRequirements2KHR, VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME, VK_API_VERSION_1_1, false,           \
+      GetImageMemoryRequirements2)                                                                                          \
+   EP(GetBufferMemoryRequirements2KHR, VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME, VK_API_VERSION_1_1, false,          \
+      GetBufferMemoryRequirements2)                                                                                         \
+   EP(GetImageSparseMemoryRequirements2KHR, VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME, VK_API_VERSION_1_1,            \
+      false, GetImageSparseMemoryRequirements2KHR)                                                                          \
+   /* VK_EXT_swapchain_maintenance1 */                                                                                      \
+   EP(ReleaseSwapchainImagesEXT, VK_EXT_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME, VK_API_VERSION_1_1, false, )                \
+   EP(GetCalibratedTimestampsEXT, VK_EXT_CALIBRATED_TIMESTAMPS_EXTENSION_NAME, API_VERSION_MAX, false, )                    \
+   EP(GetCalibratedTimestampsKHR, VK_KHR_CALIBRATED_TIMESTAMPS_EXTENSION_NAME, API_VERSION_MAX, false, )                    \
+   /* Custom entrypoints */                                                                                                 \
    DEVICE_ENTRYPOINTS_LIST_EXPANSION(EP)
 
 /**
@@ -447,9 +464,10 @@ public:
     *
     * @param device The device for which the dispatch table will be populated.
     * @param get_proc The pointer to vkGetDeviceProcAddr function.
+    * @param api_version The Vulkan API version being used.
     * @return VkResult VK_SUCCESS if successful, otherwise an error.
     */
-   VkResult populate(VkDevice dev, PFN_vkGetDeviceProcAddr get_proc);
+   VkResult populate(VkDevice dev, PFN_vkGetDeviceProcAddr get_proc, uint32_t api_version);
 
    /**
     * @brief Get the user enabled device extension entrypoint by name
@@ -467,7 +485,7 @@ public:
     *    disp.GetDeviceProcAddr(instance, fn_name);
     * The result type will be matching the function signature, so there is no need for casting.
     */
-#define DISPATCH_TABLE_SHORTCUT(name, unused1, unused2, unused3)             \
+#define DISPATCH_TABLE_SHORTCUT(name, unused1, unused2, unused3, unused4)    \
    template <class... Args>                                                  \
    auto name(Args &&...args) const                                           \
    {                                                                         \

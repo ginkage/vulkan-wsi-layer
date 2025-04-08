@@ -180,11 +180,11 @@ VKAPI_ATTR VkResult create_instance(const VkInstanceCreateInfo *pCreateInfo, con
       return VK_ERROR_OUT_OF_HOST_MEMORY;
    }
 
-   TRY_LOG_CALL(table->populate(*pInstance, fpGetInstanceProcAddr));
-   table->set_user_enabled_extensions(pCreateInfo->ppEnabledExtensionNames, pCreateInfo->enabledExtensionCount);
-
    uint32_t api_version =
       pCreateInfo->pApplicationInfo != nullptr ? pCreateInfo->pApplicationInfo->apiVersion : VK_API_VERSION_1_3;
+
+   TRY_LOG_CALL(table->populate(*pInstance, fpGetInstanceProcAddr, api_version));
+   table->set_user_enabled_extensions(pCreateInfo->ppEnabledExtensionNames, pCreateInfo->enabledExtensionCount);
 
    TRY_LOG_CALL(instance_private_data::associate(*pInstance, std::move(*table), loader_callback,
                                                  layer_platforms_to_enable, api_version, instance_allocator));
@@ -314,7 +314,7 @@ VKAPI_ATTR VkResult create_device(VkPhysicalDevice physicalDevice, const VkDevic
       return VK_ERROR_OUT_OF_HOST_MEMORY;
    }
 
-   VkResult result = table->populate(*pDevice, fpGetDeviceProcAddr);
+   VkResult result = table->populate(*pDevice, fpGetDeviceProcAddr, inst_data.api_version);
    if (result != VK_SUCCESS)
    {
       fn_destroy_device(*pDevice, pAllocator);
@@ -528,6 +528,7 @@ wsi_layer_vkGetPhysicalDeviceFeatures2KHR(VkPhysicalDevice physicalDevice,
 VWL_VKAPI_CALL(PFN_vkVoidFunction)
 wsi_layer_vkGetDeviceProcAddr(VkDevice device, const char *funcName) VWL_API_POST
 {
+   uint64_t api_version = layer::device_private_data::get(device).instance_data.api_version;
    if (layer::device_private_data::get(device).is_device_extension_enabled(VK_KHR_SWAPCHAIN_EXTENSION_NAME))
    {
       GET_PROC_ADDR(vkCreateSwapchainKHR);
@@ -557,6 +558,13 @@ wsi_layer_vkGetDeviceProcAddr(VkDevice device, const char *funcName) VWL_API_POS
 
    GET_PROC_ADDR(vkCreateImage);
    GET_PROC_ADDR(vkBindImageMemory2);
+
+   if (!strcmp(funcName, "vkBindImageMemory2KHR") &&
+       layer::device_private_data::get(device).disp.get_user_enabled_entrypoint(device, api_version, funcName) !=
+          nullptr)
+   {
+      return (PFN_vkVoidFunction)&wsi_layer_vkBindImageMemory2;
+   }
 
    /* VK_EXT_swapchain_maintenance1 */
    if (layer::device_private_data::get(device).is_device_extension_enabled(
