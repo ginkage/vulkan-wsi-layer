@@ -171,6 +171,7 @@ VkResult add_device_extensions_required_by_layer(VkPhysicalDevice phys_dev,
 #if ENABLE_INSTRUMENTATION
          VK_EXT_FRAME_BOUNDARY_EXTENSION_NAME,
 #endif
+         VK_KHR_BIND_MEMORY_2_EXTENSION_NAME,
       };
 
       for (auto extension : optional_extensions)

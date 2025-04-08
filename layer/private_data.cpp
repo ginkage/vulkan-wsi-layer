@@ -45,17 +45,17 @@ static std::mutex g_data_lock;
 static util::unordered_map<void *, instance_private_data *> g_instance_data{ util::allocator::get_generic() };
 static util::unordered_map<void *, device_private_data *> g_device_data{ util::allocator::get_generic() };
 
-VkResult instance_dispatch_table::populate(VkInstance instance, PFN_vkGetInstanceProcAddr get_proc)
+VkResult instance_dispatch_table::populate(VkInstance instance, PFN_vkGetInstanceProcAddr get_proc,
+                                           uint32_t instance_api_version)
 {
    static constexpr entrypoint entrypoints_init[] = {
-#define DISPATCH_TABLE_ENTRY(name, ext_name, api_version, required) \
-   { "vk" #name, ext_name, nullptr, api_version, false, required },
+#define DISPATCH_TABLE_ENTRY(name, ext_name, api_version, required, alias) \
+   { "vk" #name, ext_name, nullptr, api_version, false, required, "vk" #alias },
       INSTANCE_ENTRYPOINTS_LIST(DISPATCH_TABLE_ENTRY)
 #undef DISPATCH_TABLE_ENTRY
    };
 
    static constexpr auto num_entrypoints = std::distance(std::begin(entrypoints_init), std::end(entrypoints_init));
-
    for (size_t i = 0; i < num_entrypoints; i++)
    {
       const entrypoint *entrypoint = &entrypoints_init[i];
@@ -67,6 +67,12 @@ VkResult instance_dispatch_table::populate(VkInstance instance, PFN_vkGetInstanc
       struct entrypoint e = *entrypoint;
       e.fn = ret;
       e.user_visible = false;
+
+      if (entrypoint->alias != nullptr && strcmp(entrypoint->alias, "vk") != 0 &&
+          instance_api_version >= entrypoint->api_version)
+      {
+         e.fn = get_proc(instance, entrypoint->alias);
+      }
 
       if (!m_entrypoints->try_insert(std::make_pair(e.name, e)).has_value())
       {
@@ -114,11 +120,12 @@ PFN_vkVoidFunction instance_dispatch_table::get_user_enabled_entrypoint(VkInstan
    return GetInstanceProcAddr(instance, fn_name).value_or(nullptr);
 }
 
-VkResult device_dispatch_table::populate(VkDevice dev, PFN_vkGetDeviceProcAddr get_proc_fn)
+VkResult device_dispatch_table::populate(VkDevice dev, PFN_vkGetDeviceProcAddr get_proc_fn,
+                                         uint32_t instance_api_version)
 {
    static constexpr entrypoint entrypoints_init[] = {
-#define DISPATCH_TABLE_ENTRY(name, ext_name, api_version, required) \
-   { "vk" #name, ext_name, nullptr, api_version, false, required },
+#define DISPATCH_TABLE_ENTRY(name, ext_name, api_version, required, alias) \
+   { "vk" #name, ext_name, nullptr, api_version, false, required, "vk" #alias },
       DEVICE_ENTRYPOINTS_LIST(DISPATCH_TABLE_ENTRY)
 #undef DISPATCH_TABLE_ENTRY
    };
@@ -126,15 +133,21 @@ VkResult device_dispatch_table::populate(VkDevice dev, PFN_vkGetDeviceProcAddr g
 
    for (size_t i = 0; i < num_entrypoints; i++)
    {
-      const entrypoint entrypoint = entrypoints_init[i];
-      PFN_vkVoidFunction ret = get_proc_fn(dev, entrypoint.name);
-      if (!ret && entrypoint.required)
+      const entrypoint *entrypoint = &entrypoints_init[i];
+      PFN_vkVoidFunction ret = get_proc_fn(dev, entrypoint->name);
+      if (!ret && entrypoint->required)
       {
          return VK_ERROR_INITIALIZATION_FAILED;
       }
-      struct entrypoint e = entrypoint;
+      struct entrypoint e = *entrypoint;
       e.fn = ret;
       e.user_visible = false;
+
+      if (entrypoint->alias != nullptr && strcmp(entrypoint->alias, "vk") != 0 &&
+          instance_api_version >= entrypoint->api_version)
+      {
+         e.fn = get_proc_fn(dev, entrypoint->alias);
+      }
 
       if (!m_entrypoints->try_insert(std::make_pair(e.name, e)).has_value())
       {
