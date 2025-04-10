@@ -30,6 +30,7 @@
 #include <vulkan/vk_layer.h>
 #include <vulkan/vulkan.h>
 
+#include "layer/calibrated_timestamps_api.hpp"
 #include "wsi_layer_experimental.hpp"
 #include "private_data.hpp"
 #include "surface_api.hpp"
@@ -570,6 +571,14 @@ wsi_layer_vkGetDeviceProcAddr(VkDevice device, const char *funcName) VWL_API_POS
           VK_EXT_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME))
    {
       GET_PROC_ADDR(vkReleaseSwapchainImagesEXT);
+   }
+   if (layer::device_private_data::get(device).is_device_extension_enabled(VK_EXT_CALIBRATED_TIMESTAMPS_EXTENSION_NAME))
+   {
+      GET_PROC_ADDR(vkGetCalibratedTimestampsEXT);
+   }
+   if (layer::device_private_data::get(device).is_device_extension_enabled(VK_KHR_CALIBRATED_TIMESTAMPS_EXTENSION_NAME))
+   {
+      GET_PROC_ADDR(vkGetCalibratedTimestampsKHR);
    }
 
    return layer::device_private_data::get(device).disp.get_user_enabled_entrypoint(

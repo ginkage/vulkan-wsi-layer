@@ -76,4 +76,4 @@ private:
 } // namespace wayland
 } // namespace wsi
 
-#endif // VULKAN_WSI_LAYER_EXPERIMENTAL
+#endif /* VULKAN_WSI_LAYER_EXPERIMENTAL */
