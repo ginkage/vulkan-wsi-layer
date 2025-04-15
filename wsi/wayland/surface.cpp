@@ -72,9 +72,21 @@ zwp_linux_dmabuf_v1_modifier_impl(void *data, struct zwp_linux_dmabuf_v1 *dma_bu
       drm_supported_formats->is_out_of_memory = !drm_supported_formats->formats->try_push_back(format);
    }
 }
+
+/* Handler for clock_id event of the wp_presentation interface. */
+VWL_CAPI_CALL(void)
+wp_presentation_clock_id_impl(void *data, struct wp_presentation *wp_presentation,
+                              uint32_t compositor_clockid) VWL_API_POST
+{
+   UNUSED(wp_presentation);
+
+   clockid_t *clockid = static_cast<clockid_t *>(data);
+   *clockid = compositor_clockid;
+}
+
 } // namespace
 
-/*
+/**
  * @brief Get supported formats and modifiers using the zwp_linux_dmabuf_v1 interface.
  *
  * @param[in]  display               The wl_display that is being used.
@@ -119,6 +131,35 @@ static VkResult get_supported_formats_and_modifiers(wl_display *display, wl_even
       return VK_ERROR_OUT_OF_HOST_MEMORY;
    }
 
+   return VK_SUCCESS;
+}
+
+/**
+ * @brief Set the clock_id using the wp_presentation interface
+ *
+ * @retval VK_SUCCESS                    Indicates success.
+ * @retval VK_ERROR_UNKNOWN              Indicates one of the Wayland functions failed.
+ */
+static VkResult get_clock_id(wl_display *display, wl_event_queue *queue, wp_presentation *presentation_interface,
+                             clockid_t *clockid)
+{
+   const wp_presentation_listener presentation_listener = {
+      .clock_id = wp_presentation_clock_id_impl,
+   };
+
+   int res = wp_presentation_add_listener(presentation_interface, &presentation_listener, clockid);
+   if (res < 0)
+   {
+      WSI_LOG_ERROR("Failed to add wp_presentation listener.");
+      return VK_ERROR_UNKNOWN;
+   }
+
+   res = wl_display_roundtrip_queue(display, queue);
+   if (res < 0)
+   {
+      WSI_LOG_ERROR("Roundtrip failed.");
+      return VK_ERROR_UNKNOWN;
+   }
    return VK_SUCCESS;
 }
 
@@ -257,6 +298,12 @@ bool surface::init()
 
    VkResult vk_res = get_supported_formats_and_modifiers(wayland_display, surface_queue.get(), dmabuf_interface.get(),
                                                          supported_formats);
+   if (vk_res != VK_SUCCESS)
+   {
+      return false;
+   }
+
+   vk_res = get_clock_id(wayland_display, surface_queue.get(), presentation_time_interface.get(), &m_clockid);
    if (vk_res != VK_SUCCESS)
    {
       return false;
