@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, 2024 Arm Limited.
+ * Copyright (c) 2021-2025 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -31,7 +31,7 @@
 #include <linux-dmabuf-unstable-v1-client-protocol.h>
 #include <linux-explicit-synchronization-unstable-v1-protocol.h>
 #include <presentation-time-client-protocol.h>
-#include <memory.h>
+#include <memory>
 #include <functional>
 
 namespace wsi
@@ -72,6 +72,11 @@ static inline void wayland_object_destroy(wl_callback *obj)
 static inline void wayland_object_destroy(wl_event_queue *obj)
 {
    wl_event_queue_destroy(obj);
+}
+
+static inline void wayland_object_destroy(struct wp_presentation_feedback *obj)
+{
+   wp_presentation_feedback_destroy(obj);
 }
 
 template <typename T>

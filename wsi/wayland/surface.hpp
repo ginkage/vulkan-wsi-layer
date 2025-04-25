@@ -31,6 +31,7 @@
 #ifndef __STDC_VERSION__
 #define __STDC_VERSION__ 0
 #endif
+#include <sys/types.h>
 #include <wayland-client.h>
 
 #include "wsi/surface.hpp"
@@ -114,6 +115,17 @@ public:
    }
 
    /**
+    * @brief Returns a pointer to the Wayland wp_presentation interface obtained for the wayland
+    *        surface.
+    *
+    * The raw pointer is valid for the lifetime of the surface.
+    */
+   struct wp_presentation *get_presentation_time_interface()
+   {
+      return presentation_time_interface.get();
+   }
+
+   /**
     * @brief Returns a reference to a list of DRM formats supported by the Wayland surface.
     *
     * The reference is valid throughout the lifetime of this surface.
@@ -139,6 +151,14 @@ public:
     * @return true for success, false otherwise.
     */
    bool wait_next_frame_event();
+
+   /**
+    * @brief Return the clockid of the surface
+    */
+   clockid_t clockid()
+   {
+      return m_clockid;
+   }
 
 private:
    /**
@@ -180,7 +200,7 @@ private:
    wayland_owner<wp_presentation> presentation_time_interface;
 
    /**
-    * Container for a callback object for the latest frame done event.
+    * @brief Container for a callback object for the latest frame done event.
     *
     * The callback object should be destroyed before the queue so any new events
     * on the queue will be discarded. If a proxy object is destroyed after a queue,
@@ -196,6 +216,11 @@ private:
     * callback to indicate the server is ready for the next buffer.
     */
    bool present_pending;
+
+   /**
+    * @brief Stores the clock ID reported by the wp_presentation interface
+    */
+   clockid_t m_clockid;
 };
 
 } // namespace wayland

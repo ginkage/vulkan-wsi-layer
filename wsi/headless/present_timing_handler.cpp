@@ -30,6 +30,7 @@
 
 #include "present_timing_handler.hpp"
 #include <cstdint>
+#include <array>
 
 wsi_ext_present_timing_headless::wsi_ext_present_timing_headless(const util::allocator &allocator)
    : wsi::wsi_ext_present_timing(allocator)

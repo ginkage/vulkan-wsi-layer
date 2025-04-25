@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024-2025 Arm Limited.
+ * Copyright (c) 2025 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -23,46 +23,21 @@
  */
 
 /**
- * @file present_id.hpp
+ * @file calibrated_timestamps_api.hpp
  *
- * @brief Contains the base class declaration for the VK_KHR_present_id extension.
+ * @brief Contains the Vulkan entrypoints for Calibrated Timestamps extension.
+ *
  */
 
 #pragma once
+#include "util/macros.hpp"
 
-#include <util/custom_allocator.hpp>
-#include <util/macros.hpp>
-#include <atomic>
+VWL_VKAPI_CALL(VkResult)
+wsi_layer_vkGetCalibratedTimestampsEXT(VkDevice device, uint32_t timestampCount,
+                                       const VkCalibratedTimestampInfoKHR *pTimestampInfos, uint64_t *pTimestamps,
+                                       uint64_t *pMaxDeviation) VWL_API_POST;
 
-#include "wsi_extension.hpp"
-
-namespace wsi
-{
-
-/**
- * @brief Present ID extension class
- *
- * This class defines the present ID extension
- * features.
- */
-class wsi_ext_present_id : public wsi_ext
-{
-public:
-   /**
-    * @brief The name of the extension.
-    */
-   WSI_DEFINE_EXTENSION(VK_KHR_PRESENT_ID_EXTENSION_NAME);
-
-   /**
-    * @brief Marks the given present ID delivered (i.e. its image has been displayed).
-    */
-   void mark_delivered(uint64_t present_id);
-
-private:
-   /**
-    * @brief Most recently delivered present ID for this swapchain.
-    */
-   std::atomic<uint64_t> m_last_delivered_id{ 0 };
-};
-
-} /* namespace wsi */
+VWL_VKAPI_CALL(VkResult)
+wsi_layer_vkGetCalibratedTimestampsKHR(VkDevice device, uint32_t timestampCount,
+                                       const VkCalibratedTimestampInfoKHR *pTimestampInfos, uint64_t *pTimestamps,
+                                       uint64_t *pMaxDeviation) VWL_API_POST;

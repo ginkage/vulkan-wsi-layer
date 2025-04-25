@@ -149,7 +149,9 @@ if(BUILD_WSI_WAYLAND)
       wsi/swapchain_image_create_extensions/external_memory_extension.cpp)
 
    if(VULKAN_WSI_LAYER_EXPERIMENTAL)
+      target_sources(wayland_wsi PRIVATE wsi/wayland/present_id_wayland.cpp)
       target_sources(wayland_wsi PRIVATE wsi/wayland/present_timing_handler.cpp)
+      target_sources(wayland_wsi PRIVATE wsi/wayland/wp_presentation_feedback.cpp)
    endif()
 
    pkg_check_modules(WAYLAND_CLIENT REQUIRED wayland-client)
@@ -281,6 +283,7 @@ endif()
 
 # Layer
 add_library(${PROJECT_NAME} SHARED
+   layer/calibrated_timestamps_api.cpp
    layer/layer.cpp
    layer/private_data.cpp
    layer/surface_api.cpp
@@ -308,7 +311,7 @@ if (VULKAN_WSI_LAYER_EXPERIMENTAL)
    target_sources(${PROJECT_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/wsi/extensions/present_timing.cpp)
    add_definitions("-DVULKAN_WSI_LAYER_EXPERIMENTAL=1")
 else()
-   list(APPEND JSON_COMMANDS COMMAND sed -i '/VK_EXT_present_timing/d' ${CMAKE_CURRENT_BINARY_DIR}/VkLayer_window_system_integration.json)
+   list(APPEND JSON_COMMANDS COMMAND sed -i '/VK_EXT_present_timing|VK_KHR_present_wait/d' ${CMAKE_CURRENT_BINARY_DIR}/VkLayer_window_system_integration.json)
    add_definitions("-DVULKAN_WSI_LAYER_EXPERIMENTAL=0")
 endif()
 

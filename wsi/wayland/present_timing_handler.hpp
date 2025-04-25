@@ -41,7 +41,8 @@
 class wsi_ext_present_timing_wayland : public wsi::wsi_ext_present_timing
 {
 public:
-   static util::unique_ptr<wsi_ext_present_timing_wayland> create(const util::allocator &allocator);
+   static util::unique_ptr<wsi_ext_present_timing_wayland> create(VkTimeDomainKHR image_first_pixel_visible_time_domain,
+                                                                  const util::allocator &allocator);
 
    VkResult get_swapchain_timing_properties(uint64_t &timing_properties_counter,
                                             VkSwapchainTimingPropertiesEXT &timing_properties) override;

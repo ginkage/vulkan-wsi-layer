@@ -424,7 +424,8 @@ void surface_properties::get_present_timing_surface_caps(
    present_timing_surface_caps->presentTimingSupported = VK_TRUE;
    present_timing_surface_caps->presentAtAbsoluteTimeSupported = VK_FALSE;
    present_timing_surface_caps->presentAtRelativeTimeSupported = VK_FALSE;
-   present_timing_surface_caps->presentStageQueries = VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT;
+   present_timing_surface_caps->presentStageQueries =
+      VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT | VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_VISIBLE_BIT_EXT;
    present_timing_surface_caps->presentStageTargets = 0;
 }
 #endif
