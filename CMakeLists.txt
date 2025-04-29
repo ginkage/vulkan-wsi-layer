@@ -292,7 +292,7 @@ if (VULKAN_WSI_LAYER_EXPERIMENTAL)
    target_sources(${PROJECT_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/wsi/extensions/present_timing.cpp)
    add_definitions("-DVULKAN_WSI_LAYER_EXPERIMENTAL=1")
 else()
-   list(APPEND JSON_COMMANDS COMMAND sed -i '/VK_EXT_present_timing|VK_KHR_present_wait/d' ${CMAKE_CURRENT_BINARY_DIR}/VkLayer_window_system_integration.json)
+   list(APPEND JSON_COMMANDS COMMAND sed -Ei '/VK_EXT_present_timing|VK_KHR_present_wait/d' ${CMAKE_CURRENT_BINARY_DIR}/VkLayer_window_system_integration.json)
    add_definitions("-DVULKAN_WSI_LAYER_EXPERIMENTAL=0")
 endif()
 
