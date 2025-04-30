@@ -228,6 +228,12 @@ swapchain_base::swapchain_base(layer::device_private_data &dev_data, const VkAll
 {
 }
 
+static bool external_sync_supported(const layer::device_private_data &device_data)
+{
+   return device_data.disp.get_fn<PFN_vkImportFenceFdKHR>("vkImportFenceFdKHR").has_value() &&
+          device_data.disp.get_fn<PFN_vkImportSemaphoreFdKHR>("vkImportSemaphoreFdKHR").has_value();
+}
+
 VkResult swapchain_base::init(VkDevice device, const VkSwapchainCreateInfoKHR *swapchain_create_info)
 {
    assert(device != VK_NULL_HANDLE);
@@ -312,8 +318,17 @@ VkResult swapchain_base::init(VkDevice device, const VkSwapchainCreateInfoKHR *s
                                                       &img.present_fence_wait));
    }
 
-   m_device_data.disp.GetDeviceQueue(m_device, 0, 0, &m_queue);
-   TRY_LOG_CALL(m_device_data.SetDeviceLoaderData(m_device, m_queue));
+   if (!external_sync_supported(m_device_data))
+   {
+      /*
+       * This could be problematic when a queue has been created
+       * with any flag enabled. The reason is that according to the
+       * Vulkan spec, vkGetDeviceQueue2 should be used to get queues
+       * that were created with non zero flags parameters.
+       */
+      m_device_data.disp.GetDeviceQueue(m_device, 0, 0, &m_queue);
+      TRY_LOG_CALL(m_device_data.SetDeviceLoaderData(m_device, m_queue));
+   }
 
    int res = sem_init(&m_start_present_semaphore, 0, 0);
    /* Only programming error can cause this to fail. */
@@ -452,71 +467,50 @@ VkResult swapchain_base::acquire_next_image(uint64_t timeout, VkSemaphore semaph
 
    image_status_lock.unlock();
 
-   /* Try to signal fences/semaphores with a sync FD for optimal performance. */
-   if (m_device_data.disp.get_fn<PFN_vkImportFenceFdKHR>("vkImportFenceFdKHR").has_value() &&
-       m_device_data.disp.get_fn<PFN_vkImportSemaphoreFdKHR>("vkImportSemaphoreFdKHR").has_value())
+   if (!external_sync_supported(m_device_data))
    {
-      if (fence != VK_NULL_HANDLE)
-      {
-         int already_signalled_sentinel_fd = -1;
-         auto info = VkImportFenceFdInfoKHR{};
-         {
-            info.sType = VK_STRUCTURE_TYPE_IMPORT_FENCE_FD_INFO_KHR;
-            info.fence = fence;
-            info.handleType = VK_EXTERNAL_FENCE_HANDLE_TYPE_SYNC_FD_BIT;
-            info.fd = already_signalled_sentinel_fd;
-            info.flags = VK_FENCE_IMPORT_TEMPORARY_BIT;
-         }
-
-         auto result = m_device_data.disp.ImportFenceFdKHR(m_device, &info);
-         switch (result)
-         {
-         case VK_SUCCESS:
-            fence = VK_NULL_HANDLE;
-            break;
-         case VK_ERROR_INVALID_EXTERNAL_HANDLE:
-            /* Leave to fallback. */
-            break;
-         default:
-            return result;
-         }
-      }
-
-      if (semaphore != VK_NULL_HANDLE)
-      {
-         int already_signalled_sentinel_fd = -1;
-         auto info = VkImportSemaphoreFdInfoKHR{};
-         {
-            info.sType = VK_STRUCTURE_TYPE_IMPORT_SEMAPHORE_FD_INFO_KHR;
-            info.semaphore = semaphore;
-            info.handleType = VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_SYNC_FD_BIT;
-            info.flags = VK_SEMAPHORE_IMPORT_TEMPORARY_BIT;
-            info.fd = already_signalled_sentinel_fd;
-         }
-
-         auto result = m_device_data.disp.ImportSemaphoreFdKHR(m_device, &info);
-         switch (result)
-         {
-         case VK_SUCCESS:
-            semaphore = VK_NULL_HANDLE;
-            break;
-         case VK_ERROR_INVALID_EXTERNAL_HANDLE:
-            /* Leave to fallback. */
-            break;
-         default:
-            return result;
-         }
-      }
+      /* Fallback for when importing fence/semaphore sync FDs is unsupported by the ICD. */
+      queue_submit_semaphores semaphores = {
+         nullptr,
+         0,
+         (semaphore != VK_NULL_HANDLE) ? &semaphore : nullptr,
+         (semaphore != VK_NULL_HANDLE) ? 1u : 0,
+      };
+      return sync_queue_submit(m_device_data, m_queue, fence, semaphores);
    }
 
-   /* Fallback for when importing fence/semaphore sync FDs is unsupported by the ICD. */
-   queue_submit_semaphores semaphores = {
-      nullptr,
-      0,
-      (semaphore != VK_NULL_HANDLE) ? &semaphore : nullptr,
-      (semaphore != VK_NULL_HANDLE) ? 1u : 0,
-   };
-   TRY(sync_queue_submit(m_device_data, m_queue, fence, semaphores));
+   /* Try to signal fences/semaphores with a sync FD for optimal performance. */
+   if (fence != VK_NULL_HANDLE)
+   {
+      int already_signalled_sentinel_fd = -1;
+      auto info = VkImportFenceFdInfoKHR{};
+      {
+         info.sType = VK_STRUCTURE_TYPE_IMPORT_FENCE_FD_INFO_KHR;
+         info.fence = fence;
+         info.handleType = VK_EXTERNAL_FENCE_HANDLE_TYPE_SYNC_FD_BIT;
+         info.fd = already_signalled_sentinel_fd;
+         info.flags = VK_FENCE_IMPORT_TEMPORARY_BIT;
+      }
+
+      TRY_LOG_CALL(m_device_data.disp.ImportFenceFdKHR(m_device, &info));
+      fence = VK_NULL_HANDLE;
+   }
+
+   if (semaphore != VK_NULL_HANDLE)
+   {
+      int already_signalled_sentinel_fd = -1;
+      auto info = VkImportSemaphoreFdInfoKHR{};
+      {
+         info.sType = VK_STRUCTURE_TYPE_IMPORT_SEMAPHORE_FD_INFO_KHR;
+         info.semaphore = semaphore;
+         info.handleType = VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_SYNC_FD_BIT;
+         info.flags = VK_SEMAPHORE_IMPORT_TEMPORARY_BIT;
+         info.fd = already_signalled_sentinel_fd;
+      }
+
+      TRY_LOG_CALL(m_device_data.disp.ImportSemaphoreFdKHR(m_device, &info));
+      semaphore = VK_NULL_HANDLE;
+   }
 
    return VK_SUCCESS;
 }
