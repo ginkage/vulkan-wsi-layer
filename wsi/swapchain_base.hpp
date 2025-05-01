@@ -483,8 +483,8 @@ protected:
    /**
     * @brief Get backend specific image create info extensions.
     *
-    * @param      swapchain_create_info Swapchain create info.
-    * @param[out] extensions            Backend specific swapchain image create info extensions.
+    * @param         swapchain_create_info Swapchain create info.
+    * @param[in,out] extensions            Swapchain image create info extensions filled by the backend.
     */
    virtual VkResult get_required_image_creator_extensions(
       const VkSwapchainCreateInfoKHR &swapchain_create_info,

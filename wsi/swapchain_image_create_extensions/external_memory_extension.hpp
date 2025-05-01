@@ -42,7 +42,6 @@
 
 namespace wsi
 {
-using util::MAX_PLANES;
 
 /**
  * @brief
@@ -50,6 +49,15 @@ using util::MAX_PLANES;
 class swapchain_image_create_external_memory : public swapchain_image_create_info_extension
 {
 public:
+   /**
+    * @brief Constructs a swapchain_image_create_external_memory object.
+    *
+    * @param[in] compression      Optional compression control parameters for the swapchain image.
+    * @param[in] wsi_allocator    Wsi alloc allocator pointer.
+    * @param[in] surface_formats  Supported surface formats from the presentation engine.
+    * @param[in] physical_device  Vulkan physical device handle.
+    * @param[in] allocator        User provided allocation callbacks.
+    */
    swapchain_image_create_external_memory(std::optional<swapchain_image_create_compression_control> compression,
                                           swapchain_wsialloc_allocator *wsi_allocator,
                                           const util::vector<util::drm::drm_format_pair> *surface_formats,
@@ -68,6 +76,16 @@ public:
 
    VkResult extend_image_create_info(VkImageCreateInfo *image_create_info) override;
 
+   /**
+    * @brief Finds what formats are compatible with the requested swapchain image Vulkan Device and backend surface.
+    *
+    * @param      info               The Swapchain image creation info.
+    * @param[out] importable_formats A list of formats that can be imported to the Vulkan Device.
+    * @param[out] exportable_formats A list of formats that can be exported from the Vulkan Device.
+    * @param[out] drm_format_props   A list of all device supported VkDrmFormatModifierPropertiesEXT.
+    *
+    * @return VK_SUCCESS or VK_ERROR_OUT_OF_HOST_MEMORY
+    */
    VkResult get_surface_compatible_formats(const VkImageCreateInfo &info,
                                            util::vector<wsialloc_format> &importable_formats,
                                            util::vector<uint64_t> &exportable_modifers,

@@ -776,7 +776,7 @@ VkResult swapchain_base::image_creator_init(const VkSwapchainCreateInfoKHR &swap
 
    util::vector<util::unique_ptr<swapchain_image_create_info_extension>> extensions(m_allocator);
    TRY_LOG_CALL(get_required_image_creator_extensions(swapchain_create_info, &extensions));
-   TRY_LOG_CALL(m_image_creator.add_extensions(&extensions));
+   TRY_LOG_CALL(m_image_creator.add_extensions(extensions));
 
    return VK_SUCCESS;
 }

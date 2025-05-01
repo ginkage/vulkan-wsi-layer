@@ -54,11 +54,9 @@ void swapchain_image_creator::init(const VkSwapchainCreateInfoKHR &swapchain_cre
 }
 
 VkResult swapchain_image_creator::add_extensions(
-   util::vector<util::unique_ptr<swapchain_image_create_info_extension>> *extensions)
+   util::vector<util::unique_ptr<swapchain_image_create_info_extension>> &extensions)
 {
-   assert(extensions != nullptr);
-
-   for (auto &extension : *extensions)
+   for (auto &extension : extensions)
    {
       TRY(extension->extend_image_create_info(&m_image_create_info));
 

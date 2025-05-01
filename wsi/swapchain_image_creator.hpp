@@ -63,7 +63,7 @@ public:
     *
     * @return VK_SUCCESS on success, an appropriate error code on failure.
     */
-   VkResult add_extensions(util::vector<util::unique_ptr<swapchain_image_create_info_extension>> *extensions);
+   VkResult add_extensions(util::vector<util::unique_ptr<swapchain_image_create_info_extension>> &extensions);
 
    VkImageCreateInfo get_image_create_info() const
    {
