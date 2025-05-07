@@ -399,8 +399,8 @@ GetPhysicalDeviceDisplayPlanePropertiesKHR(VkPhysicalDevice physicalDevice, uint
    auto &display = drm_display::get_display();
    if (!display.has_value())
    {
-      WSI_LOG_ERROR("DRM display not available.");
-      return VK_ERROR_OUT_OF_HOST_MEMORY;
+      *pPropertyCount = 0;
+      return VK_SUCCESS;
    }
 
    if (pProperties == nullptr)
