@@ -53,7 +53,7 @@ public:
     * @brief Constructs a swapchain_image_create_external_memory object.
     *
     * @param[in] compression      Optional compression control parameters for the swapchain image.
-    * @param[in] wsi_allocator    Wsi alloc allocator pointer.
+    * @param[in] wsi_allocator    wsialloc allocator pointer.
     * @param[in] surface_formats  Supported surface formats from the presentation engine.
     * @param[in] physical_device  Vulkan physical device handle.
     * @param[in] allocator        User provided allocation callbacks.

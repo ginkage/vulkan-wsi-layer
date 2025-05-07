@@ -57,11 +57,13 @@ public:
    void init(const VkSwapchainCreateInfoKHR &swapchain_create_info);
 
    /**
-    * @brief Extend create info with extension data/
+    * @brief Extend create info with extension data.
     *
     * @param extensions Swapchain image create info extensions.
     *
     * @return VK_SUCCESS on success, an appropriate error code on failure.
+    *
+    * @note The extensions will be moved out of the vector and will become nullptr.
     */
    VkResult add_extensions(util::vector<util::unique_ptr<swapchain_image_create_info_extension>> &extensions);
 
