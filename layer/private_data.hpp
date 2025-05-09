@@ -349,10 +349,11 @@ private:
  */
 
 #if VULKAN_WSI_LAYER_EXPERIMENTAL
-#define DEVICE_ENTRYPOINTS_LIST_EXPERIMENTAL(EP)                                                           \
-   EP(GetSwapchainTimeDomainPropertiesEXT, VK_EXT_PRESENT_TIMING_EXTENSION_NAME, API_VERSION_MAX, false, ) \
-   EP(GetSwapchainTimingPropertiesEXT, VK_EXT_PRESENT_TIMING_EXTENSION_NAME, API_VERSION_MAX, false, )     \
-   EP(SetSwapchainPresentTimingQueueSizeEXT, VK_EXT_PRESENT_TIMING_EXTENSION_NAME, API_VERSION_MAX, false, )
+#define DEVICE_ENTRYPOINTS_LIST_EXPERIMENTAL(EP)                                                             \
+   EP(GetSwapchainTimeDomainPropertiesEXT, VK_EXT_PRESENT_TIMING_EXTENSION_NAME, API_VERSION_MAX, false, )   \
+   EP(GetSwapchainTimingPropertiesEXT, VK_EXT_PRESENT_TIMING_EXTENSION_NAME, API_VERSION_MAX, false, )       \
+   EP(SetSwapchainPresentTimingQueueSizeEXT, VK_EXT_PRESENT_TIMING_EXTENSION_NAME, API_VERSION_MAX, false, ) \
+   EP(WaitForPresentKHR, VK_KHR_PRESENT_WAIT_EXTENSION_NAME, API_VERSION_MAX, false, )
 #else
 #define DEVICE_ENTRYPOINTS_LIST_EXPERIMENTAL(EP)
 #endif
@@ -905,6 +906,22 @@ public:
     */
    bool is_swapchain_maintenance1_enabled() const;
 
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+   /**
+    * @brief Set whether present wait feature is enabled.
+    *
+    * @return true if enabled, false otherwise.
+    */
+   void set_present_wait_enabled(bool enable);
+
+   /**
+    * @brief Check whether present wait feature has been enabled.
+    *
+    * @return true if supported, false otherwise.
+    */
+   bool is_present_wait_enabled();
+#endif
+
 private:
    /* Allow util::allocator to access the private constructor */
    friend util::allocator;
@@ -955,18 +972,24 @@ private:
     * @brief Stores whether the device supports the present ID feature.
     *
     */
-   bool present_id_enabled;
+   bool present_id_enabled{ false };
 
    /**
     * @brief Stores whether the device has enabled support for the swapchain maintenance1 features.
     */
-   bool swapchain_maintenance1_enabled;
+   bool swapchain_maintenance1_enabled{ false };
 
 #if VULKAN_WSI_LAYER_EXPERIMENTAL
    /**
+    * @brief Stores whether the device supports the present wait feature.
+    *
+    */
+   bool present_wait_enabled{ false };
+
+   /**
     * @brief Stores whether the device has enabled support for the present timing features.
     */
-   bool present_timing_enabled;
+   bool present_timing_enabled{ false };
 #endif
 };
 
