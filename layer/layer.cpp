@@ -31,6 +31,7 @@
 #include <vulkan/vulkan.h>
 
 #include "layer/calibrated_timestamps_api.hpp"
+#include "present_wait_api.hpp"
 #include "wsi_layer_experimental.hpp"
 #include "private_data.hpp"
 #include "surface_api.hpp"
@@ -372,6 +373,15 @@ VKAPI_ATTR VkResult create_device(VkPhysicalDevice physicalDevice, const VkDevic
          physical_device_swapchain_maintenance1_features->swapchainMaintenance1);
    }
 
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+   auto *present_wait_features = util::find_extension<VkPhysicalDevicePresentWaitFeaturesKHR>(
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_WAIT_FEATURES_KHR, pCreateInfo->pNext);
+   if (present_wait_features != nullptr)
+   {
+      device_data.set_present_wait_enabled(present_wait_features->presentWait);
+   }
+#endif
+
    return VK_SUCCESS;
 }
 
@@ -580,6 +590,12 @@ wsi_layer_vkGetDeviceProcAddr(VkDevice device, const char *funcName) VWL_API_POS
    {
       GET_PROC_ADDR(vkGetCalibratedTimestampsKHR);
    }
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+   if (layer::device_private_data::get(device).is_device_extension_enabled(VK_KHR_PRESENT_WAIT_EXTENSION_NAME))
+   {
+      GET_PROC_ADDR(vkWaitForPresentKHR);
+   }
+#endif
 
    return layer::device_private_data::get(device).disp.get_user_enabled_entrypoint(
       device, layer::device_private_data::get(device).instance_data.api_version, funcName);

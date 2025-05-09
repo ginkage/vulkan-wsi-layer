@@ -38,6 +38,7 @@
 #include <wsi/swapchain_base.hpp>
 
 #include "swapchain.hpp"
+#include "present_wait_display.hpp"
 
 namespace wsi
 {
@@ -104,6 +105,17 @@ VkResult swapchain::add_required_extensions(VkDevice device, const VkSwapchainCr
          return VK_ERROR_OUT_OF_HOST_MEMORY;
       }
    }
+
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+   if (m_device_data.is_present_wait_enabled())
+   {
+      if (!add_swapchain_extension(
+             m_allocator.make_unique<wsi_ext_present_wait_display>(*get_swapchain_extension<wsi_ext_present_id>(true))))
+      {
+         return VK_ERROR_OUT_OF_HOST_MEMORY;
+      }
+   }
+#endif
 
    return VK_SUCCESS;
 }

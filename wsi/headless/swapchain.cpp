@@ -42,6 +42,7 @@
 #include "util/macros.hpp"
 
 #include "present_timing_handler.hpp"
+#include "present_wait_headless.hpp"
 
 namespace wsi
 {
@@ -106,6 +107,17 @@ VkResult swapchain::add_required_extensions(VkDevice device, const VkSwapchainCr
    if (swapchain_support_enabled)
    {
       if (!add_swapchain_extension(wsi_ext_present_timing_headless::create(m_allocator)))
+      {
+         return VK_ERROR_OUT_OF_HOST_MEMORY;
+      }
+   }
+#endif
+
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+   if (m_device_data.is_present_wait_enabled())
+   {
+      if (!add_swapchain_extension(m_allocator.make_unique<wsi_ext_present_wait_headless>(
+             *get_swapchain_extension<wsi_ext_present_id>(true))))
       {
          return VK_ERROR_OUT_OF_HOST_MEMORY;
       }

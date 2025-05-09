@@ -38,8 +38,36 @@ void wsi_ext_present_id::mark_delivered(uint64_t present_id)
    /* Stale reads are acceptable as we only care that the ID is increasing */
    if (present_id > m_last_delivered_id.load(std::memory_order_relaxed))
    {
+      std::unique_lock lock(m_mutex);
       m_last_delivered_id.store(present_id, std::memory_order_relaxed);
    }
+   m_present_id_changed.notify_all();
+}
+
+bool wsi_ext_present_id::wait_for_present_id(uint64_t present_id, uint64_t timeout_in_ns)
+{
+   if (m_last_delivered_id.load() >= present_id)
+   {
+      return VK_SUCCESS;
+   }
+
+   std::unique_lock lock(m_mutex);
+   try
+   {
+      return m_present_id_changed.wait_for(lock, std::chrono::nanoseconds(timeout_in_ns),
+                                           [&]() { return m_last_delivered_id.load() >= present_id; });
+   }
+   catch (const std::system_error &e)
+   {
+      WSI_LOG_ERROR("Failed to wait for conditional variable. Code: %d, message: %s\n", e.code().value(), e.what());
+   }
+
+   return false;
+}
+
+uint64_t wsi_ext_present_id::get_last_delivered_present_id() const
+{
+   return m_last_delivered_id.load();
 }
 
 };

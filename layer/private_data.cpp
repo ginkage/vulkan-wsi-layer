@@ -620,4 +620,16 @@ bool device_private_data::is_swapchain_maintenance1_enabled() const
    return swapchain_maintenance1_enabled;
 }
 
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+void device_private_data::set_present_wait_enabled(bool enable)
+{
+   present_wait_enabled = enable;
+}
+
+bool device_private_data::is_present_wait_enabled()
+{
+   return present_wait_enabled;
+}
+#endif
+
 } /* namespace layer */

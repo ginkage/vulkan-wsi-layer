@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2019, 2021, 2024 Arm Limited.
+ * Copyright (c) 2017-2019, 2021, 2024-2025 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -44,7 +44,7 @@
  * @param  display Wayland display to dispatch events from
  * @param  queue   Event queue to dispatch events from; other event queues will not have their handlers called from
  *                 within this function
- * @param  timeout Maximum time to wait for events to arrive, in milliseconds
+ * @param  timeout Maximum time to wait for events to arrive, in milliseconds. A negative value means infinite timeout.
  * @return         1 if one or more events were dispatched on this queue, 0 if the timeout was reached without any
  *                 events being dispatched, or -1 on error.
  */

@@ -138,6 +138,7 @@ if(BUILD_WSI_WAYLAND)
       target_sources(wayland_wsi PRIVATE wsi/wayland/present_id_wayland.cpp)
       target_sources(wayland_wsi PRIVATE wsi/wayland/present_timing_handler.cpp)
       target_sources(wayland_wsi PRIVATE wsi/wayland/wp_presentation_feedback.cpp)
+      target_sources(wayland_wsi PRIVATE wsi/wayland/present_wait_wayland.cpp)
    endif()
 
    pkg_check_modules(WAYLAND_CLIENT REQUIRED wayland-client)
@@ -217,6 +218,7 @@ if(BUILD_WSI_HEADLESS)
 
    if(VULKAN_WSI_LAYER_EXPERIMENTAL)
       target_sources(wsi_headless PRIVATE wsi/headless/present_timing_handler.cpp)
+      target_sources(wsi_headless PRIVATE wsi/headless/present_wait_headless.cpp)
    endif()
 
    target_include_directories(wsi_headless PRIVATE
@@ -238,6 +240,10 @@ if (BUILD_WSI_DISPLAY)
       wsi/display/surface_properties.cpp
       wsi/display/swapchain.cpp
       wsi/display/surface.cpp)
+
+   if(VULKAN_WSI_LAYER_EXPERIMENTAL)
+      target_sources(wsi_display PRIVATE wsi/display/present_wait_display.cpp)
+   endif()
 
    pkg_check_modules(LIBDRM REQUIRED libdrm)
    message(STATUS "Using libdrm include directories: ${LIBDRM_INCLUDE_DIRS}")
@@ -290,6 +296,8 @@ add_library(${PROJECT_NAME} SHARED
 if (VULKAN_WSI_LAYER_EXPERIMENTAL)
    target_sources(${PROJECT_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/layer/present_timing_api.cpp)
    target_sources(${PROJECT_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/wsi/extensions/present_timing.cpp)
+   target_sources(${PROJECT_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/layer/present_wait_api.cpp)
+   target_sources(${PROJECT_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/wsi/extensions/present_wait.cpp)
    add_definitions("-DVULKAN_WSI_LAYER_EXPERIMENTAL=1")
 else()
    list(APPEND JSON_COMMANDS COMMAND sed -Ei '/VK_EXT_present_timing|VK_KHR_present_wait/d' ${CMAKE_CURRENT_BINARY_DIR}/VkLayer_window_system_integration.json)
