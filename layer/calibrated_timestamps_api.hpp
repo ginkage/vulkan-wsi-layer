@@ -32,6 +32,7 @@
 #pragma once
 #include "util/macros.hpp"
 
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
 VWL_VKAPI_CALL(VkResult)
 wsi_layer_vkGetCalibratedTimestampsEXT(VkDevice device, uint32_t timestampCount,
                                        const VkCalibratedTimestampInfoKHR *pTimestampInfos, uint64_t *pTimestamps,
@@ -41,3 +42,4 @@ VWL_VKAPI_CALL(VkResult)
 wsi_layer_vkGetCalibratedTimestampsKHR(VkDevice device, uint32_t timestampCount,
                                        const VkCalibratedTimestampInfoKHR *pTimestampInfos, uint64_t *pTimestamps,
                                        uint64_t *pMaxDeviation) VWL_API_POST;
+#endif
