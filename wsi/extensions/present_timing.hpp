@@ -90,8 +90,8 @@ struct swapchain_calibrated_time
 class swapchain_time_domain
 {
 public:
-   swapchain_time_domain(VkPresentStageFlagsEXT presentStages)
-      : m_present_stages(presentStages)
+   swapchain_time_domain(VkPresentStageFlagsEXT present_stage)
+      : m_present_stage(present_stage)
    {
    }
 
@@ -101,18 +101,18 @@ public:
 
    VkPresentStageFlagsEXT get_present_stages()
    {
-      return m_present_stages;
+      return m_present_stage;
    }
 
 private:
-   VkPresentStageFlagsEXT m_present_stages;
+   VkPresentStageFlagsEXT m_present_stage;
 };
 
 class vulkan_time_domain : public swapchain_time_domain
 {
 public:
-   vulkan_time_domain(VkPresentStageFlagsEXT presentStages, VkTimeDomainKHR time_domain)
-      : swapchain_time_domain(presentStages)
+   vulkan_time_domain(VkPresentStageFlagsEXT present_stage, VkTimeDomainKHR time_domain)
+      : swapchain_time_domain(present_stage)
       , m_time_domain(time_domain)
    {
    }
@@ -148,7 +148,14 @@ public:
     */
    bool add_time_domain(util::unique_ptr<swapchain_time_domain> time_domain);
 
-   VkResult calibrate(VkPresentStageFlagBitsEXT presentStages, swapchain_calibrated_time *calibrated_time);
+   /**
+    * @brief The calibrate returns a Vulkan time domain + an offset
+    *
+    * @param present_stage   The present stage to calibrate
+    * @param calibrated_time The calibrated time output
+    * @return VK_SUCCESS when calibrated successfully VK_ERROR_OUT_OF_HOST_MEMORY otherwise.
+    */
+   VkResult calibrate(VkPresentStageFlagBitsEXT present_stage, swapchain_calibrated_time *calibrated_time);
 
    /**
     * @brief Get swapchain time domain properties.

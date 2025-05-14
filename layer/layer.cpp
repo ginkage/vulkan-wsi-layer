@@ -562,6 +562,12 @@ wsi_layer_vkGetDeviceProcAddr(VkDevice device, const char *funcName) VWL_API_POS
       GET_PROC_ADDR(vkGetSwapchainTimingPropertiesEXT);
       GET_PROC_ADDR(vkGetSwapchainTimeDomainPropertiesEXT);
       GET_PROC_ADDR(vkGetPastPresentationTimingEXT);
+      GET_PROC_ADDR(vkGetCalibratedTimestampsKHR);
+      if (layer::device_private_data::get(device).is_device_extension_enabled(
+             VK_EXT_CALIBRATED_TIMESTAMPS_EXTENSION_NAME))
+      {
+         GET_PROC_ADDR(vkGetCalibratedTimestampsEXT);
+      }
    }
 #endif
    GET_PROC_ADDR(vkDestroyDevice);
@@ -581,14 +587,6 @@ wsi_layer_vkGetDeviceProcAddr(VkDevice device, const char *funcName) VWL_API_POS
           VK_EXT_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME))
    {
       GET_PROC_ADDR(vkReleaseSwapchainImagesEXT);
-   }
-   if (layer::device_private_data::get(device).is_device_extension_enabled(VK_EXT_CALIBRATED_TIMESTAMPS_EXTENSION_NAME))
-   {
-      GET_PROC_ADDR(vkGetCalibratedTimestampsEXT);
-   }
-   if (layer::device_private_data::get(device).is_device_extension_enabled(VK_KHR_CALIBRATED_TIMESTAMPS_EXTENSION_NAME))
-   {
-      GET_PROC_ADDR(vkGetCalibratedTimestampsKHR);
    }
 #if VULKAN_WSI_LAYER_EXPERIMENTAL
    if (layer::device_private_data::get(device).is_device_extension_enabled(VK_KHR_PRESENT_WAIT_EXTENSION_NAME))

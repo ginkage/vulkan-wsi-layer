@@ -31,18 +31,13 @@
 #include <wsi/extensions/present_timing.hpp>
 #include <wsi/swapchain_base.hpp>
 
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
 VWL_VKAPI_CALL(VkResult)
-wsi_layer_vkGetCalibratedTimestampsEXT(VkDevice device, uint32_t timestampCount,
+wsi_layer_vkGetCalibratedTimestampsKHR(VkDevice device, uint32_t timestampCount,
                                        const VkCalibratedTimestampInfoKHR *pTimestampInfos, uint64_t *pTimestamps,
                                        uint64_t *pMaxDeviation) VWL_API_POST
 {
    auto &device_data = layer::device_private_data::get(device);
-   auto get_calibrated_timestamps =
-      device_data.disp.get_fn<PFN_vkGetCalibratedTimestampsEXT>("PFN_vkGetCalibratedTimestampsEXT").has_value() ?
-         device_data.disp.get_fn<PFN_vkGetCalibratedTimestampsEXT>("vkGetCalibratedTimestampsEXT") :
-         device_data.disp.get_fn<PFN_vkGetCalibratedTimestampsEXT>("vkGetCalibratedTimestampsKHR");
-   assert(get_calibrated_timestamps.has_value());
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
    struct stage_local_index_and_offset
    {
       uint32_t index;
@@ -90,7 +85,8 @@ wsi_layer_vkGetCalibratedTimestampsEXT(VkDevice device, uint32_t timestampCount,
          time_stamp_info[i].timeDomain = calibrated_time.time_domain;
       }
    }
-   TRY_LOG_CALL((*get_calibrated_timestamps)(device, timestampCount, &time_stamp_info[0], pTimestamps, pMaxDeviation));
+   TRY_LOG_CALL(device_data.disp.GetCalibratedTimestampsKHR(device, timestampCount, &time_stamp_info[0], pTimestamps,
+                                                            pMaxDeviation));
 
    /* Loop through the calibration_index_and_offset vector and update the timestamps that are stage local
    with its respective offset. */
@@ -99,14 +95,13 @@ wsi_layer_vkGetCalibratedTimestampsEXT(VkDevice device, uint32_t timestampCount,
       pTimestamps[iter.index] += iter.calibration_offset;
    }
    return VK_SUCCESS;
-#endif /* VULKAN_WSI_LAYER_EXPERIMENTAL */
-   return (*get_calibrated_timestamps)(device, timestampCount, pTimestampInfos, pTimestamps, pMaxDeviation);
 }
 
 VWL_VKAPI_CALL(VkResult)
-wsi_layer_vkGetCalibratedTimestampsKHR(VkDevice device, uint32_t timestampCount,
+wsi_layer_vkGetCalibratedTimestampsEXT(VkDevice device, uint32_t timestampCount,
                                        const VkCalibratedTimestampInfoKHR *pTimestampInfos, uint64_t *pTimestamps,
                                        uint64_t *pMaxDeviation) VWL_API_POST
 {
-   return wsi_layer_vkGetCalibratedTimestampsEXT(device, timestampCount, pTimestampInfos, pTimestamps, pMaxDeviation);
+   return wsi_layer_vkGetCalibratedTimestampsKHR(device, timestampCount, pTimestampInfos, pTimestamps, pMaxDeviation);
 }
+#endif /* VULKAN_WSI_LAYER_EXPERIMENTAL */
