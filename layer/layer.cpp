@@ -469,10 +469,10 @@ VWL_VKAPI_EXPORT wsi_layer_vkNegotiateLoaderLayerInterfaceVersion(VkNegotiateLay
 }
 
 VWL_VKAPI_CALL(void)
-wsi_layer_vkGetPhysicalDeviceFeatures2KHR(VkPhysicalDevice physicalDevice,
+wsi_layer_vkGetPhysicalDeviceFeatures2KHR(VkPhysicalDevice physical_device,
                                           VkPhysicalDeviceFeatures2 *pFeatures) VWL_API_POST
 {
-   auto &instance = layer::instance_private_data::get(physicalDevice);
+   auto &instance = layer::instance_private_data::get(physical_device);
 
    auto *swapchain_maintenance1_features = util::find_extension<VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT>(
       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_EXT, pFeatures->pNext);
@@ -490,7 +490,7 @@ wsi_layer_vkGetPhysicalDeviceFeatures2KHR(VkPhysicalDevice physicalDevice,
    }
 #endif
 
-   instance.disp.GetPhysicalDeviceFeatures2KHR(physicalDevice, pFeatures);
+   instance.disp.GetPhysicalDeviceFeatures2KHR(physical_device, pFeatures);
 
    auto *image_compression_control_swapchain_features =
       util::find_extension<VkPhysicalDeviceImageCompressionControlSwapchainFeaturesEXT>(
@@ -498,7 +498,7 @@ wsi_layer_vkGetPhysicalDeviceFeatures2KHR(VkPhysicalDevice physicalDevice,
    if (image_compression_control_swapchain_features != nullptr)
    {
       image_compression_control_swapchain_features->imageCompressionControlSwapchain =
-         instance.has_image_compression_support(physicalDevice);
+         instance.has_image_compression_support(physical_device);
    }
 
    auto *present_id_features = util::find_extension<VkPhysicalDevicePresentIdFeaturesKHR>(
@@ -508,7 +508,7 @@ wsi_layer_vkGetPhysicalDeviceFeatures2KHR(VkPhysicalDevice physicalDevice,
       present_id_features->presentId = VK_TRUE;
    }
 
-   wsi::set_swapchain_maintenance1_state(physicalDevice, swapchain_maintenance1_features);
+   wsi::set_swapchain_maintenance1_state(physical_device, swapchain_maintenance1_features);
 
 #if VULKAN_WSI_LAYER_EXPERIMENTAL
    if (present_wait_features != nullptr)
@@ -524,7 +524,14 @@ wsi_layer_vkGetPhysicalDeviceFeatures2KHR(VkPhysicalDevice physicalDevice,
       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_TIMING_FEATURES_EXT, pFeatures->pNext);
    if (present_timing_features != nullptr)
    {
-      present_timing_features->presentTiming = VK_TRUE;
+      VkPhysicalDeviceProperties physical_device_properties = {};
+      instance.disp.GetPhysicalDeviceProperties(physical_device, &physical_device_properties);
+      /* The presentTimingSupported is set based on whether the device can support timestamp queries
+       * and the graphics, compute pipelines can support time stamps. Only the graphics and compute pipelines
+       * are checked here which means queue present if happens on a different queue family,
+       * the time stamps might not be supported. */
+      present_timing_features->presentTiming = ((physical_device_properties.limits.timestampPeriod != 0) &&
+                                                physical_device_properties.limits.timestampComputeAndGraphics);
       present_timing_features->presentAtAbsoluteTime = VK_TRUE;
       present_timing_features->presentAtRelativeTime = VK_TRUE;
    }
