@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2025 Arm Limited.
+ * Copyright (c) 2025 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -22,28 +22,33 @@
  * SOFTWARE.
  */
 
+/**
+ * @file swapchain_image_create_info_extension.hpp
+ *
+ * @brief Base class for swapchain image create info extensions.
+ */
+
 #pragma once
 
 #include <vulkan/vulkan.h>
 
-namespace util
-{
-namespace drm
+namespace wsi
 {
 
-/**
- * @brief Struct describing a DRM format with modifier.
- */
-struct drm_format_pair
+class swapchain_image_create_info_extension
 {
-   uint32_t fourcc;
-   uint64_t modifier;
+public:
+   /**
+    * @brief Extend image_create_info pNext with extension specific data.
+    *
+    * A swapchain image create info extension will use this function to add its
+    * extension specific data to pNext of image_create_info.
+    *
+    * @param[in, out] image_create_info VkImageCreateInfo for creating swapchain images
+    */
+   virtual VkResult extend_image_create_info(VkImageCreateInfo *image_create_info) = 0;
+
+   virtual ~swapchain_image_create_info_extension() = default;
 };
 
-uint32_t vk_to_drm_format(VkFormat vk_format);
-VkFormat drm_to_vk_format(uint32_t drm_format);
-VkFormat drm_to_vk_srgb_format(uint32_t drm_format);
-uint32_t drm_fourcc_format_get_num_planes(uint32_t format);
-
-} // namespace drm
-} // namespace util
+} /* namespace wsi */

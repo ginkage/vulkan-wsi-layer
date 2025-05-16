@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Arm Limited.
+ * Copyright (c) 2024-2025 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -256,7 +256,7 @@ public:
     *
     * @return Pointer to vector of supported formats.
     */
-   const util::vector<drm_format_pair> *get_supported_formats() const;
+   const util::vector<util::drm::drm_format_pair> *get_supported_formats() const;
 
    /**
     * @brief Query the display for support for adding framebuffers with format modifiers.
@@ -271,7 +271,7 @@ public:
     * @param format The format to query support for.
     * @return true if the format is supported by the display, otherwise false.
     */
-   bool is_format_supported(const drm_format_pair &format) const;
+   bool is_format_supported(const util::drm::drm_format_pair &format) const;
 
    /**
     * @brief Returns a CRTC compatible with this display's connector.
@@ -297,7 +297,7 @@ private:
     * @param allocator The allocator that the display will use.
     */
    drm_display(util::fd_owner drm_fd, int crtc_id, drm_connector_owner drm_connector,
-               util::unique_ptr<util::vector<drm_format_pair>> supported_formats,
+               util::unique_ptr<util::vector<util::drm::drm_format_pair>> supported_formats,
                util::unique_ptr<drm_display_mode> display_modes, size_t num_display_modes, uint32_t max_width,
                uint32_t max_height, bool supports_fb_modifiers);
 
@@ -319,7 +319,7 @@ private:
    /**
     * @brief Vector of supported formats for use with the display.
     */
-   util::unique_ptr<util::vector<drm_format_pair>> m_supported_formats;
+   util::unique_ptr<util::vector<util::drm::drm_format_pair>> m_supported_formats;
 
    /**
     * @brief Pointer to available display modes for the connected display.

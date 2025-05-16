@@ -38,6 +38,8 @@
 #include <util/wsialloc/wsialloc.h>
 #include <wsi/external_memory.hpp>
 
+#include <wsi/wsi_alloc_utils.hpp>
+
 namespace wsi
 {
 
@@ -110,6 +112,17 @@ public:
 
    void destroy_image(swapchain_image &image) override;
 
+protected:
+   /**
+    * @brief Get backend specific image create info extensions.
+    *
+    * @param      swapchain_create_info Swapchain create info.
+    * @param[out] extensions            Backend specific swapchain image create info extensions.
+    */
+   VkResult get_required_image_creator_extensions(
+      const VkSwapchainCreateInfoKHR &swapchain_create_info,
+      util::vector<util::unique_ptr<swapchain_image_create_info_extension>> *extensions) override;
+
 private:
    VkResult allocate_image(display_image_data *image_data);
 
@@ -133,7 +146,8 @@ private:
     */
    VkResult add_required_extensions(VkDevice device, const VkSwapchainCreateInfoKHR *swapchain_create_info) override;
 
-   wsialloc_allocator *m_wsi_allocator;
+   util::unique_ptr<swapchain_wsialloc_allocator> m_wsi_allocator;
+
    drm_display_mode *m_display_mode;
    image_creation_parameters m_image_creation_parameters;
 };

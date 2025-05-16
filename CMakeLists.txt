@@ -76,6 +76,7 @@ option(ENABLE_INSTRUMENTATION "Pass frame boundary events by using VK_EXT_frame_
 
 if(BUILD_WSI_WAYLAND OR BUILD_WSI_DISPLAY)
    set(BUILD_DRM_UTILS true)
+   set(BUILD_WSIALLOC_UTILS true)
    if(SELECT_EXTERNAL_ALLOCATOR STREQUAL "none")
       message(FATAL_ERROR "WSI only supported with an external allocator.")
    endif()
@@ -126,13 +127,26 @@ if(NOT SELECT_EXTERNAL_ALLOCATOR STREQUAL "none" AND EXTERNAL_WSIALLOC_LIBRARY S
    target_include_directories(wsialloc PRIVATE util/)
 endif()
 
+if(BUILD_WSIALLOC_UTILS)
+   add_library(wsi_utils STATIC wsi/wsi_alloc_utils.cpp)
+
+   target_include_directories(wsi_utils PRIVATE
+      ${PROJECT_SOURCE_DIR}
+      ${VULKAN_CXX_INCLUDE}
+      ${CMAKE_CURRENT_BINARY_DIR})
+   target_link_libraries(wsi_utils drm_utils)
+   target_include_directories(wsi_utils PRIVATE util/wsialloc)
+   target_compile_definitions(wsi_utils PRIVATE ${WSI_DEFINES})
+endif()
+
 # Wayland WSI
 if(BUILD_WSI_WAYLAND)
    add_library(wayland_wsi STATIC
       wsi/wayland/surface_properties.cpp
       wsi/wayland/surface.cpp
       wsi/wayland/wl_helpers.cpp
-      wsi/wayland/swapchain.cpp)
+      wsi/wayland/swapchain.cpp
+      wsi/swapchain_image_create_extensions/external_memory_extension.cpp)
 
    if(VULKAN_WSI_LAYER_EXPERIMENTAL)
       target_sources(wayland_wsi PRIVATE wsi/wayland/present_id_wayland.cpp)
@@ -199,6 +213,7 @@ if(BUILD_WSI_WAYLAND)
       target_link_libraries(wayland_wsi wsialloc)
    endif()
    target_link_libraries(wayland_wsi drm_utils ${WAYLAND_CLIENT_LDFLAGS})
+   target_link_libraries(wayland_wsi wsi_utils)
    list(APPEND LINK_WSI_LIBS wayland_wsi)
    if(ENABLE_WAYLAND_FIFO_PRESENTATION_THREAD)
       target_compile_definitions(wayland_wsi PRIVATE "-DWAYLAND_FIFO_PRESENTATION_THREAD_ENABLED=1")
@@ -239,7 +254,8 @@ if (BUILD_WSI_DISPLAY)
       wsi/display/drm_display.cpp
       wsi/display/surface_properties.cpp
       wsi/display/swapchain.cpp
-      wsi/display/surface.cpp)
+      wsi/display/surface.cpp
+      wsi/swapchain_image_create_extensions/external_memory_extension.cpp)
 
    if(VULKAN_WSI_LAYER_EXPERIMENTAL)
       target_sources(wsi_display PRIVATE wsi/display/present_wait_display.cpp)
@@ -260,6 +276,7 @@ if (BUILD_WSI_DISPLAY)
    target_compile_options(wsi_display INTERFACE "-DBUILD_WSI_DISPLAY=1")
    target_link_libraries(wsi_display ${LIBDRM_LDFLAGS} drm)
    target_link_libraries(wsi_display drm_utils)
+   target_link_libraries(wsi_display wsi_utils)
    if(NOT EXTERNAL_WSIALLOC_LIBRARY STREQUAL "")
       target_link_libraries(wsi_display ${EXTERNAL_WSIALLOC_LIBRARY})
    else()
@@ -292,7 +309,9 @@ add_library(${PROJECT_NAME} SHARED
    wsi/surface_properties.cpp
    wsi/swapchain_base.cpp
    wsi/synchronization.cpp
-   wsi/wsi_factory.cpp)
+   wsi/wsi_factory.cpp
+   wsi/swapchain_image_creator.cpp
+   wsi/swapchain_image_create_extensions/image_compression_control.cpp)
 if (VULKAN_WSI_LAYER_EXPERIMENTAL)
    target_sources(${PROJECT_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/layer/present_timing_api.cpp)
    target_sources(${PROJECT_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/wsi/extensions/present_timing.cpp)

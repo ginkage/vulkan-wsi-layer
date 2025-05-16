@@ -40,7 +40,7 @@ namespace wayland
 
 struct formats_vector
 {
-   util::vector<drm_format_pair> *formats{ nullptr };
+   util::vector<util::drm::drm_format_pair> *formats{ nullptr };
    bool is_out_of_memory{ false };
 };
 
@@ -63,7 +63,7 @@ zwp_linux_dmabuf_v1_modifier_impl(void *data, struct zwp_linux_dmabuf_v1 *dma_bu
    UNUSED(dma_buf);
    auto *drm_supported_formats = reinterpret_cast<formats_vector *>(data);
 
-   drm_format_pair format = {};
+   util::drm::drm_format_pair format = {};
    format.fourcc = drm_format;
    format.modifier = (static_cast<uint64_t>(modifier_hi) << 32) | modifier_low;
 
@@ -101,7 +101,7 @@ wp_presentation_clock_id_impl(void *data, struct wp_presentation *wp_presentatio
  */
 static VkResult get_supported_formats_and_modifiers(wl_display *display, wl_event_queue *queue,
                                                     zwp_linux_dmabuf_v1 *dmabuf_interface,
-                                                    util::vector<drm_format_pair> &supported_formats)
+                                                    util::vector<util::drm::drm_format_pair> &supported_formats)
 {
    formats_vector drm_supported_formats;
    drm_supported_formats.formats = &supported_formats;

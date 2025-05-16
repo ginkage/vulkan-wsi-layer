@@ -41,6 +41,8 @@ extern "C" {
 #include "util/custom_allocator.hpp"
 #include "wl_object_owner.hpp"
 
+#include <wsi/wsi_alloc_utils.hpp>
+
 #include <wsi/external_memory.hpp>
 
 namespace wsi
@@ -181,6 +183,16 @@ protected:
    VkResult bind_swapchain_image(VkDevice &device, const VkBindImageMemoryInfo *bind_image_mem_info,
                                  const VkBindImageMemorySwapchainInfoKHR *bind_sc_info) override;
 
+   /**
+    * @brief Get backend specific image create info extensions.
+    *
+    * @param      swapchain_create_info Swapchain create info.
+    * @param[out] extensions            Backend specific swapchain image create info extensions.
+    */
+   VkResult get_required_image_creator_extensions(
+      const VkSwapchainCreateInfoKHR &swapchain_create_info,
+      util::vector<util::unique_ptr<swapchain_image_create_info_extension>> *extensions) override;
+
 private:
    VkResult create_wl_buffer(const VkImageCreateInfo &image_create_info, swapchain_image &image,
                              wayland_image_data *image_data);
@@ -210,7 +222,7 @@ private:
    /**
     * @brief Handle to the WSI allocator.
     */
-   wsialloc_allocator *m_wsi_allocator;
+   util::unique_ptr<swapchain_wsialloc_allocator> m_wsi_allocator;
 
    /**
     * @brief Image creation parameters used for all swapchain images.
