@@ -262,7 +262,10 @@ static constexpr uint32_t API_VERSION_MAX = UINT32_MAX;
    /* The layer does not use these entrypoints directly but does use VkExternalImageFormatPropertiesKHR introduced by */  \
    /* this extension. These are listed here in order to hide them from the application. */                                \
    EP(GetPhysicalDeviceExternalBufferPropertiesKHR, VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME,                   \
-      VK_API_VERSION_1_1, false, GetPhysicalDeviceExternalBufferProperties)
+      VK_API_VERSION_1_1, false, GetPhysicalDeviceExternalBufferProperties)                                               \
+   /* VK_KHR_calibrated_timestamps */                                                                                     \
+   EP(GetPhysicalDeviceCalibrateableTimeDomainsKHR, VK_KHR_CALIBRATED_TIMESTAMPS_EXTENSION_NAME, API_VERSION_MAX,         \
+      false, )
 
 /**
  * @brief Struct representing the instance dispatch table.
