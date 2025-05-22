@@ -122,7 +122,7 @@ VkResult wsi_ext_present_timing_headless::get_swapchain_timing_properties(
    uint64_t &timing_properties_counter, VkSwapchainTimingPropertiesEXT &timing_properties)
 {
    /* Use a reasonable approximate (5ms) that most devices should be able to match. */
-   const uint64_t fixed_refresh_duration_ns = 5e+6;
+   const uint64_t fixed_refresh_duration_ns = 1;
 
    timing_properties_counter = 1;
    timing_properties.refreshDuration = fixed_refresh_duration_ns;
