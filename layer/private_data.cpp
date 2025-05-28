@@ -162,20 +162,33 @@ VkResult device_dispatch_table::populate(VkDevice dev, PFN_vkGetDeviceProcAddr g
 PFN_vkVoidFunction device_dispatch_table::get_user_enabled_entrypoint(VkDevice device, uint32_t api_version,
                                                                       const char *fn_name) const
 {
-   auto item = m_entrypoints->find(fn_name);
-   if (item != m_entrypoints->end())
+   auto itr = m_entrypoints->find(fn_name);
+   if (itr != m_entrypoints->end())
    {
-      /* An entrypoint is allowed to use if it has been enabled by the user or is included in the core specficiation of the API version.
-       * Entrypoints included in API version 1.0 are allowed by default. */
-      if (item->second.user_visible || item->second.api_version <= api_version ||
-          item->second.api_version == VK_API_VERSION_1_0)
+      /* An entrypoint is allowed to be used:
+       * - if it has been enabled by the user,
+       * - or if is included in the core specficiation of the API version.
+       * Entrypoints included in API version 1.0 are allowed by default.
+       */
+      const entrypoint &ep = itr->second;
+
+      if (ep.user_visible)
       {
-         return item->second.fn;
+         return ep.fn;
       }
-      else
+
+      if (ep.api_version == VK_API_VERSION_1_0)
       {
-         return nullptr;
+         return ep.fn;
       }
+
+      bool is_core = (ep.ext_name != nullptr && ep.ext_name[0] == '\0');
+      if (is_core && ep.api_version <= api_version)
+      {
+         return ep.fn;
+      }
+
+      return nullptr;
    }
 
    return GetDeviceProcAddr(device, fn_name).value_or(nullptr);
