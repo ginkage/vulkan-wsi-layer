@@ -356,7 +356,8 @@ private:
    EP(GetSwapchainTimeDomainPropertiesEXT, VK_EXT_PRESENT_TIMING_EXTENSION_NAME, API_VERSION_MAX, false, )   \
    EP(GetSwapchainTimingPropertiesEXT, VK_EXT_PRESENT_TIMING_EXTENSION_NAME, API_VERSION_MAX, false, )       \
    EP(SetSwapchainPresentTimingQueueSizeEXT, VK_EXT_PRESENT_TIMING_EXTENSION_NAME, API_VERSION_MAX, false, ) \
-   EP(WaitForPresentKHR, VK_KHR_PRESENT_WAIT_EXTENSION_NAME, API_VERSION_MAX, false, )
+   EP(WaitForPresentKHR, VK_KHR_PRESENT_WAIT_EXTENSION_NAME, API_VERSION_MAX, false, )                       \
+   EP(GetPastPresentationTimingEXT, VK_EXT_PRESENT_TIMING_EXTENSION_NAME, API_VERSION_MAX, false, )
 #else
 #define DEVICE_ENTRYPOINTS_LIST_EXPERIMENTAL(EP)
 #endif
@@ -390,6 +391,11 @@ private:
    EP(ResetFences, "", VK_API_VERSION_1_0, true, )                                                                          \
    EP(WaitForFences, "", VK_API_VERSION_1_0, true, )                                                                        \
    EP(DestroyDevice, "", VK_API_VERSION_1_0, true, )                                                                        \
+   EP(CmdResetQueryPool, "", VK_API_VERSION_1_0, true, )                                                                    \
+   EP(CmdWriteTimestamp, "", VK_API_VERSION_1_0, true, )                                                                    \
+   EP(CreateQueryPool, "", VK_API_VERSION_1_0, true, )                                                                      \
+   EP(DestroyQueryPool, "", VK_API_VERSION_1_0, true, )                                                                     \
+   EP(GetQueryPoolResults, "", VK_API_VERSION_1_0, true, )                                                                  \
    /* VK_KHR_swapchain */                                                                                                   \
    EP(CreateSwapchainKHR, VK_KHR_SWAPCHAIN_EXTENSION_NAME, API_VERSION_MAX, false, )                                        \
    EP(DestroySwapchainKHR, VK_KHR_SWAPCHAIN_EXTENSION_NAME, API_VERSION_MAX, false, )                                       \

@@ -35,8 +35,9 @@
 #include "present_timing_handler.hpp"
 #include "layer/private_data.hpp"
 
-wsi_ext_present_timing_headless::wsi_ext_present_timing_headless(const util::allocator &allocator)
-   : wsi::wsi_ext_present_timing(allocator)
+wsi_ext_present_timing_headless::wsi_ext_present_timing_headless(const util::allocator &allocator, VkDevice device,
+                                                                 uint32_t num_images)
+   : wsi::wsi_ext_present_timing(allocator, device, num_images)
 {
 }
 /**
@@ -87,7 +88,7 @@ static std::optional<bool> is_time_domain_clock_monotonic_raw_supported(const Vk
 }
 
 util::unique_ptr<wsi_ext_present_timing_headless> wsi_ext_present_timing_headless::create(
-   const VkDevice &device, const util::allocator &allocator)
+   const VkDevice &device, const util::allocator &allocator, uint32_t num_images)
 {
    /*
     * Select the hardware raw monotonic clock domain (unaffected by NTP or adjtime adjustments)
@@ -115,7 +116,8 @@ util::unique_ptr<wsi_ext_present_timing_headless> wsi_ext_present_timing_headles
                                                      monotonic_time_domain)
    };
 
-   return wsi_ext_present_timing::create<wsi_ext_present_timing_headless>(allocator, time_domains_array);
+   return wsi_ext_present_timing::create<wsi_ext_present_timing_headless>(allocator, time_domains_array, device,
+                                                                          num_images);
 }
 
 VkResult wsi_ext_present_timing_headless::get_swapchain_timing_properties(

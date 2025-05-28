@@ -587,16 +587,6 @@ VkResult swapchain_base::notify_presentation_engine(const pending_present_reques
 VkResult swapchain_base::queue_present(VkQueue queue, const VkPresentInfoKHR *present_info,
                                        const swapchain_presentation_parameters &submit_info)
 {
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
-   auto *ext = get_swapchain_extension<wsi::wsi_ext_present_timing>();
-   if (ext)
-   {
-      wsi::swapchain_presentation_entry presentation_entry = {};
-      presentation_entry.present_id = submit_info.pending_present.present_id;
-      TRY_LOG_CALL(ext->add_presentation_entry(presentation_entry));
-   }
-#endif
-
    if (submit_info.switch_presentation_mode)
    {
       /* Assert when a presentation mode switch is requested and the swapchain_maintenance1 extension which implements this is not available */
@@ -624,6 +614,7 @@ VkResult swapchain_base::queue_present(VkQueue queue, const VkPresentInfoKHR *pr
    }
 
    void *submission_pnext = nullptr;
+   uint32_t count_signal_semaphores = 0;
    std::optional<VkFrameBoundaryEXT> frame_boundary;
    /* Do not handle the event if it was handled before reaching this point */
    if (submit_info.handle_present_frame_boundary_event)
@@ -637,14 +628,32 @@ VkResult swapchain_base::queue_present(VkQueue queue, const VkPresentInfoKHR *pr
          submission_pnext = &frame_boundary.value();
       }
    }
-
+   if (submit_info.present_fence != VK_NULL_HANDLE)
+   {
+      signal_semaphores[count_signal_semaphores++] =
+         m_swapchain_images[submit_info.pending_present.image_index].present_fence_wait;
+   }
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+   const VkPresentTimingInfoEXT *present_timing_info = VK_NULL_HANDLE;
+   const auto *present_timings_info =
+      util::find_extension<VkPresentTimingsInfoEXT>(VK_STRUCTURE_TYPE_PRESENT_TIMINGS_INFO_EXT, present_info->pNext);
+   if (present_timings_info != VK_NULL_HANDLE)
+   {
+      present_timing_info = present_timings_info->pTimingInfos;
+      assert(present_timing_info != VK_NULL_HANDLE);
+      if (present_timing_info->presentStageQueries & VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT)
+      {
+         auto *ext_present_timing = get_swapchain_extension<wsi::wsi_ext_present_timing>(true);
+         signal_semaphores[count_signal_semaphores++] =
+            ext_present_timing->get_image_present_semaphore(submit_info.pending_present.image_index);
+      }
+   }
+#endif
    queue_submit_semaphores semaphores = {
       wait_semaphores,
       sem_count,
-      (submit_info.present_fence != VK_NULL_HANDLE) ?
-         &m_swapchain_images[submit_info.pending_present.image_index].present_fence_wait :
-         nullptr,
-      (submit_info.present_fence != VK_NULL_HANDLE) ? 1u : 0,
+      count_signal_semaphores > 0 ? signal_semaphores.data() : nullptr,
+      count_signal_semaphores,
    };
    TRY_LOG_CALL(image_set_present_payload(m_swapchain_images[submit_info.pending_present.image_index], queue,
                                           semaphores, submission_pnext));
@@ -662,6 +671,15 @@ VkResult swapchain_base::queue_present(VkQueue queue, const VkPresentInfoKHR *pr
 
    TRY(notify_presentation_engine(submit_info.pending_present));
 
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+   if (present_timing_info != VK_NULL_HANDLE)
+   {
+      auto *ext_present_timing = get_swapchain_extension<wsi::wsi_ext_present_timing>(true);
+      TRY_LOG_CALL(ext_present_timing->add_presentation_entry(
+         m_device_data, queue, submit_info.pending_present.present_id, submit_info.pending_present.image_index,
+         present_timing_info->presentStageQueries));
+   }
+#endif
    return VK_SUCCESS;
 }
 

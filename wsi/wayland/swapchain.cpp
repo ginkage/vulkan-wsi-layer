@@ -146,7 +146,9 @@ VkResult swapchain::add_required_extensions(VkDevice device, const VkSwapchainCr
          image_first_pixel_visible_time_domain = VK_TIME_DOMAIN_CLOCK_MONOTONIC_KHR;
       }
       if (!add_swapchain_extension(
-             wsi_ext_present_timing_wayland::create(image_first_pixel_visible_time_domain, m_allocator)))
+
+             wsi_ext_present_timing_wayland::create(image_first_pixel_visible_time_domain, m_allocator, m_device,
+                                                    swapchain_create_info->minImageCount)))
       {
          return VK_ERROR_OUT_OF_HOST_MEMORY;
       }

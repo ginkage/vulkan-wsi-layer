@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024 Arm Limited.
+ * Copyright (c) 2021-2025 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -51,6 +51,17 @@ struct queue_submit_semaphores
    uint32_t wait_semaphores_count;
    const VkSemaphore *signal_semaphores;
    uint32_t signal_semaphores_count;
+};
+
+struct command_buffer_data
+{
+   VkCommandBuffer *m_command_buffers{ nullptr };
+   uint32_t m_command_buffer_count{ 0 };
+   command_buffer_data(VkCommandBuffer *command_buffers, uint32_t command_buffer_count)
+      : m_command_buffers(command_buffers)
+      , m_command_buffer_count(command_buffer_count)
+   {
+   }
 };
 
 /**
@@ -198,4 +209,19 @@ private:
  */
 VkResult sync_queue_submit(const layer::device_private_data &device, VkQueue queue, VkFence fence,
                            const queue_submit_semaphores &semaphores, const void *submission_pnext = nullptr);
+
+/**
+ * @brief Submit queue operation for synchronization.
+ *
+ * @param device              The device private data for the fence.
+ * @param queue               The Vulkan queue that may be used to submit synchronization commands.
+ * @param fence               The fence to be signalled, it could be VK_NULL_HANDLE in the absence
+ *                            of a fence to be signalled.
+ * @param semaphores          The wait and signal semaphores.
+ * @param command_buffer_data Data of command buffer to be submitted.
+ *
+ * @return VK_SUCCESS on success, an appropiate error code otherwise.
+ */
+VkResult sync_queue_submit(const layer::device_private_data &device, VkQueue queue, VkFence fence,
+                           const queue_submit_semaphores &semaphores, const command_buffer_data &command_buffer_data);
 } /* namespace wsi */

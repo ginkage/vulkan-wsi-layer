@@ -181,6 +181,10 @@ typedef VkResult(VKAPI_PTR *PFN_vkGetSwapchainTimingPropertiesEXT)(
 typedef VkResult(VKAPI_PTR *PFN_vkSetSwapchainPresentTimingQueueSizeEXT)(VkDevice device, VkSwapchainKHR swapchain,
                                                                          uint32_t size);
 
+typedef VkResult(VKAPI_PTR *PFN_vkGetPastPresentationTimingEXT)(
+   VkDevice device, const VkPastPresentationTimingInfoEXT *pPastPresentationTimingInfo,
+   VkPastPresentationTimingPropertiesEXT *pPastPresentationTimingProperties);
+
 VWL_VKAPI_CALL(VkResult)
 wsi_layer_vkSetSwapchainPresentTimingQueueSizeEXT(VkDevice device, VkSwapchainKHR swapchain,
                                                   uint32_t size) VWL_API_POST;

@@ -32,18 +32,55 @@
 #pragma once
 
 #include <layer/wsi_layer_experimental.hpp>
+#include <layer/private_data.hpp>
 #include <util/custom_allocator.hpp>
 #include <util/macros.hpp>
 
+#include <atomic>
 #include <iterator>
 #include <type_traits>
 #include <array>
+#include <optional>
+#include <functional>
 
 #include "wsi_extension.hpp"
 
 #if VULKAN_WSI_LAYER_EXPERIMENTAL
 namespace wsi
 {
+
+/**
+ * @brief Swapchain presentation timing
+ *
+ * This structure is used to keep the timing parameters for various presentation stages.
+ *
+ */
+struct swapchain_presentation_timing
+{
+   uint64_t m_timedomain_id{ 0 };
+   /* Using atomics to enforce sequentially consistent ordering */
+   std::atomic<uint64_t> m_time{ 0 };
+
+   swapchain_presentation_timing()
+      : m_timedomain_id(0)
+      , m_time(0)
+   {
+   }
+   swapchain_presentation_timing(swapchain_presentation_timing &&rhs) noexcept
+   {
+      m_timedomain_id = rhs.m_timedomain_id;
+      m_time.store(rhs.m_time.load());
+   }
+   swapchain_presentation_timing &operator=(swapchain_presentation_timing &&rhs) noexcept
+   {
+      m_timedomain_id = rhs.m_timedomain_id;
+      m_time.store(rhs.m_time.load());
+      return *this;
+   }
+
+   swapchain_presentation_timing(const swapchain_presentation_timing &) = delete;
+   swapchain_presentation_timing &operator=(const swapchain_presentation_timing &) = delete;
+};
 
 /**
  * @brief Swapchain presentation entry
@@ -54,39 +91,108 @@ namespace wsi
 struct swapchain_presentation_entry
 {
    /**
-    * Whether this entry is an outstanding result or not.
+    * The target stages for the presentation entry.
     */
-   bool is_outstanding{ false };
+   VkPresentStageFlagsEXT m_target_stages{ 0 };
+
    /**
-    * The present id.
+    * The present id. Zero is a valid value for present id.
     */
-   uint64_t present_id{ 0 };
+   uint64_t m_present_id{ 0 };
+
+   /**
+    * The image index of the entry in the swapchain.
+    */
+   uint32_t m_image_index{ 0 };
+
+   /**
+    * The number of requested stages for this entry.
+    */
+   size_t m_num_present_stages;
+
+   /**
+    * When serving a get past presentation timings request, this field
+    * keep the status of whether the slot had already been copied to
+    * the results.
+    */
+   bool copied;
+
+   /**
+    * The variables to keep timing stages.
+    */
+   std::optional<swapchain_presentation_timing> m_queue_end_timing;
+   std::optional<swapchain_presentation_timing> m_latch_timing;
+   std::optional<swapchain_presentation_timing> m_first_pixel_out_timing;
+   std::optional<swapchain_presentation_timing> m_first_pixel_visible_timing;
+
+   swapchain_presentation_entry(VkPresentStageFlagsEXT present_stage_queries, uint64_t present_id,
+                                uint32_t image_index);
+   swapchain_presentation_entry(swapchain_presentation_entry &&) noexcept = default;
+   swapchain_presentation_entry &operator=(swapchain_presentation_entry &&) noexcept = default;
+
+   swapchain_presentation_entry(const swapchain_presentation_entry &) = delete;
+   swapchain_presentation_entry &operator=(const swapchain_presentation_entry &) = delete;
+
+   /**
+    * @brief This API returns true when the requested stage timing is pending.
+    *
+    * @param stage The stage to get the status for.
+    *
+    * @return true when the stage is pending and false otherwise.
+    */
+   bool is_pending(VkPresentStageFlagBitsEXT stage);
+
+   /**
+    * @brief This API returns true when the requested stage timing is completed.
+    *
+    * @param stage The stage to get the status for.
+    *
+    * @return true when the stage is completed and false otherwise.
+    */
+   bool is_complete(VkPresentStageFlagBitsEXT stage);
+
+   /**
+    * @brief This API returns true when there are outstanding stages and false otherwise.
+    *
+    * @return true when there are outstanding stages and false otherwise.
+    */
+   bool has_outstanding_stages();
+
+   /**
+    * @brief This API returns true when there are completed stages and false otherwise.
+    *
+    * @return true when there are completed stages and false otherwise.
+    */
+   bool has_completed_stages();
+
+   /**
+    * @brief This API populates the timing parameters from the swapchain_presentation_entry for all stages.
+    *
+    * @param timing Reference to the timing to be populated.
+    *
+    * @return true when atleast one stage is populated from the swapchain_presentation_entry and false otherwise.
+    */
+   bool populate(VkPastPresentationTimingEXT &timing);
+
+   /**
+    * @brief This API retuns and optional reference to a particular stage of the swapchain_presentation_entry.
+    *
+    * @param stage The stage to get the timing for.
+    *
+    * @return optional reference to the particular stage, std::nullopt if the stage doesn't exit.
+    */
+   std::optional<std::reference_wrapper<swapchain_presentation_timing>> get_stage_timing(
+      VkPresentStageFlagBitsEXT stage);
 };
 
-/**
- * @brief Timings queue
- *
- * This structure is used to keep the parameters related to the presentation timing queue.
- *
- */
-struct timings_queue
-{
-   timings_queue(const util::allocator &allocator)
-      : m_timings(allocator)
-   {
-   }
-
-   util::vector<swapchain_presentation_entry> m_timings;
-};
-
-// Predefined struct for calibrated time
+/* Predefined struct for calibrated time */
 struct swapchain_calibrated_time
 {
    VkTimeDomainKHR time_domain;
    uint64_t offset;
 };
 
-// Base struct for swapchain time domain
+/* Base struct for swapchain time domain */
 class swapchain_time_domain
 {
 public:
@@ -188,9 +294,10 @@ public:
 
    template <typename T, std::size_t N>
    static util::unique_ptr<T> create(const util::allocator &allocator,
-                                     std::array<util::unique_ptr<wsi::vulkan_time_domain>, N> &domains)
+                                     std::array<util::unique_ptr<wsi::vulkan_time_domain>, N> &domains, VkDevice device,
+                                     uint32_t num_images)
    {
-      auto present_timing = allocator.make_unique<T>(allocator);
+      auto present_timing = allocator.make_unique<T>(allocator, device, num_images);
       for (auto &domain : domains)
       {
          if (!present_timing->get_swapchain_time_domains().add_time_domain(std::move(domain)))
@@ -199,14 +306,24 @@ public:
             return nullptr;
          }
       }
+      if (present_timing->init_timing_resources() != VK_SUCCESS)
+      {
+         WSI_LOG_ERROR("Failed to initialize present timing.");
+         return nullptr;
+      }
 
       return present_timing;
    }
 
    /**
     * @brief Constructor for the wsi_ext_present_timing class.
+    *
+    * @param allocator  Reference to the custom allocator.
+    * @param device     The device to which the swapchain belongs.
+    * @param num_images Number of images in the swapchain.
+    *
     */
-   wsi_ext_present_timing(const util::allocator &allocator);
+   wsi_ext_present_timing(const util::allocator &allocator, VkDevice device, uint32_t num_images);
 
    /**
     * @brief Destructor for the wsi_ext_present_timing class.
@@ -239,14 +356,35 @@ public:
    /**
     * @brief Add a presentation entry to the present timing queue.
     *
-    * This API pushes a presentation entry to the present timing queue.
-    *
-    * @param sc_presentation_entry Reference to the presentation entry to be added.
+    * @param device                The device private data.
+    * @param queue                 The Vulkan queue used to submit synchronization commands.
+    * @param present_id            The present id of the current presentation.
+    * @param image_index           The index of the image in the swapchain.
+    * @param present_stage_queries The present stages application had requested timings for.
     *
     * @return VK_SUCCESS when the entry was inserted successfully and VK_ERROR_OUT_OF_HOST_MEMORY
     * when there is no host memory.
     */
-   VkResult add_presentation_entry(const wsi::swapchain_presentation_entry &sc_presentation_entry);
+   VkResult add_presentation_entry(const layer::device_private_data &device, VkQueue queue, uint64_t present_id,
+                                   uint32_t image_index, VkPresentStageFlagsEXT present_stage_queries);
+
+   /**
+    * @brief Get the image's present semaphore.
+    *
+    * @param image_index Image's index
+    *
+    * @return the image's present semaphore.
+    */
+   VkSemaphore get_image_present_semaphore(uint32_t image_index);
+
+   /**
+    * @brief Get the results of the past presentation from the internal queue.
+    *
+    * @param past_present_timing_properties Pointer for returing results.
+    *
+    * @return VK_SUCCESS when the requested results are returned, VK_INCOMPLETE when returning fewer results.
+    */
+   VkResult get_past_presentation_results(VkPastPresentationTimingPropertiesEXT *past_present_timing_properties);
 
    /**
     * @brief Get the swapchain time domains
@@ -272,14 +410,89 @@ protected:
 
 private:
    /**
-    * @brief The presentation timing queue.
-    */
-   timings_queue m_queue;
-
-   /**
     *  @brief Handle the backend specific time domains for each present stage.
     */
    swapchain_time_domains m_time_domains;
+
+   /**
+    *  @brief The Vulkan device.
+    */
+   VkDevice m_device;
+
+   /**
+    * @brief Query pool to allocate for present stage timing queries.
+    */
+   VkQueryPool m_query_pool;
+
+   /**
+    * @brief The command pool for allocating the buffers for the present stage timings.
+    */
+   VkCommandPool m_command_pool;
+
+   /**
+    * @brief The command buffer for the present stage timings.
+    */
+   util::vector<VkCommandBuffer> m_command_buffer;
+
+   /**
+    * @brief The presentation timing queue.
+    */
+   util::vector<swapchain_presentation_entry> m_queue;
+
+   /**
+    * @brief The number of images in the swapchain.
+    */
+   uint32_t m_num_images;
+
+   /**
+    * @brief Semaphore per image.
+    */
+   util::vector<VkSemaphore> m_present_semaphore;
+
+   /**
+    * @brief This API does the queue submission for getting the queue end timing.
+    *
+    * @param device                The device private data.
+    * @param queue                 The Vulkan queue used to submit synchronization commands.
+    * @param image_index           The index of the image in the swapchain.
+    *
+    * @return VK_SUCCESS when the submission is successfully and error otherwise.
+    */
+   VkResult queue_submit_queue_end_timing(const layer::device_private_data &device, VkQueue queue,
+                                          uint32_t image_index);
+
+   /**
+    * @brief This API initializes the resources for timing query such as the
+    * command buffer, command pool and query pool.
+    *
+    * @return VK_SUCCESS if the initialization is successful and error if otherwise.
+    */
+   VkResult init_timing_resources();
+
+   /**
+    * @brief This API is called to query the queue end timings for a particular image index
+    * and store it in the internal queue.
+    *
+    * @param image_index The index of the image in the swapchain.
+    *
+    * @return VK_SUCCESS if the query is successful and error if otherwise.
+    */
+   VkResult get_queue_end_timing_to_queue(uint32_t image_index);
+
+   /**
+    * @brief This API is called to get all the timings in the query pool to the
+    * internal queue and tries clearing it.
+    *
+    * @return VK_SUCCESS if the records are copied successfully or partially.
+    */
+   VkResult query_present_queue_end_timings();
+
+   /**
+    * @brief Get the number of results that are available in the internal queue.
+    *
+    * @return The number of available results.
+    */
+   uint32_t get_num_available_results();
 };
 
 } /* namespace wsi */

@@ -124,6 +124,14 @@ struct swapchain_presentation_parameters
 #endif
 };
 
+enum signal_semaphores_type
+{
+   SIGNAL_SEMAPHORE_PRESENT_FENCE,
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+   SIGNAL_SEMAPHORE_PRESENT_TIMING,
+#endif
+   SIGNAL_SEMAPHORE_MAX_NUM,
+};
 /**
  * @brief Base swapchain class
  *
@@ -636,11 +644,6 @@ private:
    VkResult m_error_state;
 
    /**
-    * @brief Wait for a buffer to become free.
-    */
-   VkResult wait_for_free_buffer(uint64_t timeout);
-
-   /**
     * @brief A semaphore to be signalled once a free image becomes available.
     *
     * Uses a custom semaphore implementation that uses a condition variable.
@@ -649,6 +652,30 @@ private:
     * This is kept private as waiting should be done via wait_for_free_buffer().
     */
    util::timed_semaphore m_free_image_semaphore;
+
+   /**
+    * @brief A flag to track if swapchain has started presenting.
+    */
+   bool m_started_presenting;
+
+   /**
+    * @brief Holds the swapchain extensions and related functionalities.
+    */
+   wsi_ext_maintainer m_extensions;
+
+   /**
+    * @brief Holds the VkImageCreateInfo and backend specific image create info extensions.
+    */
+   swapchain_image_creator m_image_creator;
+
+   /** @brief Signal semaphores for queue submit.
+    */
+   std::array<VkSemaphore, SIGNAL_SEMAPHORE_MAX_NUM> signal_semaphores;
+
+   /**
+    * @brief Wait for a buffer to become free.
+    */
+   VkResult wait_for_free_buffer(uint64_t timeout);
 
    /**
     * @brief Per swapchain thread function that handles page flipping.
@@ -710,21 +737,6 @@ private:
     * @return VK_SUCCESS on success or an error code otherwise.
     */
    VkResult notify_presentation_engine(const pending_present_request &submit_info);
-
-   /**
-    * @brief A flag to track if swapchain has started presenting.
-    */
-   bool m_started_presenting;
-
-   /**
-    * @brief Holds the swapchain extensions and related functionalities.
-    */
-   wsi_ext_maintainer m_extensions;
-
-   /**
-    * @brief Holds the VkImageCreateInfo and backend specific image create info extensions.
-    */
-   swapchain_image_creator m_image_creator;
 
    /**
     * @brief Initialize m_image_creator.
