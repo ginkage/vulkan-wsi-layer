@@ -31,13 +31,15 @@
 #include "present_timing_handler.hpp"
 #include <array>
 
-wsi_ext_present_timing_wayland::wsi_ext_present_timing_wayland(const util::allocator &allocator)
-   : wsi_ext_present_timing(allocator)
+wsi_ext_present_timing_wayland::wsi_ext_present_timing_wayland(const util::allocator &allocator, VkDevice device,
+                                                               uint32_t num_images)
+   : wsi_ext_present_timing(allocator, device, num_images)
 {
 }
 
 util::unique_ptr<wsi_ext_present_timing_wayland> wsi_ext_present_timing_wayland::create(
-   VkTimeDomainKHR image_first_pixel_visible_time_domain, const util::allocator &allocator)
+   VkTimeDomainKHR image_first_pixel_visible_time_domain, const util::allocator &allocator, VkDevice device,
+   uint32_t num_images)
 {
    std::array<util::unique_ptr<wsi::vulkan_time_domain>, 2> time_domains_array = {
       allocator.make_unique<wsi::vulkan_time_domain>(VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT,
@@ -46,7 +48,8 @@ util::unique_ptr<wsi_ext_present_timing_wayland> wsi_ext_present_timing_wayland:
                                                      image_first_pixel_visible_time_domain)
    };
 
-   return wsi_ext_present_timing::create<wsi_ext_present_timing_wayland>(allocator, time_domains_array);
+   return wsi_ext_present_timing::create<wsi_ext_present_timing_wayland>(allocator, time_domains_array, device,
+                                                                         num_images);
 }
 
 VkResult wsi_ext_present_timing_wayland::get_swapchain_timing_properties(

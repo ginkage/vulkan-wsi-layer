@@ -108,10 +108,15 @@ wsi_layer_vkGetPastPresentationTimingEXT(
    VkDevice device, const VkPastPresentationTimingInfoEXT *pPastPresentationTimingInfo,
    VkPastPresentationTimingPropertiesEXT *pPastPresentationTimingProperties) VWL_API_POST
 {
-   UNUSED(device);
-   UNUSED(pPastPresentationTimingInfo);
-   UNUSED(pPastPresentationTimingProperties);
-   VkResult result = VK_SUCCESS;
-   return result;
+   assert(pPastPresentationTimingInfo != nullptr);
+   auto &device_data = layer::device_private_data::get(device);
+   if (!device_data.layer_owns_swapchain(pPastPresentationTimingInfo->swapchain))
+   {
+      return device_data.disp.GetPastPresentationTimingEXT(device, pPastPresentationTimingInfo,
+                                                           pPastPresentationTimingProperties);
+   }
+   auto *sc = reinterpret_cast<wsi::swapchain_base *>(pPastPresentationTimingInfo->swapchain);
+   auto *ext = sc->get_swapchain_extension<wsi::wsi_ext_present_timing>(true);
+   return ext->get_past_presentation_results(pPastPresentationTimingProperties);
 }
 #endif /* VULKAN_WSI_LAYER_EXPERIMENTAL */
