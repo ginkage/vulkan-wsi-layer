@@ -123,7 +123,12 @@ util::unique_ptr<wsi_ext_present_timing_headless> wsi_ext_present_timing_headles
 VkResult wsi_ext_present_timing_headless::get_swapchain_timing_properties(
    uint64_t &timing_properties_counter, VkSwapchainTimingPropertiesEXT &timing_properties)
 {
-   /* Use a reasonable approximate (5ms) that most devices should be able to match. */
+   /*
+    * The headless backend does not have a limit on how fast the swapchain can be presented.
+    * We set the refresh duration to 1, because on some platforms, 0 is returned until after
+    * at least one image had been presented. On these platforms, 0 is used to indicate timing
+    * properties are currently unavailable.
+    */
    const uint64_t fixed_refresh_duration_ns = 1;
 
    timing_properties_counter = 1;
