@@ -263,6 +263,20 @@ static constexpr uint32_t API_VERSION_MAX = UINT32_MAX;
    /* this extension. These are listed here in order to hide them from the application. */                                \
    EP(GetPhysicalDeviceExternalBufferPropertiesKHR, VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME,                   \
       VK_API_VERSION_1_1, false, GetPhysicalDeviceExternalBufferProperties)                                               \
+   /* VK_EXT_debug_utils */                                                                                               \
+   /* The layer is only using vkSetDebugUtilsObjectNameEXT but we need to list all the commands in order to hide */       \
+   /* from the application. */                                                                                            \
+   EP(CmdBeginDebugUtilsLabelEXT, VK_EXT_DEBUG_UTILS_EXTENSION_NAME, API_VERSION_MAX, false, )                            \
+   EP(CmdEndDebugUtilsLabelEXT, VK_EXT_DEBUG_UTILS_EXTENSION_NAME, API_VERSION_MAX, false, )                              \
+   EP(CmdInsertDebugUtilsLabelEXT, VK_EXT_DEBUG_UTILS_EXTENSION_NAME, API_VERSION_MAX, false, )                           \
+   EP(CreateDebugUtilsMessengerEXT, VK_EXT_DEBUG_UTILS_EXTENSION_NAME, API_VERSION_MAX, false, )                          \
+   EP(DestroyDebugUtilsMessengerEXT, VK_EXT_DEBUG_UTILS_EXTENSION_NAME, API_VERSION_MAX, false, )                         \
+   EP(QueueBeginDebugUtilsLabelEXT, VK_EXT_DEBUG_UTILS_EXTENSION_NAME, API_VERSION_MAX, false, )                          \
+   EP(QueueEndDebugUtilsLabelEXT, VK_EXT_DEBUG_UTILS_EXTENSION_NAME, API_VERSION_MAX, false, )                            \
+   EP(QueueInsertDebugUtilsLabelEXT, VK_EXT_DEBUG_UTILS_EXTENSION_NAME, API_VERSION_MAX, false, )                         \
+   EP(SetDebugUtilsObjectNameEXT, VK_EXT_DEBUG_UTILS_EXTENSION_NAME, API_VERSION_MAX, false, )                            \
+   EP(SetDebugUtilsObjectTagEXT, VK_EXT_DEBUG_UTILS_EXTENSION_NAME, API_VERSION_MAX, false, )                             \
+   EP(SubmitDebugUtilsMessageEXT, VK_EXT_DEBUG_UTILS_EXTENSION_NAME, API_VERSION_MAX, false, )                            \
    /* VK_KHR_calibrated_timestamps */                                                                                     \
    EP(GetPhysicalDeviceCalibrateableTimeDomainsKHR, VK_KHR_CALIBRATED_TIMESTAMPS_EXTENSION_NAME, API_VERSION_MAX,         \
       false, )
