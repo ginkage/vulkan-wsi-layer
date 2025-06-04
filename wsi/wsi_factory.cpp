@@ -247,6 +247,11 @@ VkResult add_instance_extensions_required_by_layer(const util::wsi_platform_set 
       TRY_LOG_CALL(extensions_to_enable.add(extensions_required_by_layer));
    }
 
+   if (ENABLE_INSTRUMENTATION)
+   {
+      TRY_LOG_CALL(extensions_to_enable.add(VK_EXT_DEBUG_UTILS_EXTENSION_NAME));
+   }
+
    return VK_SUCCESS;
 }
 

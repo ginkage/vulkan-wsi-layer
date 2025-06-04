@@ -54,6 +54,22 @@ std::optional<fence_sync> fence_sync::create(layer::device_private_data &device)
    {
       return std::nullopt;
    }
+
+   if (ENABLE_INSTRUMENTATION &&
+       device.instance_data.disp.get_fn<PFN_vkSetDebugUtilsObjectNameEXT>("vkSetDebugUtilsObjectNameEXT").has_value())
+   {
+      VkDebugUtilsObjectNameInfoEXT nameInfo = { .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+                                                 .pNext = NULL,
+                                                 .objectType = VK_OBJECT_TYPE_FENCE,
+                                                 .objectHandle = reinterpret_cast<uint64_t>(fence),
+                                                 .pObjectName = "WsiLayerFence" };
+      res = device.instance_data.disp.SetDebugUtilsObjectNameEXT(device.device, &nameInfo);
+      if (res != VK_SUCCESS)
+      {
+         WSI_LOG_WARNING("Couldn't set fence name");
+      }
+   }
+
    return fence_sync(device, fence);
 }
 
@@ -148,6 +164,20 @@ std::optional<sync_fd_fence_sync> sync_fd_fence_sync::create(layer::device_priva
    if (res != VK_SUCCESS)
    {
       return std::nullopt;
+   }
+   if (ENABLE_INSTRUMENTATION &&
+       device.instance_data.disp.get_fn<PFN_vkSetDebugUtilsObjectNameEXT>("vkSetDebugUtilsObjectNameEXT").has_value())
+   {
+      VkDebugUtilsObjectNameInfoEXT nameInfo = { .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+                                                 .pNext = NULL,
+                                                 .objectType = VK_OBJECT_TYPE_FENCE,
+                                                 .objectHandle = reinterpret_cast<uint64_t>(fence),
+                                                 .pObjectName = "WsiLayerFence" };
+      res = device.instance_data.disp.SetDebugUtilsObjectNameEXT(device.device, &nameInfo);
+      if (res != VK_SUCCESS)
+      {
+         WSI_LOG_WARNING("Couldn't set fence name");
+      }
    }
    return sync_fd_fence_sync{ device, fence };
 }
