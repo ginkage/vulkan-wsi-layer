@@ -903,6 +903,15 @@ public:
     */
    bool is_present_id_enabled();
 
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+   /**
+    * @brief Selectively enable/disable the fifo_latest_ready for this device
+    *
+    * @param enable Value to set fifo_latest_ready_enabled member variable.
+    */
+   void set_present_mode_fifo_latest_ready_enabled(bool enable);
+#endif
+
    /**
     * @brief Selectively enable/disable the swapchain maintenance1 features for this device.
     *
@@ -1001,6 +1010,12 @@ private:
     * @brief Stores whether the device has enabled support for the present timing features.
     */
    bool present_timing_enabled{ false };
+
+   /**
+    * @brief Stores whether the device supports the fifo latest ready present mode.
+    *
+    */
+   bool present_mode_fifo_latest_ready_enabled{ false };
 #endif
 };
 

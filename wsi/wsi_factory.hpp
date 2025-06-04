@@ -136,5 +136,4 @@ PFN_vkVoidFunction get_proc_addr(const char *name, const layer::instance_private
  */
 void set_swapchain_maintenance1_state(
    VkPhysicalDevice physicalDevice, VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT *swapchain_maintenance1_features);
-
 } // namespace wsi
