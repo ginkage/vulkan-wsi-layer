@@ -451,6 +451,7 @@ device_private_data::device_private_data(instance_private_data &inst_data, VkPhy
    , swapchain_maintenance1_enabled{ false }
 #if VULKAN_WSI_LAYER_EXPERIMENTAL
    , present_timing_enabled { true }
+   , present_mode_fifo_latest_ready_enabled { false }
 #endif
 /* clang-format on */
 {
@@ -642,6 +643,11 @@ void device_private_data::set_present_wait_enabled(bool enable)
 bool device_private_data::is_present_wait_enabled()
 {
    return present_wait_enabled;
+}
+
+void device_private_data::set_present_mode_fifo_latest_ready_enabled(bool enable)
+{
+   present_mode_fifo_latest_ready_enabled = enable;
 }
 #endif
 

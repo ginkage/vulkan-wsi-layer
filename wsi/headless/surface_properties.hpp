@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2019, 2022-2024 Arm Limited.
+ * Copyright (c) 2017-2019, 2022-2025 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -28,10 +28,19 @@
 #include <vulkan/vulkan.h>
 #include <wsi/surface_properties.hpp>
 #include <wsi/compatible_present_modes.hpp>
+
 namespace wsi
 {
 namespace headless
 {
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+/*
+ * Due to VK_PRESENT_MODE_FIFO_LATEST_READY_EXT
+ */
+constexpr int PRESENT_MODES_NUM = 5;
+#else
+constexpr int PRESENT_MODES_NUM = 4;
+#endif
 
 class surface_properties : public wsi::surface_properties
 {
@@ -68,10 +77,10 @@ public:
 
 private:
    /* List of supported presentation modes */
-   std::array<VkPresentModeKHR, 4> m_supported_modes;
+   std::array<VkPresentModeKHR, PRESENT_MODES_NUM> m_supported_modes;
 
    /* Stores compatible presentation modes */
-   compatible_present_modes<4> m_compatible_present_modes;
+   compatible_present_modes<PRESENT_MODES_NUM> m_compatible_present_modes;
 
    void populate_present_mode_compatibilities() override;
 

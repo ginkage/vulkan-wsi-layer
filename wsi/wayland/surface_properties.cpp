@@ -53,17 +53,28 @@ namespace wayland
 
 void surface_properties::populate_present_mode_compatibilities()
 {
-   std::array<present_mode_compatibility, 2> compatible_present_modes_list = {
+   std::array compatible_present_modes_list = {
       present_mode_compatibility{ VK_PRESENT_MODE_FIFO_KHR, 1, { VK_PRESENT_MODE_FIFO_KHR } },
       present_mode_compatibility{ VK_PRESENT_MODE_MAILBOX_KHR, 1, { VK_PRESENT_MODE_MAILBOX_KHR } }
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+      ,
+      present_mode_compatibility{ VK_PRESENT_MODE_FIFO_LATEST_READY_EXT, 1, { VK_PRESENT_MODE_FIFO_LATEST_READY_EXT } }
+#endif
    };
-   m_compatible_present_modes = compatible_present_modes<2>(compatible_present_modes_list);
+   m_compatible_present_modes =
+      compatible_present_modes<compatible_present_modes_list.size()>(compatible_present_modes_list);
 }
 
 surface_properties::surface_properties(surface *wsi_surface, const util::allocator &allocator)
    : specific_surface(wsi_surface)
    , supported_formats(allocator)
-   , m_supported_modes({ VK_PRESENT_MODE_FIFO_KHR, VK_PRESENT_MODE_MAILBOX_KHR })
+   , m_supported_modes({
+      VK_PRESENT_MODE_FIFO_KHR, VK_PRESENT_MODE_MAILBOX_KHR
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+         ,
+         VK_PRESENT_MODE_FIFO_LATEST_READY_EXT
+#endif
+   })
 {
    populate_present_mode_compatibilities();
 }
@@ -242,7 +253,6 @@ VkResult surface_properties::get_surface_present_modes(VkPhysicalDevice physical
 {
    UNUSED(physical_device);
    UNUSED(surface);
-
    return get_surface_present_modes_common(pPresentModeCount, pPresentModes, m_supported_modes);
 }
 

@@ -302,5 +302,4 @@ void set_swapchain_maintenance1_state(VkPhysicalDevice physicalDevice,
       }
    }
 }
-
 } // namespace wsi

@@ -60,6 +60,10 @@
                 "entrypoints": [
                     "vkWaitForPresentKHR"
                 ]
+            },
+            {
+                "name": "VK_EXT_present_mode_fifo_latest_ready",
+                "spec_version": "1"
             }
         ],
         "disable_environment": {

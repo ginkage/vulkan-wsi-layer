@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2019, 2021-2024 Arm Limited.
+ * Copyright (c) 2017-2019, 2021-2025 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -32,7 +32,14 @@ namespace wsi
 {
 namespace wayland
 {
-
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+/*
+ * Due to VK_PRESENT_MODE_FIFO_LATEST_READY_EXT
+ */
+constexpr int PRESENT_MODES_NUM = 3;
+#else
+constexpr int PRESENT_MODES_NUM = 2;
+#endif
 struct surface_format_properties_hasher
 {
    size_t operator()(const VkFormat &format) const
@@ -88,10 +95,10 @@ private:
    surface_format_properties_map supported_formats;
 
    /* List of supported presentation modes */
-   std::array<VkPresentModeKHR, 2> m_supported_modes;
+   std::array<VkPresentModeKHR, PRESENT_MODES_NUM> m_supported_modes;
 
    /* Stores compatible presentation modes */
-   compatible_present_modes<2> m_compatible_present_modes;
+   compatible_present_modes<PRESENT_MODES_NUM> m_compatible_present_modes;
 
    void populate_present_mode_compatibilities() override;
 
