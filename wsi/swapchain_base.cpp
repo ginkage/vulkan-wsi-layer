@@ -634,13 +634,13 @@ VkResult swapchain_base::queue_present(VkQueue queue, const VkPresentInfoKHR *pr
          m_swapchain_images[submit_info.pending_present.image_index].present_fence_wait;
    }
 #if VULKAN_WSI_LAYER_EXPERIMENTAL
-   const VkPresentTimingInfoEXT *present_timing_info = VK_NULL_HANDLE;
+   const VkPresentTimingInfoEXT *present_timing_info = nullptr;
    const auto *present_timings_info =
       util::find_extension<VkPresentTimingsInfoEXT>(VK_STRUCTURE_TYPE_PRESENT_TIMINGS_INFO_EXT, present_info->pNext);
-   if (present_timings_info != VK_NULL_HANDLE)
+   if (present_timings_info != nullptr)
    {
       present_timing_info = present_timings_info->pTimingInfos;
-      assert(present_timing_info != VK_NULL_HANDLE);
+      assert(present_timing_info != nullptr);
       if (present_timing_info->presentStageQueries & VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT)
       {
          auto *ext_present_timing = get_swapchain_extension<wsi::wsi_ext_present_timing>(true);
@@ -672,7 +672,7 @@ VkResult swapchain_base::queue_present(VkQueue queue, const VkPresentInfoKHR *pr
    TRY(notify_presentation_engine(submit_info.pending_present));
 
 #if VULKAN_WSI_LAYER_EXPERIMENTAL
-   if (present_timing_info != VK_NULL_HANDLE)
+   if (present_timing_info != nullptr)
    {
       auto *ext_present_timing = get_swapchain_extension<wsi::wsi_ext_present_timing>(true);
       TRY_LOG_CALL(ext_present_timing->add_presentation_entry(
