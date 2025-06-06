@@ -79,7 +79,7 @@ wsi_ext_present_timing::~wsi_ext_present_timing()
       m_query_pool = VK_NULL_HANDLE;
    }
 
-   for (auto semaphore : m_present_semaphore)
+   for (const auto &semaphore : m_present_semaphore)
    {
       if (semaphore != VK_NULL_HANDLE)
       {
@@ -179,21 +179,28 @@ VkResult wsi_ext_present_timing::present_timing_queue_set_size(size_t queue_size
    {
       return VK_NOT_READY;
    }
-
+   /* A  vector is reserved with the updated size and the outstanding entries
+    * are copied over. A vector resize is not used since the outstanding entries
+    * are not sequential.
+    */
    util::vector<swapchain_presentation_entry> presentation_timing(
-      util::allocator(m_allocator, VK_SYSTEM_ALLOCATION_SCOPE_DEVICE));
+      util::allocator(m_allocator, VK_SYSTEM_ALLOCATION_SCOPE_OBJECT));
    if (!presentation_timing.try_reserve(queue_size))
    {
       return VK_ERROR_OUT_OF_HOST_MEMORY;
    }
-   for (auto &iter : m_queue)
+   for (auto &slot : m_queue)
    {
-      if (iter.has_outstanding_stages())
+      if (slot.has_outstanding_stages())
       {
-         if (!presentation_timing.try_push_back(std::move(iter)))
-         {
-            return VK_ERROR_OUT_OF_HOST_MEMORY;
-         }
+         /* The memory is already reserved for the new vector
+          * and there are no possibilities for an exception
+          * at this point. An exception at this point will
+          * cause bad state as the vector has partially copied.
+          */
+         bool res = presentation_timing.try_push_back(std::move(slot));
+         assert(res);
+         UNUSED(res);
       }
    }
    m_queue.swap(presentation_timing);
@@ -204,9 +211,9 @@ size_t wsi_ext_present_timing::present_timing_get_num_outstanding_results()
 {
    size_t num_outstanding = 0;
 
-   for (auto &iter : m_queue)
+   for (auto &slot : m_queue)
    {
-      if (iter.has_outstanding_stages())
+      if (slot.has_outstanding_stages())
       {
          num_outstanding++;
       }
@@ -321,16 +328,16 @@ VkResult wsi_ext_present_timing::get_past_presentation_results(
       VkPastPresentationTimingEXT &timing = past_present_timing_properties->pPresentationTimings[i];
       for (auto slot = m_queue.begin(); slot != m_queue.end();)
       {
-         if ((!(*slot).copied) && (*slot).has_completed_stages())
+         if (!slot->copied && slot->has_completed_stages())
          {
             /* There will be only one slot in the queue per presentId. */
-            if ((timing.presentId == 0) || (timing.presentId == (*slot).m_present_id))
+            if ((timing.presentId == 0) || (timing.presentId == slot->m_present_id))
             {
-               assert(timing.presentStageCount >= (*slot).m_num_present_stages);
-               if (((*slot).populate(timing)))
+               assert(timing.presentStageCount >= slot->m_num_present_stages);
+               if (slot->populate(timing))
                {
                   count_results++;
-                  (*slot).copied = true;
+                  slot->copied = true;
                   timings_found = true;
                   if (timing.reportComplete)
                   {
