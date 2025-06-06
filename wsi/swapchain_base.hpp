@@ -41,15 +41,17 @@
 #include <util/ring_buffer.hpp>
 #include <util/timed_semaphore.hpp>
 #include <util/log.hpp>
+#include <util/macros.hpp>
+
 #include <layer/private_data.hpp>
 
 #include "surface_properties.hpp"
 #include "synchronization.hpp"
+#include "swapchain_image_creator.hpp"
 
 #include "extensions/frame_boundary.hpp"
 #include "extensions/wsi_extension.hpp"
-#include "swapchain_image_creator.hpp"
-#include "util/macros.hpp"
+#include "extensions/present_id.hpp"
 
 namespace wsi
 {
@@ -630,6 +632,12 @@ protected:
    void set_error_state(VkResult state)
    {
       m_error_state = state;
+
+      auto *ext = get_swapchain_extension<wsi_ext_present_id>();
+      if (ext)
+      {
+         ext->set_error_state(state);
+      }
    }
 
 private:

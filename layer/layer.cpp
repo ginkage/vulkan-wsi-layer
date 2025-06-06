@@ -384,14 +384,12 @@ VKAPI_ATTR VkResult create_device(VkPhysicalDevice physicalDevice, const VkDevic
          physical_device_swapchain_maintenance1_features->swapchainMaintenance1);
    }
 
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
    auto *present_wait_features = util::find_extension<VkPhysicalDevicePresentWaitFeaturesKHR>(
       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_WAIT_FEATURES_KHR, pCreateInfo->pNext);
    if (present_wait_features != nullptr)
    {
       device_data.set_present_wait_enabled(present_wait_features->presentWait);
    }
-#endif
 
    return VK_SUCCESS;
 }
@@ -492,14 +490,12 @@ wsi_layer_vkGetPhysicalDeviceFeatures2KHR(VkPhysicalDevice physical_device,
       swapchain_maintenance1_features->swapchainMaintenance1 = VK_FALSE;
    }
 
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
    auto *present_wait_features = util::find_extension<VkPhysicalDevicePresentWaitFeaturesKHR>(
       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_WAIT_FEATURES_KHR, pFeatures->pNext);
    if (present_wait_features != nullptr)
    {
       present_wait_features->presentWait = VK_FALSE;
    }
-#endif
 
    instance.disp.GetPhysicalDeviceFeatures2KHR(physical_device, pFeatures);
 
@@ -521,7 +517,6 @@ wsi_layer_vkGetPhysicalDeviceFeatures2KHR(VkPhysicalDevice physical_device,
 
    wsi::set_swapchain_maintenance1_state(physical_device, swapchain_maintenance1_features);
 
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
    if (present_wait_features != nullptr)
    {
       /* If there is an surface extension in use that is unsupported by the layer, defer to the ICD */
@@ -531,6 +526,7 @@ wsi_layer_vkGetPhysicalDeviceFeatures2KHR(VkPhysicalDevice physical_device,
       }
    }
 
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
    auto *present_timing_features = util::find_extension<VkPhysicalDevicePresentTimingFeaturesEXT>(
       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_TIMING_FEATURES_EXT, pFeatures->pNext);
    if (present_timing_features != nullptr)
@@ -614,12 +610,10 @@ wsi_layer_vkGetDeviceProcAddr(VkDevice device, const char *funcName) VWL_API_POS
    {
       GET_PROC_ADDR(vkReleaseSwapchainImagesEXT);
    }
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
    if (layer::device_private_data::get(device).is_device_extension_enabled(VK_KHR_PRESENT_WAIT_EXTENSION_NAME))
    {
       GET_PROC_ADDR(vkWaitForPresentKHR);
    }
-#endif
 
    return layer::device_private_data::get(device).disp.get_user_enabled_entrypoint(
       device, layer::device_private_data::get(device).instance_data.api_version, funcName);

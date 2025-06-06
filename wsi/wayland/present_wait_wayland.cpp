@@ -60,7 +60,12 @@ VkResult wsi_ext_present_wait_wayland::wait_for_update(uint64_t present_id, uint
 
    do
    {
-      if (m_present_id_ext.get_last_delivered_present_id() >= present_id)
+      VkResult error_state = m_present_id_ext.get_error_state();
+      if (error_state != VK_SUCCESS)
+      {
+         return error_state;
+      }
+      else if (m_present_id_ext.get_last_delivered_present_id() >= present_id)
       {
          return VK_SUCCESS;
       }

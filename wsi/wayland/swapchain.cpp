@@ -112,7 +112,6 @@ VkResult swapchain::add_required_extensions(VkDevice device, const VkSwapchainCr
       }
    }
 
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
    if (m_device_data.is_present_wait_enabled())
    {
       if (!add_swapchain_extension(
@@ -121,7 +120,6 @@ VkResult swapchain::add_required_extensions(VkDevice device, const VkSwapchainCr
          return VK_ERROR_OUT_OF_HOST_MEMORY;
       }
    }
-#endif
 
    if (m_device_data.should_layer_handle_frame_boundary_events())
    {
@@ -200,13 +198,11 @@ VkResult swapchain::init_platform(VkDevice device, const VkSwapchainCreateInfoKH
 #endif
                              && (m_present_mode != VK_PRESENT_MODE_MAILBOX_KHR);
 
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
    auto present_wait = get_swapchain_extension<wsi_ext_present_wait_wayland>();
    if (present_wait)
    {
       present_wait->set_wayland_dispatcher(m_display, m_buffer_queue);
    }
-#endif
 
    return VK_SUCCESS;
 }

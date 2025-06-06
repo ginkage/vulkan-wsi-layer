@@ -41,7 +41,12 @@ wsi_ext_present_wait::wsi_ext_present_wait(wsi_ext_present_id &present_id_extens
 
 VkResult wsi_ext_present_wait::wait_for_present_id(uint64_t present_id, uint64_t timeout_in_ns)
 {
-   if (m_present_id_ext.get_last_delivered_present_id() >= present_id)
+   VkResult error_state = m_present_id_ext.get_error_state();
+   if (error_state != VK_SUCCESS)
+   {
+      return error_state;
+   }
+   else if (m_present_id_ext.get_last_delivered_present_id() >= present_id)
    {
       return VK_SUCCESS;
    }

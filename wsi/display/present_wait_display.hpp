@@ -23,7 +23,7 @@
  */
 
 /**
- * @file present_wait_headless.hpp
+ * @file present_wait_display.hpp
  *
  * @brief Contains the base class declaration for the VK_KHR_present_wait extension.
  */
@@ -68,5 +68,5 @@ private:
    VkResult wait_for_update(uint64_t present_id, uint64_t timeout_in_ns) override;
 };
 
-} /* namespace wayland */
+} /* namespace display */
 } /* namespace wsi */

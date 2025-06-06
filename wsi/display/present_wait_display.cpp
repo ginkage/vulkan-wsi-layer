@@ -23,7 +23,7 @@
  */
 
 /**
- * @file present_wait_headless.cpp
+ * @file present_wait_display.cpp
  *
  * @brief Contains the base class declaration for the VK_KHR_present_wait extension.
  */
@@ -42,8 +42,8 @@ wsi_ext_present_wait_display::wsi_ext_present_wait_display(wsi_ext_present_id &p
 
 VkResult wsi_ext_present_wait_display::wait_for_update(uint64_t present_id, uint64_t timeout_in_ns)
 {
-   return m_present_id_ext.wait_for_present_id(present_id, timeout_in_ns) ? VK_SUCCESS : VK_TIMEOUT;
+   return m_present_id_ext.wait_for_present_id(present_id, timeout_in_ns);
 }
 
-} /* namespace wayland */
+} /* namespace display */
 } /* namespace wsi */

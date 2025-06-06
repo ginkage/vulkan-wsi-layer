@@ -370,7 +370,6 @@ private:
    EP(GetSwapchainTimeDomainPropertiesEXT, VK_EXT_PRESENT_TIMING_EXTENSION_NAME, API_VERSION_MAX, false, )   \
    EP(GetSwapchainTimingPropertiesEXT, VK_EXT_PRESENT_TIMING_EXTENSION_NAME, API_VERSION_MAX, false, )       \
    EP(SetSwapchainPresentTimingQueueSizeEXT, VK_EXT_PRESENT_TIMING_EXTENSION_NAME, API_VERSION_MAX, false, ) \
-   EP(WaitForPresentKHR, VK_KHR_PRESENT_WAIT_EXTENSION_NAME, API_VERSION_MAX, false, )                       \
    EP(GetPastPresentationTimingEXT, VK_EXT_PRESENT_TIMING_EXTENSION_NAME, API_VERSION_MAX, false, )
 #else
 #define DEVICE_ENTRYPOINTS_LIST_EXPERIMENTAL(EP)
@@ -463,6 +462,8 @@ private:
    EP(GetCalibratedTimestampsEXT, VK_EXT_CALIBRATED_TIMESTAMPS_EXTENSION_NAME, API_VERSION_MAX, false, )                    \
    /* VK_KHR_calibrated_timestamps */                                                                                       \
    EP(GetCalibratedTimestampsKHR, VK_KHR_CALIBRATED_TIMESTAMPS_EXTENSION_NAME, API_VERSION_MAX, false, )                    \
+   /* VK_KHR_present_wait */                                                                                                \
+   EP(WaitForPresentKHR, VK_KHR_PRESENT_WAIT_EXTENSION_NAME, API_VERSION_MAX, false, )                                      \
    /* Custom entrypoints */                                                                                                 \
    DEVICE_ENTRYPOINTS_LIST_EXPANSION(EP)
 
@@ -940,7 +941,6 @@ public:
     */
    bool is_swapchain_maintenance1_enabled() const;
 
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
    /**
     * @brief Set whether present wait feature is enabled.
     *
@@ -954,7 +954,6 @@ public:
     * @return true if supported, false otherwise.
     */
    bool is_present_wait_enabled();
-#endif
 
 private:
    /* Allow util::allocator to access the private constructor */
@@ -1013,13 +1012,13 @@ private:
     */
    bool swapchain_maintenance1_enabled{ false };
 
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
    /**
     * @brief Stores whether the device supports the present wait feature.
     *
     */
    bool present_wait_enabled{ false };
 
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
    /**
     * @brief Stores whether the device has enabled support for the present timing features.
     */

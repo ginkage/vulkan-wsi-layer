@@ -33,8 +33,6 @@
 
 #include "present_wait_api.hpp"
 
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
-
 /**
  * @brief Implements vkSetSwapchainPresentTimingQueueSizeEXT Vulkan entrypoint.
  */
@@ -55,5 +53,3 @@ wsi_layer_vkWaitForPresentKHR(VkDevice device, VkSwapchainKHR swapchain, uint64_
 
    return ext->wait_for_present_id(present_id, timeout);
 }
-
-#endif /* VULKAN_WSI_LAYER_EXPERIMENTAL */

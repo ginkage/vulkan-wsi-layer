@@ -101,7 +101,6 @@ VkResult swapchain::add_required_extensions(VkDevice device, const VkSwapchainCr
       }
    }
 
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
    if (m_device_data.is_present_wait_enabled())
    {
       if (!add_swapchain_extension(
@@ -110,7 +109,6 @@ VkResult swapchain::add_required_extensions(VkDevice device, const VkSwapchainCr
          return VK_ERROR_OUT_OF_HOST_MEMORY;
       }
    }
-#endif
 
    return VK_SUCCESS;
 }
