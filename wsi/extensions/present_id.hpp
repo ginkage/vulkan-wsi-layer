@@ -61,14 +61,31 @@ public:
    void mark_delivered(uint64_t present_id);
 
    /**
+    * @brief Sets the error state for all pending and future image requests.
+    *        Any error state other than VK_SUCCESS will cause all current and
+    *        future calls to vkWaitForPresentKHR to fail with @p error_code.
+    *
+    * @param error_code Vulkan error code
+    */
+   void set_error_state(VkResult error_code);
+
+   /**
+    * @brief Get the current error state
+    *
+    * @return VkResult error state
+    */
+   VkResult get_error_state();
+
+   /**
     * @brief Waits for present ID to be above or equal to the @p value.
     *
-    * @param value The value to wait for.
+    * @param present_id The value to wait for.
     * @param timeout_in_ns Timeout in nanoseconds.
-    * @return true The present ID value is equal or higher than @p value
-    * @return false The present ID is lower than @p value and timeout occured
+    * @return VK_SUCCESS The present ID value is equal or higher than @p present_id
+    *         and there were no errors during present.
+    *         Any other error code to indicate a timeout or error state for the present.
     */
-   bool wait_for_present_id(uint64_t present_id, uint64_t timeout_in_ns);
+   VkResult wait_for_present_id(uint64_t present_id, uint64_t timeout_in_ns);
 
    /**
     * @brief Get the last delivered present ID value.
@@ -83,12 +100,17 @@ private:
    std::atomic<uint64_t> m_last_delivered_id{ 0 };
 
    /**
-    * @brief Conditional variable that notifies whenever present ID value has changed.
+    * @brief Current error state of the swapchain
     */
-   std::condition_variable m_present_id_changed;
+   std::atomic<VkResult> m_error_state{ VK_SUCCESS };
 
    /**
-    * @brief Mutex for m_present_id_changed conditional variable.
+    * @brief Conditional variable that notifies whenever present state has changed.
+    */
+   std::condition_variable m_present_state_changed;
+
+   /**
+    * @brief Mutex for m_present_state_changed conditional variable.
     */
    std::mutex m_mutex;
 };

@@ -30,10 +30,6 @@
 #include <vulkan/vulkan.h>
 #include <util/macros.hpp>
 
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
-
 VWL_VKAPI_CALL(VkResult)
 wsi_layer_vkWaitForPresentKHR(VkDevice device, VkSwapchainKHR swapchain, uint64_t present_id,
                               uint64_t timeout) VWL_API_POST;
-
-#endif /* VULKAN_WSI_LAYER_EXPERIMENTAL */

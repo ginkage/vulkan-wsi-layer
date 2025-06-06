@@ -146,13 +146,13 @@ if(BUILD_WSI_WAYLAND)
       wsi/wayland/surface.cpp
       wsi/wayland/wl_helpers.cpp
       wsi/wayland/swapchain.cpp
+      wsi/wayland/present_wait_wayland.cpp
       wsi/swapchain_image_create_extensions/external_memory_extension.cpp)
 
    if(VULKAN_WSI_LAYER_EXPERIMENTAL)
       target_sources(wayland_wsi PRIVATE wsi/wayland/present_id_wayland.cpp)
       target_sources(wayland_wsi PRIVATE wsi/wayland/present_timing_handler.cpp)
       target_sources(wayland_wsi PRIVATE wsi/wayland/wp_presentation_feedback.cpp)
-      target_sources(wayland_wsi PRIVATE wsi/wayland/present_wait_wayland.cpp)
    endif()
 
    pkg_check_modules(WAYLAND_CLIENT REQUIRED wayland-client)
@@ -229,11 +229,11 @@ if(BUILD_WSI_HEADLESS)
    add_library(wsi_headless STATIC
       wsi/headless/surface_properties.cpp
       wsi/headless/surface.cpp
-      wsi/headless/swapchain.cpp)
+      wsi/headless/swapchain.cpp
+      wsi/headless/present_wait_headless.cpp)
 
    if(VULKAN_WSI_LAYER_EXPERIMENTAL)
       target_sources(wsi_headless PRIVATE wsi/headless/present_timing_handler.cpp)
-      target_sources(wsi_headless PRIVATE wsi/headless/present_wait_headless.cpp)
    endif()
 
    target_include_directories(wsi_headless PRIVATE
@@ -255,11 +255,8 @@ if (BUILD_WSI_DISPLAY)
       wsi/display/surface_properties.cpp
       wsi/display/swapchain.cpp
       wsi/display/surface.cpp
-      wsi/swapchain_image_create_extensions/external_memory_extension.cpp)
-
-   if(VULKAN_WSI_LAYER_EXPERIMENTAL)
-      target_sources(wsi_display PRIVATE wsi/display/present_wait_display.cpp)
-   endif()
+      wsi/swapchain_image_create_extensions/external_memory_extension.cpp
+      wsi/display/present_wait_display.cpp)
 
    pkg_check_modules(LIBDRM REQUIRED libdrm)
    message(STATUS "Using libdrm include directories: ${LIBDRM_INCLUDE_DIRS}")
@@ -295,6 +292,7 @@ add_library(${PROJECT_NAME} SHARED
    layer/surface_api.cpp
    layer/swapchain_api.cpp
    layer/swapchain_maintenance_api.cpp
+   layer/present_wait_api.cpp
    util/timed_semaphore.cpp
    util/custom_allocator.cpp
    util/extension_list.cpp
@@ -303,6 +301,7 @@ add_library(${PROJECT_NAME} SHARED
    wsi/external_memory.cpp
    wsi/extensions/image_compression_control.cpp
    wsi/extensions/present_id.cpp
+   wsi/extensions/present_wait.cpp
    wsi/extensions/frame_boundary.cpp
    wsi/extensions/wsi_extension.cpp
    wsi/extensions/swapchain_maintenance.cpp
@@ -315,11 +314,9 @@ add_library(${PROJECT_NAME} SHARED
 if (VULKAN_WSI_LAYER_EXPERIMENTAL)
    target_sources(${PROJECT_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/layer/present_timing_api.cpp)
    target_sources(${PROJECT_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/wsi/extensions/present_timing.cpp)
-   target_sources(${PROJECT_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/layer/present_wait_api.cpp)
-   target_sources(${PROJECT_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/wsi/extensions/present_wait.cpp)
    add_definitions("-DVULKAN_WSI_LAYER_EXPERIMENTAL=1")
 else()
-   list(APPEND JSON_COMMANDS COMMAND sed -Ei '/VK_EXT_present_timing|VK_KHR_present_wait|VK_EXT_present_mode_fifo_latest_ready/d' ${CMAKE_CURRENT_BINARY_DIR}/VkLayer_window_system_integration.json)
+   list(APPEND JSON_COMMANDS COMMAND sed -Ei '/VK_EXT_present_timing|VK_EXT_present_mode_fifo_latest_ready/d' ${CMAKE_CURRENT_BINARY_DIR}/VkLayer_window_system_integration.json)
    add_definitions("-DVULKAN_WSI_LAYER_EXPERIMENTAL=0")
 endif()
 

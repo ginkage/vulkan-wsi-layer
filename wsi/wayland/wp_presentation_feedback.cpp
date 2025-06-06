@@ -31,6 +31,12 @@ namespace wayland
 {
 
 VWL_CAPI_CALL(void)
+wp_presentation_feedback_sync_output(void *, struct wp_presentation_feedback *, struct wl_output *)
+{
+   /* Not relevant */
+}
+
+VWL_CAPI_CALL(void)
 wp_presentation_feedback_presented(void *data, struct wp_presentation_feedback *, uint32_t, uint32_t, uint32_t,
                                    uint32_t, uint32_t, uint32_t, uint32_t)
 {
@@ -42,10 +48,24 @@ wp_presentation_feedback_presented(void *data, struct wp_presentation_feedback *
    }
 }
 
+VWL_CAPI_CALL(void)
+wp_presentation_feedback_discarded(void *data, struct wp_presentation_feedback *)
+{
+   /* If the presentation request has been discarded, we still want to notify that the image has reached the compositor
+    * as otherwise, any functions waiting on the present ID will never be notified. There is nothing more we can do
+    * with this request as it has been discarded. */
+   auto feedback_obj = reinterpret_cast<wsi::wayland::presentation_feedback *>(data);
+   if (feedback_obj->ext() != nullptr)
+   {
+      feedback_obj->ext()->mark_delivered(feedback_obj->present_id());
+      feedback_obj->ext()->remove_from_pending_present_feedback_list(feedback_obj->present_id());
+   }
+}
+
 static const wp_presentation_feedback_listener presentation_listener = {
-   .sync_output = NULL,
+   .sync_output = wp_presentation_feedback_sync_output,
    .presented = wp_presentation_feedback_presented,
-   .discarded = NULL,
+   .discarded = wp_presentation_feedback_discarded,
 };
 
 VkResult register_wp_presentation_feedback_listener(struct wp_presentation_feedback *wp_presentation_feedback,

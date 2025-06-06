@@ -41,28 +41,66 @@ void wsi_ext_present_id::mark_delivered(uint64_t present_id)
       std::unique_lock lock(m_mutex);
       m_last_delivered_id.store(present_id, std::memory_order_relaxed);
    }
-   m_present_id_changed.notify_all();
+   m_present_state_changed.notify_all();
 }
 
-bool wsi_ext_present_id::wait_for_present_id(uint64_t present_id, uint64_t timeout_in_ns)
+void wsi_ext_present_id::set_error_state(VkResult error_code)
+{
+   std::unique_lock lock(m_mutex);
+   m_error_state.store(error_code);
+   m_present_state_changed.notify_all();
+}
+
+VkResult wsi_ext_present_id::get_error_state()
+{
+   return m_error_state;
+}
+
+VkResult wsi_ext_present_id::wait_for_present_id(uint64_t present_id, uint64_t timeout_in_ns)
 {
    if (m_last_delivered_id.load() >= present_id)
    {
       return VK_SUCCESS;
    }
 
-   std::unique_lock lock(m_mutex);
    try
    {
-      return m_present_id_changed.wait_for(lock, std::chrono::nanoseconds(timeout_in_ns),
-                                           [&]() { return m_last_delivered_id.load() >= present_id; });
+      std::unique_lock lock(m_mutex);
+      if (timeout_in_ns == UINT64_MAX)
+      {
+         /* Infinite wait */
+         m_present_state_changed.wait(
+            lock, [&]() { return (m_last_delivered_id.load() >= present_id || m_error_state.load() != VK_SUCCESS); });
+
+         /* The condition can either return when present_id condition has been reached or there has been an error */
+         return m_error_state;
+      }
+      else
+      {
+         /* Note: With very long timeouts it is possible that the clock in condition_variable will overflow.
+          * This will result in wait_for immediately returning with a failed result. Considering the
+          * duration needed to overflow the clock, we can probably ignore this. */
+         bool wait_success = m_present_state_changed.wait_for(lock, std::chrono::nanoseconds(timeout_in_ns), [&]() {
+            return (m_last_delivered_id.load() >= present_id || m_error_state.load() != VK_SUCCESS);
+         });
+
+         if (!wait_success)
+         {
+            /* We timed out */
+            return VK_TIMEOUT;
+         }
+
+         /* The condition can either return when present_id condition has been reached or there has been an error */
+         return m_error_state;
+      }
    }
    catch (const std::system_error &e)
    {
       WSI_LOG_ERROR("Failed to wait for conditional variable. Code: %d, message: %s\n", e.code().value(), e.what());
    }
 
-   return false;
+   /* The mutex lock has failed */
+   return VK_ERROR_SURFACE_LOST_KHR;
 }
 
 uint64_t wsi_ext_present_id::get_last_delivered_present_id() const

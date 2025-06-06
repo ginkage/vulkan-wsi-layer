@@ -26,6 +26,7 @@ implements the following extensions:
   * VK_KHR_shared_presentable_image
   * VK_EXT_image_compression_control_swapchain
   * VK_KHR_present_id
+  * VK_KHR_present_wait
   * VK_EXT_swapchain_maintenance1
 
 ## Building

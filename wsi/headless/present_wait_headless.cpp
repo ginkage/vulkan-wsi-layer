@@ -42,8 +42,8 @@ wsi_ext_present_wait_headless::wsi_ext_present_wait_headless(wsi_ext_present_id 
 
 VkResult wsi_ext_present_wait_headless::wait_for_update(uint64_t present_id, uint64_t timeout_in_ns)
 {
-   return m_present_id_ext.wait_for_present_id(present_id, timeout_in_ns) ? VK_SUCCESS : VK_TIMEOUT;
+   return m_present_id_ext.wait_for_present_id(present_id, timeout_in_ns);
 }
 
-} /* namespace wayland */
+} /* namespace headless */
 } /* namespace wsi */
