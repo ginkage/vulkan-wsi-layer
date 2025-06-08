@@ -33,14 +33,7 @@ namespace wsi
 {
 namespace headless
 {
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
-/*
- * Due to VK_PRESENT_MODE_FIFO_LATEST_READY_EXT
- */
 constexpr int PRESENT_MODES_NUM = 5;
-#else
-constexpr int PRESENT_MODES_NUM = 4;
-#endif
 
 class surface_properties : public wsi::surface_properties
 {
