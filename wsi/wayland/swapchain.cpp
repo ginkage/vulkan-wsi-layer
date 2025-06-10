@@ -192,11 +192,9 @@ VkResult swapchain::init_platform(VkDevice device, const VkSwapchainCreateInfoKH
     * been chosen by the application we don't initialize the page flip thread
     * so the present_image function can be called during vkQueuePresent.
     */
-   use_presentation_thread = WAYLAND_FIFO_PRESENTATION_THREAD_ENABLED
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
-                             && (m_present_mode != VK_PRESENT_MODE_FIFO_LATEST_READY_EXT)
-#endif
-                             && (m_present_mode != VK_PRESENT_MODE_MAILBOX_KHR);
+   use_presentation_thread = WAYLAND_FIFO_PRESENTATION_THREAD_ENABLED &&
+                             (m_present_mode != VK_PRESENT_MODE_FIFO_LATEST_READY_EXT) &&
+                             (m_present_mode != VK_PRESENT_MODE_MAILBOX_KHR);
 
    auto present_wait = get_swapchain_extension<wsi_ext_present_wait_wayland>();
    if (present_wait)

@@ -28,7 +28,8 @@ implements the following extensions:
   * VK_KHR_present_id
   * VK_KHR_present_wait
   * VK_EXT_swapchain_maintenance1
-
+  * VK_EXT_present_mode_fifo_latest_ready (For Headless and Wayland only)
+  
 ## Building
 
 ### Dependencies

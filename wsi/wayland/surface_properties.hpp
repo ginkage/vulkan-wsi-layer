@@ -32,14 +32,8 @@ namespace wsi
 {
 namespace wayland
 {
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
-/*
- * Due to VK_PRESENT_MODE_FIFO_LATEST_READY_EXT
- */
 constexpr int PRESENT_MODES_NUM = 3;
-#else
-constexpr int PRESENT_MODES_NUM = 2;
-#endif
+
 struct surface_format_properties_hasher
 {
    size_t operator()(const VkFormat &format) const

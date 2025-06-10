@@ -450,9 +450,9 @@ device_private_data::device_private_data(instance_private_data &inst_data, VkPhy
    , present_id_enabled { false }
    , swapchain_maintenance1_enabled{ false }
 #if VULKAN_WSI_LAYER_EXPERIMENTAL
-   , present_timing_enabled { true }
-   , present_mode_fifo_latest_ready_enabled { false }
+   , present_timing_enabled { true }   
 #endif
+    , present_mode_fifo_latest_ready_enabled { false }
 /* clang-format on */
 {
 }
@@ -644,11 +644,9 @@ bool device_private_data::is_present_wait_enabled()
    return present_wait_enabled;
 }
 
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
 void device_private_data::set_present_mode_fifo_latest_ready_enabled(bool enable)
 {
    present_mode_fifo_latest_ready_enabled = enable;
 }
-#endif
 
 } /* namespace layer */

@@ -56,25 +56,17 @@ void surface_properties::populate_present_mode_compatibilities()
       present_mode_compatibility{
          VK_PRESENT_MODE_SHARED_DEMAND_REFRESH_KHR, 1, { VK_PRESENT_MODE_SHARED_DEMAND_REFRESH_KHR } },
       present_mode_compatibility{
-         VK_PRESENT_MODE_SHARED_CONTINUOUS_REFRESH_KHR, 1, { VK_PRESENT_MODE_SHARED_CONTINUOUS_REFRESH_KHR } }
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
-      ,
+         VK_PRESENT_MODE_SHARED_CONTINUOUS_REFRESH_KHR, 1, { VK_PRESENT_MODE_SHARED_CONTINUOUS_REFRESH_KHR } },
       present_mode_compatibility{ VK_PRESENT_MODE_FIFO_LATEST_READY_EXT, 1, { VK_PRESENT_MODE_FIFO_LATEST_READY_EXT } }
-#endif
    };
    m_compatible_present_modes =
       compatible_present_modes<compatible_present_modes_list.size()>(compatible_present_modes_list);
 }
 
 surface_properties::surface_properties()
-   : m_supported_modes({
-      VK_PRESENT_MODE_FIFO_KHR, VK_PRESENT_MODE_FIFO_RELAXED_KHR, VK_PRESENT_MODE_SHARED_DEMAND_REFRESH_KHR,
-         VK_PRESENT_MODE_SHARED_CONTINUOUS_REFRESH_KHR
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
-         ,
-         VK_PRESENT_MODE_FIFO_LATEST_READY_EXT
-#endif
-   })
+   : m_supported_modes({ VK_PRESENT_MODE_FIFO_KHR, VK_PRESENT_MODE_FIFO_RELAXED_KHR,
+                         VK_PRESENT_MODE_SHARED_DEMAND_REFRESH_KHR, VK_PRESENT_MODE_SHARED_CONTINUOUS_REFRESH_KHR,
+                         VK_PRESENT_MODE_FIFO_LATEST_READY_EXT })
 {
    populate_present_mode_compatibilities();
 }

@@ -364,7 +364,6 @@ VKAPI_ATTR VkResult create_device(VkPhysicalDevice physicalDevice, const VkDevic
       device_data.set_present_id_feature_enabled(present_id_features->presentId);
    }
 
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
    const auto present_mode_fifo_latest_ready_features =
       util::find_extension<VkPhysicalDevicePresentModeFifoLatestReadyFeaturesEXT>(
          VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_MODE_FIFO_LATEST_READY_FEATURES_EXT, pCreateInfo->pNext);
@@ -373,7 +372,6 @@ VKAPI_ATTR VkResult create_device(VkPhysicalDevice physicalDevice, const VkDevic
       device_data.set_present_mode_fifo_latest_ready_enabled(
          present_mode_fifo_latest_ready_features->presentModeFifoLatestReady);
    }
-#endif
 
    auto *physical_device_swapchain_maintenance1_features =
       util::find_extension<VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT>(
@@ -542,6 +540,7 @@ wsi_layer_vkGetPhysicalDeviceFeatures2KHR(VkPhysicalDevice physical_device,
       present_timing_features->presentAtAbsoluteTime = VK_TRUE;
       present_timing_features->presentAtRelativeTime = VK_TRUE;
    }
+#endif
 
    auto *present_mode_fifo_latest_ready_features =
       util::find_extension<VkPhysicalDevicePresentModeFifoLatestReadyFeaturesEXT>(
@@ -550,7 +549,6 @@ wsi_layer_vkGetPhysicalDeviceFeatures2KHR(VkPhysicalDevice physical_device,
    {
       present_mode_fifo_latest_ready_features->presentModeFifoLatestReady = VK_TRUE;
    }
-#endif
 }
 
 #define GET_PROC_ADDR(func)      \
