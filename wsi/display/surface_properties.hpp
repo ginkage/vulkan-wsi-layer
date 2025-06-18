@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Arm Limited.
+ * Copyright (c) 2024-2025 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -67,7 +67,8 @@ public:
    bool is_surface_extension_enabled(const layer::instance_private_data &instance_data) override;
 
 #if VULKAN_WSI_LAYER_EXPERIMENTAL
-   void get_present_timing_surface_caps(VkPresentTimingSurfaceCapabilitiesEXT *present_timing_surface_caps) override;
+   VkResult get_present_timing_surface_caps(
+      VkPhysicalDevice physical_device, VkPresentTimingSurfaceCapabilitiesEXT *present_timing_surface_caps) override;
 #endif
 
    static surface_properties &get_instance();

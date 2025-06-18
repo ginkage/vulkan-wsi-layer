@@ -532,14 +532,16 @@ bool surface_properties::is_surface_extension_enabled(const layer::instance_priv
 }
 
 #if VULKAN_WSI_LAYER_EXPERIMENTAL
-void surface_properties::get_present_timing_surface_caps(
-   VkPresentTimingSurfaceCapabilitiesEXT *present_timing_surface_caps)
+VkResult surface_properties::get_present_timing_surface_caps(
+   VkPhysicalDevice, VkPresentTimingSurfaceCapabilitiesEXT *present_timing_surface_caps)
 {
    present_timing_surface_caps->presentTimingSupported = VK_FALSE;
    present_timing_surface_caps->presentAtAbsoluteTimeSupported = VK_FALSE;
    present_timing_surface_caps->presentAtRelativeTimeSupported = VK_FALSE;
    present_timing_surface_caps->presentStageQueries = 0;
    present_timing_surface_caps->presentStageTargets = 0;
+
+   return VK_SUCCESS;
 }
 #endif
 

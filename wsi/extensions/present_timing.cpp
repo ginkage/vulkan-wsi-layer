@@ -30,6 +30,7 @@
 #include <array>
 #include <cassert>
 #include <wsi/swapchain_base.hpp>
+#include <util/helpers.hpp>
 
 #include "present_timing.hpp"
 
@@ -550,6 +551,34 @@ bool swapchain_time_domains::add_time_domain(util::unique_ptr<swapchain_time_dom
       return m_time_domains.try_push_back(std::move(time_domain));
    }
    return false;
+}
+
+VkResult check_time_domain_support(VkPhysicalDevice physical_device, std::tuple<VkTimeDomainEXT, bool> *domains,
+                                   size_t domain_size)
+{
+   auto &instance_data = layer::instance_private_data::get(physical_device);
+
+   uint32_t supported_domains_count = 0;
+   TRY(instance_data.disp.GetPhysicalDeviceCalibrateableTimeDomainsKHR(physical_device, &supported_domains_count,
+                                                                       nullptr));
+
+   util::allocator allocator(instance_data.get_allocator(), VK_SYSTEM_ALLOCATION_SCOPE_OBJECT);
+   util::vector<VkTimeDomainEXT> supported_domains(allocator);
+   if (!supported_domains.try_resize(supported_domains_count))
+   {
+      return VK_ERROR_OUT_OF_HOST_MEMORY;
+   }
+
+   TRY(instance_data.disp.GetPhysicalDeviceCalibrateableTimeDomainsKHR(physical_device, &supported_domains_count,
+                                                                       supported_domains.data()));
+   for (size_t i = 0; i < domain_size; i++)
+   {
+      std::get<1>(domains[i]) =
+         std::find(supported_domains.begin(), supported_domains.begin() + supported_domains_count,
+                   std::get<0>(domains[i])) != (supported_domains.begin() + supported_domains_count);
+   }
+
+   return VK_SUCCESS;
 }
 
 } /* namespace wsi */

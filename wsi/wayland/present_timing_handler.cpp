@@ -29,7 +29,6 @@
  */
 
 #include "present_timing_handler.hpp"
-#include <array>
 
 wsi_ext_present_timing_wayland::wsi_ext_present_timing_wayland(const util::allocator &allocator, VkDevice device,
                                                                uint32_t num_images)
@@ -38,18 +37,40 @@ wsi_ext_present_timing_wayland::wsi_ext_present_timing_wayland(const util::alloc
 }
 
 util::unique_ptr<wsi_ext_present_timing_wayland> wsi_ext_present_timing_wayland::create(
-   VkTimeDomainKHR image_first_pixel_visible_time_domain, const util::allocator &allocator, VkDevice device,
-   uint32_t num_images)
+   VkDevice device, const util::allocator &allocator,
+   std::optional<VkTimeDomainKHR> image_first_pixel_visible_time_domain, uint32_t num_images)
 {
-   std::array<util::unique_ptr<wsi::vulkan_time_domain>, 2> time_domains_array = {
-      allocator.make_unique<wsi::vulkan_time_domain>(VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT,
-                                                     VK_TIME_DOMAIN_DEVICE_KHR),
-      allocator.make_unique<wsi::vulkan_time_domain>(VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_VISIBLE_BIT_EXT,
-                                                     image_first_pixel_visible_time_domain)
-   };
 
-   return wsi_ext_present_timing::create<wsi_ext_present_timing_wayland>(allocator, time_domains_array, device,
-                                                                         num_images);
+   util::vector<util::unique_ptr<wsi::vulkan_time_domain>> domains(allocator);
+   if (!domains.try_push_back(allocator.make_unique<wsi::vulkan_time_domain>(
+          VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT, VK_TIME_DOMAIN_DEVICE_KHR)))
+   {
+      return nullptr;
+   }
+
+   if (image_first_pixel_visible_time_domain.has_value())
+   {
+      std::tuple<VkTimeDomainEXT, bool> monotonic_query = { *image_first_pixel_visible_time_domain, false };
+
+      const layer::device_private_data &device_data = layer::device_private_data::get(device);
+      auto result = wsi::check_time_domain_support(device_data.physical_device, &monotonic_query, 1);
+      if (result != VK_SUCCESS)
+      {
+         return nullptr;
+      }
+
+      if (std::get<1>(monotonic_query))
+      {
+         if (!domains.try_push_back(allocator.make_unique<wsi::vulkan_time_domain>(
+                VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_VISIBLE_BIT_EXT, image_first_pixel_visible_time_domain.value())))
+         {
+            return nullptr;
+         }
+      }
+   }
+
+   return wsi_ext_present_timing::create<wsi_ext_present_timing_wayland>(allocator, domains.data(), domains.size(),
+                                                                         device, num_images);
 }
 
 VkResult wsi_ext_present_timing_wayland::get_swapchain_timing_properties(

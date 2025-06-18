@@ -30,7 +30,6 @@
 #if VULKAN_WSI_LAYER_EXPERIMENTAL
 #include <cstdint>
 #include <array>
-#include <optional>
 #include <algorithm>
 #include "present_timing_handler.hpp"
 #include "layer/private_data.hpp"
@@ -40,84 +39,68 @@ wsi_ext_present_timing_headless::wsi_ext_present_timing_headless(const util::all
    : wsi::wsi_ext_present_timing(allocator, device, num_images)
 {
 }
-/**
- * @brief Queries whether the driver supports the raw monotonic clock domain.
- *
- * This function invokes vkGetPhysicalDeviceCalibrateableTimeDomainsKHR twice:
- * 1. To query the count of supported time domains.
- * 2. To retrieve the list of supported time domains.
- *
- * @param device The Vulkan logical device whose physical device is queried. Must be valid.
- * @return A std::optional<bool> with:
- *         - true if VK_TIME_DOMAIN_CLOCK_MONOTONIC_RAW_KHR is supported.
- *         - false if VK_TIME_DOMAIN_CLOCK_MONOTONIC_RAW_KHR is not supported.
- *         - std::nullopt if the query fails (e.g., vkGetPhysicalDeviceCalibrateableTimeDomainsKHR
- *           returns an error or memory allocation fails).
- */
-static std::optional<bool> is_time_domain_clock_monotonic_raw_supported(const VkDevice &device)
-{
-   auto &dev_data = layer::device_private_data::get(device);
-   auto &physicalDevice = dev_data.physical_device;
-   auto &instance = dev_data.instance_data;
-
-   uint32_t supported_domains_count = 0;
-   VkResult result =
-      instance.disp.GetPhysicalDeviceCalibrateableTimeDomainsKHR(physicalDevice, &supported_domains_count, nullptr);
-   if (result != VK_SUCCESS)
-   {
-      return std::nullopt;
-   }
-
-   util::allocator allocator(instance.get_allocator(), VK_SYSTEM_ALLOCATION_SCOPE_OBJECT);
-   util::vector<VkTimeDomainEXT> supported_domains(allocator);
-   if (!supported_domains.try_resize(supported_domains_count))
-   {
-      return std::nullopt;
-   }
-
-   result = instance.disp.GetPhysicalDeviceCalibrateableTimeDomainsKHR(physicalDevice, &supported_domains_count,
-                                                                       supported_domains.data());
-   if (result != VK_SUCCESS)
-   {
-      return std::nullopt;
-   }
-
-   bool supported = std::find(supported_domains.begin(), supported_domains.end(),
-                              VK_TIME_DOMAIN_CLOCK_MONOTONIC_RAW_KHR) != supported_domains.end();
-   return supported;
-}
 
 util::unique_ptr<wsi_ext_present_timing_headless> wsi_ext_present_timing_headless::create(
    const VkDevice &device, const util::allocator &allocator, uint32_t num_images)
 {
+
+   auto &dev_data = layer::device_private_data::get(device);
+
    /*
     * Select the hardware raw monotonic clock domain (unaffected by NTP or adjtime adjustments)
     * when the driver supports it; otherwise use the standard monotonic clock.
     */
-   VkTimeDomainKHR monotonic_time_domain = VK_TIME_DOMAIN_CLOCK_MONOTONIC_RAW_KHR;
-
-   auto clock_monotonic_raw_support = is_time_domain_clock_monotonic_raw_supported(device);
-   if (!clock_monotonic_raw_support.has_value())
+   std::array monotonic_domains = {
+      std::tuple{ VK_TIME_DOMAIN_CLOCK_MONOTONIC_RAW_EXT, false },
+      std::tuple{ VK_TIME_DOMAIN_CLOCK_MONOTONIC_EXT, false },
+   };
+   auto result =
+      wsi::check_time_domain_support(dev_data.physical_device, monotonic_domains.data(), monotonic_domains.size());
+   if (result != VK_SUCCESS)
    {
       return nullptr;
    }
-   else if (clock_monotonic_raw_support.value() == false)
+
+   VkTimeDomainEXT monotonic_domain_to_use = VK_TIME_DOMAIN_CLOCK_MONOTONIC_RAW_EXT;
+   bool monotonic_time_domain_supported = false;
+   for (auto [domain, supported] : monotonic_domains)
    {
-      monotonic_time_domain = VK_TIME_DOMAIN_CLOCK_MONOTONIC_KHR;
+      monotonic_domain_to_use = domain;
+      if (supported)
+      {
+         monotonic_time_domain_supported = true;
+         break;
+      }
    }
 
-   std::array<util::unique_ptr<wsi::vulkan_time_domain>, 4> time_domains_array = {
-      allocator.make_unique<wsi::vulkan_time_domain>(VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT,
-                                                     VK_TIME_DOMAIN_DEVICE_KHR),
-      allocator.make_unique<wsi::vulkan_time_domain>(VK_PRESENT_STAGE_IMAGE_LATCHED_BIT_EXT, monotonic_time_domain),
-      allocator.make_unique<wsi::vulkan_time_domain>(VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_OUT_BIT_EXT,
-                                                     monotonic_time_domain),
-      allocator.make_unique<wsi::vulkan_time_domain>(VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_VISIBLE_BIT_EXT,
-                                                     monotonic_time_domain)
-   };
+   util::vector<util::unique_ptr<wsi::vulkan_time_domain>> domains(allocator);
+   if (!domains.try_push_back(allocator.make_unique<wsi::vulkan_time_domain>(
+          VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT, VK_TIME_DOMAIN_DEVICE_KHR)))
+   {
+      return nullptr;
+   }
 
-   return wsi_ext_present_timing::create<wsi_ext_present_timing_headless>(allocator, time_domains_array, device,
-                                                                          num_images);
+   if (monotonic_time_domain_supported)
+   {
+      if (!domains.try_push_back(allocator.make_unique<wsi::vulkan_time_domain>(VK_PRESENT_STAGE_IMAGE_LATCHED_BIT_EXT,
+                                                                                monotonic_domain_to_use)))
+      {
+         return nullptr;
+      }
+      if (!domains.try_push_back(allocator.make_unique<wsi::vulkan_time_domain>(
+             VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_OUT_BIT_EXT, monotonic_domain_to_use)))
+      {
+         return nullptr;
+      }
+      if (!domains.try_push_back(allocator.make_unique<wsi::vulkan_time_domain>(
+             VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_VISIBLE_BIT_EXT, monotonic_domain_to_use)))
+      {
+         return nullptr;
+      }
+   }
+
+   return wsi_ext_present_timing::create<wsi_ext_present_timing_headless>(allocator, domains.data(), domains.size(),
+                                                                          device, num_images);
 }
 
 VkResult wsi_ext_present_timing_headless::get_swapchain_timing_properties(
@@ -137,4 +120,5 @@ VkResult wsi_ext_present_timing_headless::get_swapchain_timing_properties(
 
    return VK_SUCCESS;
 }
+
 #endif

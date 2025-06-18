@@ -117,7 +117,8 @@ public:
    /**
     * @brief Get the present timing surface capabilities for the specific VkSurface type.
     */
-   virtual void get_present_timing_surface_caps(VkPresentTimingSurfaceCapabilitiesEXT *present_timing_surface_caps) = 0;
+   virtual VkResult get_present_timing_surface_caps(
+      VkPhysicalDevice physical_device, VkPresentTimingSurfaceCapabilitiesEXT *present_timing_surface_caps) = 0;
 #endif
 
 private:
