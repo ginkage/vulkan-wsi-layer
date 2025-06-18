@@ -40,6 +40,7 @@
 #include <iterator>
 #include <type_traits>
 #include <array>
+#include <tuple>
 #include <optional>
 #include <functional>
 
@@ -254,7 +255,7 @@ public:
     */
    bool add_time_domain(util::unique_ptr<swapchain_time_domain> time_domain);
 
-   /**
+   /*
     * @brief The calibrate returns a Vulkan time domain + an offset
     *
     * @param present_stage   The present stage to calibrate
@@ -292,15 +293,15 @@ public:
     */
    WSI_DEFINE_EXTENSION(VK_EXT_PRESENT_TIMING_EXTENSION_NAME);
 
-   template <typename T, std::size_t N>
+   template <typename T>
    static util::unique_ptr<T> create(const util::allocator &allocator,
-                                     std::array<util::unique_ptr<wsi::vulkan_time_domain>, N> &domains, VkDevice device,
-                                     uint32_t num_images)
+                                     util::unique_ptr<wsi::vulkan_time_domain> *domains, size_t domain_count,
+                                     VkDevice device, uint32_t num_images)
    {
       auto present_timing = allocator.make_unique<T>(allocator, device, num_images);
-      for (auto &domain : domains)
+      for (size_t i = 0; i < domain_count; i++)
       {
-         if (!present_timing->get_swapchain_time_domains().add_time_domain(std::move(domain)))
+         if (!present_timing->get_swapchain_time_domains().add_time_domain(std::move(domains[i])))
          {
             WSI_LOG_ERROR("Failed to add a time domain.");
             return nullptr;
@@ -494,6 +495,18 @@ private:
     */
    uint32_t get_num_available_results();
 };
+
+/**
+ * @brief Check if any of the time domains are supported
+ *
+ * @param physical_device Physical device used for the query
+ * @param domains Array of time domains. The boolean will be modified to indicate
+ *                whether the domain is supported.
+ * @param domain_size Size of the @p domains array
+ * @return Vulkan result code
+ */
+VkResult check_time_domain_support(VkPhysicalDevice physical_device, std::tuple<VkTimeDomainEXT, bool> *domains,
+                                   size_t domain_size);
 
 } /* namespace wsi */
 #endif

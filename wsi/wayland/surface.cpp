@@ -40,6 +40,11 @@ namespace wayland
 
 struct formats_vector
 {
+   formats_vector(util::vector<util::drm::drm_format_pair> *format_list)
+      : formats(format_list)
+   {
+   }
+
    util::vector<util::drm::drm_format_pair> *formats{ nullptr };
    bool is_out_of_memory{ false };
 };
@@ -87,66 +92,55 @@ wp_presentation_clock_id_impl(void *data, struct wp_presentation *wp_presentatio
 } // namespace
 
 /**
- * @brief Get supported formats and modifiers using the zwp_linux_dmabuf_v1 interface.
+ * @brief Listener for the zwp_linux_dmabuf_v1 interface
+ */
+const zwp_linux_dmabuf_v1_listener dma_buf_listener = {
+   .format = zwp_linux_dmabuf_v1_format_impl,
+   .modifier = zwp_linux_dmabuf_v1_modifier_impl,
+};
+
+/**
+ * @brief Register listener for the zwp_linux_dmabuf_v1 interface to query
+ *        supported formats and modifiers.
  *
- * @param[in]  display               The wl_display that is being used.
- * @param[in]  queue                 The wl_event_queue set for the @p dmabuf_interface
- * @param[in]  dmabuf_interface      Object of the zwp_linux_dmabuf_v1 interface.
- * @param[out] supported_formats     Vector which will contain the supported drm
- *                                   formats and their modifiers.
+ * @param[in]  dmabuf_interface            Object of the zwp_linux_dmabuf_v1 interface.
+ * @param[out] drm_supported_format_query  Vector which will be filled with the supported drm
+ *                                         formats and their modifiers.
  *
  * @retval VK_SUCCESS                    Indicates success.
  * @retval VK_ERROR_UNKNOWN              Indicates one of the Wayland functions failed.
- * @retval VK_ERROR_OUT_OF_DEVICE_MEMORY Indicates the host went out of memory.
  */
-static VkResult get_supported_formats_and_modifiers(wl_display *display, wl_event_queue *queue,
-                                                    zwp_linux_dmabuf_v1 *dmabuf_interface,
-                                                    util::vector<util::drm::drm_format_pair> &supported_formats)
+static VkResult register_supported_format_and_modifier_listener(zwp_linux_dmabuf_v1 *dmabuf_interface,
+                                                                formats_vector *drm_supported_format_query)
 {
-   formats_vector drm_supported_formats;
-   drm_supported_formats.formats = &supported_formats;
-
-   const zwp_linux_dmabuf_v1_listener dma_buf_listener = {
-      .format = zwp_linux_dmabuf_v1_format_impl,
-      .modifier = zwp_linux_dmabuf_v1_modifier_impl,
-   };
-   int res = zwp_linux_dmabuf_v1_add_listener(dmabuf_interface, &dma_buf_listener, &drm_supported_formats);
+   int res = zwp_linux_dmabuf_v1_add_listener(dmabuf_interface, &dma_buf_listener, drm_supported_format_query);
    if (res < 0)
    {
       WSI_LOG_ERROR("Failed to add zwp_linux_dmabuf_v1 listener.");
       return VK_ERROR_UNKNOWN;
    }
 
-   /* Get all modifier events. */
-   res = wl_display_roundtrip_queue(display, queue);
-   if (res < 0)
-   {
-      WSI_LOG_ERROR("Roundtrip failed.");
-      return VK_ERROR_UNKNOWN;
-   }
-
-   if (drm_supported_formats.is_out_of_memory)
-   {
-      WSI_LOG_ERROR("Host got out of memory.");
-      return VK_ERROR_OUT_OF_HOST_MEMORY;
-   }
-
    return VK_SUCCESS;
 }
 
 /**
- * @brief Set the clock_id using the wp_presentation interface
+ * @brief Listener for the wp_presentation interface
+ */
+const wp_presentation_listener presentation_listener = {
+   .clock_id = wp_presentation_clock_id_impl,
+};
+
+/**
+ * @brief Register listener for clock_id event for wp_presentation interface
+ *
+ * @param presentation_interface wp_presentation interface
+ * @param clockid Clock ID pointer that will get the assigned clock_id from the event
  *
  * @retval VK_SUCCESS                    Indicates success.
  * @retval VK_ERROR_UNKNOWN              Indicates one of the Wayland functions failed.
  */
-static VkResult get_clock_id(wl_display *display, wl_event_queue *queue, wp_presentation *presentation_interface,
-                             clockid_t *clockid)
+static VkResult register_clock_id_listener(wp_presentation *presentation_interface, clockid_t *clockid)
 {
-   const wp_presentation_listener presentation_listener = {
-      .clock_id = wp_presentation_clock_id_impl,
-   };
-
    int res = wp_presentation_add_listener(presentation_interface, &presentation_listener, clockid);
    if (res < 0)
    {
@@ -154,12 +148,6 @@ static VkResult get_clock_id(wl_display *display, wl_event_queue *queue, wp_pres
       return VK_ERROR_UNKNOWN;
    }
 
-   res = wl_display_roundtrip_queue(display, queue);
-   if (res < 0)
-   {
-      WSI_LOG_ERROR("Roundtrip failed.");
-      return VK_ERROR_UNKNOWN;
-   }
    return VK_SUCCESS;
 }
 
@@ -175,7 +163,7 @@ surface::surface(const init_parameters &params)
    , wayland_display(params.display)
    , surface_queue(nullptr)
    , wayland_surface(params.surf)
-   , supported_formats(params.allocator)
+   , m_supported_formats(params.allocator)
    , properties(this, params.allocator)
    , last_frame_callback(nullptr)
    , present_pending(false)
@@ -280,12 +268,6 @@ bool surface::init()
       return false;
    }
 
-   if (presentation_time_interface.get() == nullptr)
-   {
-      WSI_LOG_ERROR("Failed to obtain wp_presentation interface.");
-      return false;
-   }
-
    auto surface_sync_obj =
       zwp_linux_explicit_synchronization_v1_get_synchronization(explicit_sync_interface.get(), wayland_surface);
    if (surface_sync_obj == nullptr)
@@ -296,16 +278,33 @@ bool surface::init()
 
    surface_sync_interface.reset(surface_sync_obj);
 
-   VkResult vk_res = get_supported_formats_and_modifiers(wayland_display, surface_queue.get(), dmabuf_interface.get(),
-                                                         supported_formats);
+   VkResult vk_res = VK_SUCCESS;
+   if (presentation_time_interface.get() != nullptr)
+   {
+      vk_res = register_clock_id_listener(presentation_time_interface.get(), &m_clockid);
+      if (vk_res != VK_SUCCESS)
+      {
+         return false;
+      }
+   }
+
+   formats_vector drm_supported_formats(&m_supported_formats);
+   vk_res = register_supported_format_and_modifier_listener(dmabuf_interface.get(), &drm_supported_formats);
    if (vk_res != VK_SUCCESS)
    {
       return false;
    }
 
-   vk_res = get_clock_id(wayland_display, surface_queue.get(), presentation_time_interface.get(), &m_clockid);
-   if (vk_res != VK_SUCCESS)
+   res = wl_display_roundtrip_queue(wayland_display, surface_queue.get());
+   if (res < 0)
    {
+      WSI_LOG_ERROR("Roundtrip failed.");
+      return false;
+   }
+
+   if (drm_supported_formats.is_out_of_memory)
+   {
+      WSI_LOG_ERROR("Host got out of memory for DRM format query.");
       return false;
    }
 

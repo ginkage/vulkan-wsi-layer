@@ -132,7 +132,7 @@ public:
     */
    const util::vector<util::drm::drm_format_pair> &get_formats() const
    {
-      return supported_formats;
+      return m_supported_formats;
    }
 
    /**
@@ -184,7 +184,7 @@ private:
    /** The native Wayland surface */
    wl_surface *wayland_surface;
    /** A list of DRM formats supported by the Wayland compositor on this surface */
-   util::vector<util::drm::drm_format_pair> supported_formats;
+   util::vector<util::drm::drm_format_pair> m_supported_formats;
    /** Surface properties specific to the Wayland surface. */
    surface_properties properties;
 

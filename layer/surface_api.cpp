@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2017, 2019, 2021-2022, 2024 Arm Limited.
+ * Copyright (c) 2016-2017, 2019, 2021-2022, 2024-2025 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -23,7 +23,10 @@
  */
 
 #include <cassert>
+
 #include <wsi/wsi_factory.hpp>
+#include <util/helpers.hpp>
+
 #include "private_data.hpp"
 #include "surface_api.hpp"
 
@@ -68,7 +71,7 @@ wsi_layer_vkGetPhysicalDeviceSurfaceCapabilities2KHR(VkPhysicalDevice physicalDe
          VK_STRUCTURE_TYPE_PRESENT_TIMING_SURFACE_CAPABILITIES_EXT, pSurfaceCapabilities);
       if (surf_caps_ext != nullptr)
       {
-         props->get_present_timing_surface_caps(surf_caps_ext);
+         TRY_LOG_CALL(props->get_present_timing_surface_caps(physicalDevice, surf_caps_ext));
       }
 #endif
 

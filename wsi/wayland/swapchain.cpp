@@ -133,20 +133,22 @@ VkResult swapchain::add_required_extensions(VkDevice device, const VkSwapchainCr
    bool swapchain_support_enabled = swapchain_create_info->flags & VK_SWAPCHAIN_CREATE_PRESENT_TIMING_BIT_EXT;
    if (swapchain_support_enabled)
    {
-      /*
-       * Default to a raw hardware-based time that is not subject to NTP adjustments or
-       * the incremental adjustments performed by adjtime(3)
-       */
-      VkTimeDomainKHR image_first_pixel_visible_time_domain = VK_TIME_DOMAIN_CLOCK_MONOTONIC_RAW_KHR;
-
-      if (m_wsi_surface->clockid() == CLOCK_MONOTONIC)
+      std::optional<VkTimeDomainKHR> image_first_pixel_visible_time_domain;
+      if (m_wsi_surface->get_presentation_time_interface() != nullptr)
       {
-         image_first_pixel_visible_time_domain = VK_TIME_DOMAIN_CLOCK_MONOTONIC_KHR;
+         switch (m_wsi_surface->clockid())
+         {
+         case CLOCK_MONOTONIC:
+            image_first_pixel_visible_time_domain = VK_TIME_DOMAIN_CLOCK_MONOTONIC_KHR;
+            break;
+         case CLOCK_MONOTONIC_RAW:
+            image_first_pixel_visible_time_domain = VK_TIME_DOMAIN_CLOCK_MONOTONIC_RAW_KHR;
+            break;
+         }
       }
-      if (!add_swapchain_extension(
 
-             wsi_ext_present_timing_wayland::create(image_first_pixel_visible_time_domain, m_allocator, m_device,
-                                                    swapchain_create_info->minImageCount)))
+      if (!add_swapchain_extension(wsi_ext_present_timing_wayland::create(
+             m_device, m_allocator, image_first_pixel_visible_time_domain, swapchain_create_info->minImageCount)))
       {
          return VK_ERROR_OUT_OF_HOST_MEMORY;
       }

@@ -32,6 +32,7 @@
 #if VULKAN_WSI_LAYER_EXPERIMENTAL
 
 #include <wsi/extensions/present_timing.hpp>
+#include <optional>
 
 /**
  * @brief Present timing extension class
@@ -41,9 +42,9 @@
 class wsi_ext_present_timing_wayland : public wsi::wsi_ext_present_timing
 {
 public:
-   static util::unique_ptr<wsi_ext_present_timing_wayland> create(VkTimeDomainKHR image_first_pixel_visible_time_domain,
-                                                                  const util::allocator &allocator, VkDevice device,
-                                                                  uint32_t num_images);
+   static util::unique_ptr<wsi_ext_present_timing_wayland> create(
+      VkDevice device, const util::allocator &allocator,
+      std::optional<VkTimeDomainKHR> image_first_pixel_visible_time_domain, uint32_t num_images);
 
    VkResult get_swapchain_timing_properties(uint64_t &timing_properties_counter,
                                             VkSwapchainTimingPropertiesEXT &timing_properties) override;

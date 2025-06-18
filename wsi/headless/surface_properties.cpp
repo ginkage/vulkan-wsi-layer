@@ -39,6 +39,10 @@
 #include "surface.hpp"
 #include "util/macros.hpp"
 
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+#include "present_timing_handler.hpp"
+#endif
+
 namespace wsi
 {
 namespace headless
@@ -216,18 +220,34 @@ bool surface_properties::is_compatible_present_modes(VkPresentModeKHR present_mo
 }
 
 #if VULKAN_WSI_LAYER_EXPERIMENTAL
-void surface_properties::get_present_timing_surface_caps(
-   VkPresentTimingSurfaceCapabilitiesEXT *present_timing_surface_caps)
+VkResult surface_properties::get_present_timing_surface_caps(
+   VkPhysicalDevice physical_device, VkPresentTimingSurfaceCapabilitiesEXT *present_timing_surface_caps)
 {
    present_timing_surface_caps->presentTimingSupported = VK_TRUE;
    present_timing_surface_caps->presentAtAbsoluteTimeSupported = VK_TRUE;
    present_timing_surface_caps->presentAtRelativeTimeSupported = VK_TRUE;
+
+   VkPresentStageFlagsEXT monotonic_present_stages_supported = 0;
+   std::array monotonic_domains = {
+      std::tuple{ VK_TIME_DOMAIN_CLOCK_MONOTONIC_RAW_EXT, false },
+      std::tuple{ VK_TIME_DOMAIN_CLOCK_MONOTONIC_EXT, false },
+   };
+   TRY(wsi::check_time_domain_support(physical_device, monotonic_domains.data(), monotonic_domains.size()));
+
+   auto it_monotonic_supported = std::find_if(monotonic_domains.begin(), monotonic_domains.end(),
+                                              [](auto &domain) { return std::get<1>(domain); });
+   if (it_monotonic_supported != monotonic_domains.end())
+   {
+      monotonic_present_stages_supported |= VK_PRESENT_STAGE_IMAGE_LATCHED_BIT_EXT |
+                                            VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_OUT_BIT_EXT |
+                                            VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_VISIBLE_BIT_EXT;
+   }
+
    present_timing_surface_caps->presentStageQueries =
-      VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT | VK_PRESENT_STAGE_IMAGE_LATCHED_BIT_EXT |
-      VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_OUT_BIT_EXT | VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_VISIBLE_BIT_EXT;
-   present_timing_surface_caps->presentStageTargets = VK_PRESENT_STAGE_IMAGE_LATCHED_BIT_EXT |
-                                                      VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_OUT_BIT_EXT |
-                                                      VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_VISIBLE_BIT_EXT;
+      VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT | monotonic_present_stages_supported;
+   present_timing_surface_caps->presentStageTargets = monotonic_present_stages_supported;
+
+   return VK_SUCCESS;
 }
 #endif
 

@@ -46,6 +46,10 @@
 #include "util/macros.hpp"
 #include "util/helpers.hpp"
 
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+#include "present_timing_handler.hpp"
+#endif
+
 namespace wsi
 {
 namespace wayland
@@ -261,6 +265,7 @@ VkResult surface_properties::get_required_device_extensions(util::extension_list
       VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME,
       VK_KHR_EXTERNAL_FENCE_EXTENSION_NAME,
       VK_KHR_EXTERNAL_FENCE_FD_EXTENSION_NAME,
+      VK_KHR_CALIBRATED_TIMESTAMPS_EXTENSION_NAME,
    };
    return extension_list.add(required_device_extensions.data(), required_device_extensions.size());
 }
@@ -419,15 +424,47 @@ bool surface_properties::is_compatible_present_modes(VkPresentModeKHR present_mo
 }
 
 #if VULKAN_WSI_LAYER_EXPERIMENTAL
-void surface_properties::get_present_timing_surface_caps(
-   VkPresentTimingSurfaceCapabilitiesEXT *present_timing_surface_caps)
+VkResult surface_properties::get_present_timing_surface_caps(
+   VkPhysicalDevice physical_device, VkPresentTimingSurfaceCapabilitiesEXT *present_timing_surface_caps)
 {
    present_timing_surface_caps->presentTimingSupported = VK_TRUE;
    present_timing_surface_caps->presentAtAbsoluteTimeSupported = VK_FALSE;
    present_timing_surface_caps->presentAtRelativeTimeSupported = VK_FALSE;
-   present_timing_surface_caps->presentStageQueries =
-      VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT | VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_VISIBLE_BIT_EXT;
+   present_timing_surface_caps->presentStageQueries = VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT;
    present_timing_surface_caps->presentStageTargets = 0;
+
+   if (specific_surface->get_presentation_time_interface() != nullptr)
+   {
+      bool clock_domain_supported = true;
+      VkTimeDomainKHR image_first_pixel_visible_time_domain;
+
+      /* Check if we can support any of the reported time domains */
+      switch (specific_surface->clockid())
+      {
+      case CLOCK_MONOTONIC:
+         image_first_pixel_visible_time_domain = VK_TIME_DOMAIN_CLOCK_MONOTONIC_KHR;
+         break;
+      case CLOCK_MONOTONIC_RAW:
+         image_first_pixel_visible_time_domain = VK_TIME_DOMAIN_CLOCK_MONOTONIC_RAW_KHR;
+         break;
+      default:
+         clock_domain_supported = false;
+         break;
+      }
+
+      if (clock_domain_supported)
+      {
+         std::tuple<VkTimeDomainEXT, bool> monotonic_query = { image_first_pixel_visible_time_domain, false };
+         TRY(wsi::check_time_domain_support(physical_device, &monotonic_query, 1));
+
+         if (std::get<1>(monotonic_query))
+         {
+            present_timing_surface_caps->presentStageQueries |= VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_VISIBLE_BIT_EXT;
+         }
+      }
+   }
+
+   return VK_SUCCESS;
 }
 #endif
 
