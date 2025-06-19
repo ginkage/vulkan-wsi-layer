@@ -420,7 +420,7 @@ VkResult swapchain_base::acquire_next_image(uint64_t timeout, VkSemaphore semaph
 {
    std::unique_lock<std::mutex> acquire_lock(m_image_acquire_lock);
 
-   TRY(wait_for_free_buffer(timeout));
+   TRY(wait_and_get_free_buffer(timeout));
    if (error_has_occured())
    {
       return get_error_state();
@@ -700,28 +700,44 @@ void swapchain_base::deprecate(VkSwapchainKHR descendant)
 void swapchain_base::wait_for_pending_buffers()
 {
    std::unique_lock<std::mutex> acquire_lock(m_image_acquire_lock);
-   int wait;
-   int acquired_images = 0;
    std::unique_lock<std::recursive_mutex> image_status_lock(m_image_status_mutex);
 
+   uint64_t non_pending_images = 0;
    for (auto &img : m_swapchain_images)
    {
-      if (img.status == swapchain_image::ACQUIRED)
+      /*
+       * We don't want wait_and_get_free_buffer to be called when
+       * there are free images, because it will consume the semaphore
+       * and then subsequent calls might block if the semaphore value
+       * has reached to zero.
+       */
+      if ((img.status == swapchain_image::ACQUIRED) || (img.status == swapchain_image::FREE) ||
+          (img.status == swapchain_image::INVALID))
       {
-         acquired_images++;
+         /* If the image is acquired or free, it is not pending. */
+         non_pending_images++;
       }
    }
 
-   /* Waiting for free images waits for both free and pending. One pending image may be presented and acquired by a
-    * compositor. The WSI backend may not necessarily know which pending image is presented to change its state. It may
-    * be impossible to wait for that one presented image. */
-   wait = static_cast<int>(m_swapchain_images.size()) - acquired_images - 1;
+   /*
+    * One pending image may be presented and acquired by a
+    * compositor. The WSI backend may not necessarily know which
+    * pending image is presented to change its state. It may
+    * be impossible to wait for that one presented image.
+    */
+   int wait = static_cast<int>(m_swapchain_images.size() - non_pending_images - 1);
    image_status_lock.unlock();
 
    while (wait > 0)
    {
-      /* Take down one free image semaphore. */
-      wait_for_free_buffer(UINT64_MAX);
+      /*
+       * Take down one free image semaphore.
+       *
+       * In backends which unpresent an image only after a new one
+       * has been submitted for presentation wait_and_get_free_buffer
+       * could hang if the semaphore has a zero value  and the swapchain has been deprecated.
+       */
+      wait_and_get_free_buffer(UINT64_MAX);
       --wait;
    }
 }
@@ -736,11 +752,10 @@ void swapchain_base::clear_descendant()
    m_descendant = VK_NULL_HANDLE;
 }
 
-VkResult swapchain_base::wait_for_free_buffer(uint64_t timeout)
+VkResult swapchain_base::wait_and_get_free_buffer(uint64_t timeout)
 {
-   VkResult retval;
    /* first see if a buffer is already marked as free */
-   retval = m_free_image_semaphore.wait(0);
+   VkResult retval = m_free_image_semaphore.wait(0);
    if (retval == VK_NOT_READY)
    {
       /* if not, we still have work to do even if timeout==0 -
