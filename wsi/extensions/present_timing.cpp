@@ -55,6 +55,7 @@ wsi_ext_present_timing::wsi_ext_present_timing(const util::allocator &allocator,
    , m_query_pool(VK_NULL_HANDLE)
    , m_command_pool(VK_NULL_HANDLE)
    , m_command_buffer(allocator)
+   , m_queue_mutex()
    , m_queue(allocator)
    , m_num_images(num_images)
    , m_present_semaphore(allocator)
@@ -146,7 +147,7 @@ VkResult wsi_ext_present_timing::get_queue_end_timing_to_queue(uint32_t image_in
 {
    for (auto &slot : m_queue)
    {
-      if ((slot.m_image_index == image_index) && slot.is_pending(VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT))
+      if ((slot.m_image_index == image_index) && !slot.is_complete(VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT))
       {
          uint64_t time;
          auto stage_timing_optional = slot.get_stage_timing(VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT);
@@ -154,6 +155,7 @@ VkResult wsi_ext_present_timing::get_queue_end_timing_to_queue(uint32_t image_in
          TRY(device_data.disp.GetQueryPoolResults(m_device, m_query_pool, image_index, 1, sizeof(time), &time, 0,
                                                   VK_QUERY_RESULT_64_BIT));
          stage_timing_optional->get().m_time.store(time);
+         stage_timing_optional->get().m_set.store(true, std::memory_order_release);
          /* For an image index, there can only be one entry in the internal queue with pending results. */
          break;
       }
@@ -176,6 +178,7 @@ VkResult wsi_ext_present_timing::query_present_queue_end_timings()
 
 VkResult wsi_ext_present_timing::present_timing_queue_set_size(size_t queue_size)
 {
+   const std::lock_guard<std::mutex> lock(m_queue_mutex);
    if (present_timing_get_num_outstanding_results() > queue_size)
    {
       return VK_NOT_READY;
@@ -242,6 +245,8 @@ VkResult wsi_ext_present_timing::add_presentation_entry(const layer::device_priv
                                                         uint64_t present_id, uint32_t image_index,
                                                         VkPresentStageFlagsEXT present_stage_queries)
 {
+   const std::lock_guard<std::mutex> lock(m_queue_mutex);
+
    if (present_stage_queries & VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT)
    {
       /* Get results for the previous presentation. The queue end stage of
@@ -249,11 +254,13 @@ VkResult wsi_ext_present_timing::add_presentation_entry(const layer::device_priv
        * finished when the same image is going to be presented again. */
       TRY_LOG_CALL(get_queue_end_timing_to_queue(image_index));
    }
+
    /* Keep the internal queue to the limit defined by the application. */
    if (m_queue.size() == m_queue.capacity())
    {
       return VK_ERROR_PRESENT_TIMING_QUEUE_FULL_EXT;
    }
+
    wsi::swapchain_presentation_entry presentation_entry(present_stage_queries, present_id, image_index);
    if (!m_queue.try_push_back(std::move(presentation_entry)))
    {
@@ -292,77 +299,80 @@ uint32_t wsi_ext_present_timing::get_num_available_results()
 VkResult wsi_ext_present_timing::get_past_presentation_results(
    VkPastPresentationTimingPropertiesEXT *past_present_timing_properties)
 {
+   const std::lock_guard<std::mutex> lock(m_queue_mutex);
+
    assert(past_present_timing_properties != nullptr);
    /* Get any outstanding timings in the query pool to the internal queue. */
    TRY_LOG_CALL(query_present_queue_end_timings());
-   if ((past_present_timing_properties->presentationTimingCount == 0) ||
-       (past_present_timing_properties->pPresentationTimings == nullptr))
+   if (past_present_timing_properties->pPresentationTimings == nullptr)
    {
       past_present_timing_properties->presentationTimingCount = get_num_available_results();
       return VK_SUCCESS;
    }
-   /* When application request entries with multiple zero present ids or combination of zero and
-    * non-zero present ids, this field helps avoiding the same slot getting copied to the results.
+
+   VkPastPresentationTimingEXT *timings = past_present_timing_properties->pPresentationTimings;
+
+   bool seen_zero = false;
+   size_t last_zero_entry = 0;
+   uint64_t in = 0;
+   uint64_t out = 0;
+   uint64_t removed_entries = 0;
+   /*
+    * Single forward pass over the caller-supplied pPresentationTimings array:
+    *
+    * Locate the first matching presentation slot in `m_queue`.
+    *
+    * When a matching slot exists and at least one stage has available timings,
+    * copy its timestamps into the current entry.  Valid results are compacted
+    * in-place by writing to the `out` cursor while `in` continues to scan,
+    * so gaps are skipped without repeated shifting.
     */
-   for (auto &slot : m_queue)
+   while (in < past_present_timing_properties->presentationTimingCount)
    {
-      slot.copied = false;
-   }
-   /* When application request entries with presentIds in an order where there are presentId=0
-    * requested earlier than presentId!=0, then the incoming pointer get filled with first available
-    * slots when handling the zero presentIds. Later when non-zero presentIds are handled, if the
-    * matching slot was already copied to the output, then no slot will be copied for that.
-    * This creates a situation where a fewer results being responded for that particular request
-    * compared to the amount that would have achieved with handling non-zeros first and zeros later. */
-   uint32_t count_results = 0;
-   for (uint32_t i = 0; i < past_present_timing_properties->presentationTimingCount; ++i)
-   {
-      bool timings_found = false;
-      if (count_results == past_present_timing_properties->presentationTimingCount)
+      const uint64_t present_id = timings[in].presentId;
+      /*
+       * If presentId != 0, match the exact ID.
+       * If presentId == 0, pick the next unused zero-ID slot appearing
+       * after `last_zero_entry`, ensuring we never report the same slot twice.
+       */
+      auto slot = std::find_if(m_queue.begin(), m_queue.end(), [&](const swapchain_presentation_entry &e) {
+         bool zero_extra_cond =
+            (present_id == 0 && seen_zero) ? (&e - m_queue.data()) > static_cast<ptrdiff_t>(last_zero_entry) : true;
+         return (e.m_present_id == present_id) && zero_extra_cond;
+      });
+
+      if (slot != m_queue.end() && slot->has_completed_stages())
       {
-         if (count_results < get_num_available_results())
+         if (present_id == 0)
          {
-            return VK_INCOMPLETE;
+            seen_zero = true;
+            last_zero_entry = std::distance(m_queue.begin(), slot);
          }
-         return VK_SUCCESS;
-      }
-      VkPastPresentationTimingEXT &timing = past_present_timing_properties->pPresentationTimings[i];
-      for (auto slot = m_queue.begin(); slot != m_queue.end();)
-      {
-         if (!slot->copied && slot->has_completed_stages())
+
+         slot->populate(timings[in]);
+
+         if (in != out)
          {
-            /* There will be only one slot in the queue per presentId. */
-            if ((timing.presentId == 0) || (timing.presentId == slot->m_present_id))
-            {
-               assert(timing.presentStageCount >= slot->m_num_present_stages);
-               if (slot->populate(timing))
-               {
-                  count_results++;
-                  slot->copied = true;
-                  timings_found = true;
-                  if (timing.reportComplete)
-                  {
-                     slot = m_queue.erase(slot);
-                     continue;
-                  }
-               }
-            }
+            timings[out] = timings[in];
          }
-         slot++;
+
+         ++out;
+
+         if (timings[in].reportComplete)
+         {
+            m_queue.erase(slot);
+            removed_entries++;
+         }
       }
-      /* When the timings are not filled, reset the count to zero. */
-      if (!timings_found)
-      {
-         timing.presentStageCount = 0;
-      }
+
+      ++in;
    }
-   if ((count_results < past_present_timing_properties->presentationTimingCount) ||
-       (count_results < get_num_available_results()))
-   {
-      past_present_timing_properties->presentationTimingCount = count_results;
-      return VK_INCOMPLETE;
-   }
-   return VK_SUCCESS;
+
+   past_present_timing_properties->presentationTimingCount = out;
+
+   const bool incomplete = (out < in) || (out < (get_num_available_results() + removed_entries));
+
+   return incomplete ? VK_INCOMPLETE : VK_SUCCESS;
 }
 
 swapchain_presentation_entry::swapchain_presentation_entry(VkPresentStageFlagsEXT present_stage_queries,
@@ -394,38 +404,22 @@ swapchain_presentation_entry::swapchain_presentation_entry(VkPresentStageFlagsEX
    }
 }
 
-bool swapchain_presentation_entry::is_pending(VkPresentStageFlagBitsEXT stage)
-{
-   auto stage_timing_optional = get_stage_timing(stage);
-   if (stage_timing_optional.has_value() && (stage_timing_optional->get().m_time.load() == 0))
-   {
-      return true;
-   }
-   return false;
-}
-
 bool swapchain_presentation_entry::is_complete(VkPresentStageFlagBitsEXT stage)
 {
    auto stage_timing_optional = get_stage_timing(stage);
-   if (stage_timing_optional.has_value() && (stage_timing_optional->get().m_time.load() != 0))
-   {
-      return true;
-   }
-   return false;
+   return stage_timing_optional.has_value() ? stage_timing_optional->get().m_set.load(std::memory_order_relaxed) : true;
 }
 
 bool swapchain_presentation_entry::has_outstanding_stages()
 {
-   /* Check if any of the requested stages is pending to be completed. */
-   return (is_pending(VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT) ||
-           is_pending(VK_PRESENT_STAGE_IMAGE_LATCHED_BIT_EXT) ||
-           is_pending(VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_OUT_BIT_EXT) ||
-           is_pending(VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_VISIBLE_BIT_EXT));
+   return (!is_complete(VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT) ||
+           !is_complete(VK_PRESENT_STAGE_IMAGE_LATCHED_BIT_EXT) ||
+           !is_complete(VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_OUT_BIT_EXT) ||
+           !is_complete(VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_VISIBLE_BIT_EXT));
 }
 
 bool swapchain_presentation_entry::has_completed_stages()
 {
-   /* Check if any of the requested stages is complete. */
    return (is_complete(VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT) ||
            is_complete(VK_PRESENT_STAGE_IMAGE_LATCHED_BIT_EXT) ||
            is_complete(VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_OUT_BIT_EXT) ||
@@ -467,7 +461,7 @@ std::optional<std::reference_wrapper<swapchain_presentation_timing>> swapchain_p
    return std::nullopt;
 }
 
-bool swapchain_presentation_entry::populate(VkPastPresentationTimingEXT &timing)
+void swapchain_presentation_entry::populate(VkPastPresentationTimingEXT &timing)
 {
    uint64_t stage_index = 0;
    for (const auto &stage : g_present_stages)
@@ -477,27 +471,22 @@ bool swapchain_presentation_entry::populate(VkPastPresentationTimingEXT &timing)
       {
          continue;
       }
-      uint64_t time = stage_timing_optional->get().m_time.load();
-      if (time > 0)
+
+      if (stage_timing_optional->get().m_set.load(std::memory_order_acquire))
       {
          timing.timeDomainId = stage_timing_optional->get().m_timedomain_id;
          timing.pPresentStages[stage_index].stage = stage;
-         timing.pPresentStages[stage_index++].time = time;
+         timing.pPresentStages[stage_index++].time =
+            stage_timing_optional->get().m_time.load(std::memory_order_relaxed);
       }
    }
-   timing.presentStageCount = stage_index;
+
    /* If atleast one entry is made to the timings, update the other fields. */
    if (stage_index != 0)
    {
-      /* and all requested stages in the entry had been responded,
-       * set the report complete to true. */
       timing.presentId = m_present_id;
-      /* All the available stages are now populated. If there are no more outstanding stages,
-       * then the report is complete and the slot can be freed. */
       timing.reportComplete = !has_outstanding_stages();
-      return true;
    }
-   return false;
 }
 
 VkResult swapchain_time_domains::calibrate(VkPresentStageFlagBitsEXT present_stage,
