@@ -147,7 +147,7 @@ VkResult wsi_ext_present_timing::get_queue_end_timing_to_queue(uint32_t image_in
 {
    for (auto &slot : m_queue)
    {
-      if ((slot.m_image_index == image_index) && !slot.is_complete(VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT))
+      if ((slot.m_image_index == image_index) && slot.is_pending(VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT))
       {
          uint64_t time;
          auto stage_timing_optional = slot.get_stage_timing(VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT);
@@ -407,15 +407,23 @@ swapchain_presentation_entry::swapchain_presentation_entry(VkPresentStageFlagsEX
 bool swapchain_presentation_entry::is_complete(VkPresentStageFlagBitsEXT stage)
 {
    auto stage_timing_optional = get_stage_timing(stage);
-   return stage_timing_optional.has_value() ? stage_timing_optional->get().m_set.load(std::memory_order_relaxed) : true;
+   return stage_timing_optional.has_value() ? stage_timing_optional->get().m_set.load(std::memory_order_relaxed) :
+                                              false;
+}
+
+bool swapchain_presentation_entry::is_pending(VkPresentStageFlagBitsEXT stage)
+{
+   auto stage_timing_optional = get_stage_timing(stage);
+   return stage_timing_optional.has_value() ? !stage_timing_optional->get().m_set.load(std::memory_order_relaxed) :
+                                              false;
 }
 
 bool swapchain_presentation_entry::has_outstanding_stages()
 {
-   return (!is_complete(VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT) ||
-           !is_complete(VK_PRESENT_STAGE_IMAGE_LATCHED_BIT_EXT) ||
-           !is_complete(VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_OUT_BIT_EXT) ||
-           !is_complete(VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_VISIBLE_BIT_EXT));
+   return (is_pending(VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT) ||
+           is_pending(VK_PRESENT_STAGE_IMAGE_LATCHED_BIT_EXT) ||
+           is_pending(VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_OUT_BIT_EXT) ||
+           is_pending(VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_VISIBLE_BIT_EXT));
 }
 
 bool swapchain_presentation_entry::has_completed_stages()
