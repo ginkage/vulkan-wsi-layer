@@ -25,7 +25,7 @@
 /**
  * @file present_timing.hpp
  *
- * @brief Contains the implentation for the VK_EXT_present_timing extension.
+ * @brief Contains the implementation for the VK_EXT_present_timing extension.
  *
  */
 
@@ -58,24 +58,39 @@ namespace wsi
  */
 struct swapchain_presentation_timing
 {
-   uint64_t m_timedomain_id{ 0 };
-   /* Using atomics to enforce sequentially consistent ordering */
-   std::atomic<uint64_t> m_time{ 0 };
+   /**
+    * ID of the time domain that used when getting the timestamp.
+    */
+   uint64_t m_timedomain_id{};
+
+   /**
+    * Timestamp for this entry.
+    */
+   std::atomic<uint64_t> m_time{};
+
+   /**
+    * Needed to mark “logically complete” timings even for presentations that the WSI
+    * implementation ultimately rejected (e.g. in MAILBOX the presentation engine
+    * rejected the one present request)
+    */
+   std::atomic<bool> m_set{};
 
    swapchain_presentation_timing()
-      : m_timedomain_id(0)
-      , m_time(0)
    {
    }
+
    swapchain_presentation_timing(swapchain_presentation_timing &&rhs) noexcept
    {
       m_timedomain_id = rhs.m_timedomain_id;
       m_time.store(rhs.m_time.load());
+      m_set.store(rhs.m_set.load());
    }
+
    swapchain_presentation_timing &operator=(swapchain_presentation_timing &&rhs) noexcept
    {
       m_timedomain_id = rhs.m_timedomain_id;
       m_time.store(rhs.m_time.load());
+      m_set.store(rhs.m_set.load());
       return *this;
    }
 
@@ -112,13 +127,6 @@ struct swapchain_presentation_entry
    size_t m_num_present_stages;
 
    /**
-    * When serving a get past presentation timings request, this field
-    * keep the status of whether the slot had already been copied to
-    * the results.
-    */
-   bool copied;
-
-   /**
     * The variables to keep timing stages.
     */
    std::optional<swapchain_presentation_timing> m_queue_end_timing;
@@ -135,16 +143,7 @@ struct swapchain_presentation_entry
    swapchain_presentation_entry &operator=(const swapchain_presentation_entry &) = delete;
 
    /**
-    * @brief This API returns true when the requested stage timing is pending.
-    *
-    * @param stage The stage to get the status for.
-    *
-    * @return true when the stage is pending and false otherwise.
-    */
-   bool is_pending(VkPresentStageFlagBitsEXT stage);
-
-   /**
-    * @brief This API returns true when the requested stage timing is completed.
+    * @brief Check if a present stage is completed.
     *
     * @param stage The stage to get the status for.
     *
@@ -153,30 +152,28 @@ struct swapchain_presentation_entry
    bool is_complete(VkPresentStageFlagBitsEXT stage);
 
    /**
-    * @brief This API returns true when there are outstanding stages and false otherwise.
+    * @brief Check if there are outstanding present stages.
     *
     * @return true when there are outstanding stages and false otherwise.
     */
    bool has_outstanding_stages();
 
    /**
-    * @brief This API returns true when there are completed stages and false otherwise.
+    * @brief Check if there are completed present stages.
     *
     * @return true when there are completed stages and false otherwise.
     */
    bool has_completed_stages();
 
    /**
-    * @brief This API populates the timing parameters from the swapchain_presentation_entry for all stages.
+    * @brief Populate a VkPastPresentationTimingEXT object.
     *
     * @param timing Reference to the timing to be populated.
-    *
-    * @return true when atleast one stage is populated from the swapchain_presentation_entry and false otherwise.
     */
-   bool populate(VkPastPresentationTimingEXT &timing);
+   void populate(VkPastPresentationTimingEXT &timing);
 
    /**
-    * @brief This API retuns and optional reference to a particular stage of the swapchain_presentation_entry.
+    * @brief Get the swapchain_presentation_entry for a present stage.
     *
     * @param stage The stage to get the timing for.
     *
@@ -334,8 +331,6 @@ public:
    /**
     * @brief Set the queue size for the present timing queue.
     *
-    * This API allows modifying the queue size of the present timing queue.
-    *
     * @param queue_size The new queue size to set.
     *
     * @return VK_SUCCESS on if the queue size was updated correctly.
@@ -344,15 +339,6 @@ public:
     * when there is no host memory available for the new size.
     */
    VkResult present_timing_queue_set_size(size_t queue_size);
-
-   /**
-    * @brief Get the number of outstanding presnt timing results.
-    *
-    * This API allows getting the number of the current outstanding results.
-    *
-    * @return The size of the currently outstanding present timing items.
-    */
-   size_t present_timing_get_num_outstanding_results();
 
    /**
     * @brief Add a presentation entry to the present timing queue.
@@ -436,6 +422,15 @@ private:
    util::vector<VkCommandBuffer> m_command_buffer;
 
    /**
+    * @brief Mutex guarding the internal presentation-timing queue.
+    *
+    * Public methods lock this mutex before accessing the queue.
+    * Private helpers assume **the caller already holds the lock**; that
+    * pre-condition must be met before invoking them.
+    */
+   std::mutex m_queue_mutex;
+
+   /**
     * @brief The presentation timing queue.
     */
    util::vector<swapchain_presentation_entry> m_queue;
@@ -451,11 +446,11 @@ private:
    util::vector<VkSemaphore> m_present_semaphore;
 
    /**
-    * @brief This API does the queue submission for getting the queue end timing.
+    * @brief Perform a queue submission for getting the queue end timing.
     *
-    * @param device                The device private data.
-    * @param queue                 The Vulkan queue used to submit synchronization commands.
-    * @param image_index           The index of the image in the swapchain.
+    * @param device      The device private data.
+    * @param queue       The Vulkan queue used to submit synchronization commands.
+    * @param image_index The index of the image in the swapchain.
     *
     * @return VK_SUCCESS when the submission is successfully and error otherwise.
     */
@@ -463,16 +458,18 @@ private:
                                           uint32_t image_index);
 
    /**
-    * @brief This API initializes the resources for timing query such as the
-    * command buffer, command pool and query pool.
+    * @brief Initialize resources for timing queries.
     *
     * @return VK_SUCCESS if the initialization is successful and error if otherwise.
     */
    VkResult init_timing_resources();
 
    /**
-    * @brief This API is called to query the queue end timings for a particular image index
-    * and store it in the internal queue.
+    * @pre Caller must hold m_queue_mutex.
+    *
+    * @brief Get the queue end timings for an image.
+    *
+    * Gets the queue end timings for a swapchain image and stores it in the internal queue.
     *
     * @param image_index The index of the image in the swapchain.
     *
@@ -481,19 +478,31 @@ private:
    VkResult get_queue_end_timing_to_queue(uint32_t image_index);
 
    /**
-    * @brief This API is called to get all the timings in the query pool to the
-    * internal queue and tries clearing it.
+    * @brief Query and get every completed queue-end timing.
     *
-    * @return VK_SUCCESS if the records are copied successfully or partially.
+    * Any slots that were read are then reset so they can be reused.
+    *
+    * @retval VK_SUCCESS if the records are copied successfully or partially
     */
    VkResult query_present_queue_end_timings();
 
    /**
+    * @pre Caller must hold m_queue_mutex
+    *
     * @brief Get the number of results that are available in the internal queue.
     *
     * @return The number of available results.
     */
    uint32_t get_num_available_results();
+
+   /**
+    * @pre Caller must hold m_queue_mutex
+    *
+    * @brief Get the number of outstanding present timing results.
+    *
+    * @return The size of the currently outstanding present timing items.
+    */
+   size_t present_timing_get_num_outstanding_results();
 };
 
 /**
