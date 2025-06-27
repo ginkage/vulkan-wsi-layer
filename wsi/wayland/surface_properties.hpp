@@ -65,9 +65,9 @@ public:
    VkResult get_surface_present_modes(VkPhysicalDevice physical_device, VkSurfaceKHR surface,
                                       uint32_t *pPresentModeCount, VkPresentModeKHR *pPresentModes) override;
 
-   VkResult get_required_device_extensions(util::extension_list &extension_list) override;
+   VkResult get_required_device_extensions(util::extension_list &extension_list, const uint32_t api_version) override;
 
-   VkResult get_required_instance_extensions(util::extension_list &extension_list) override;
+   VkResult get_required_instance_extensions(util::extension_list &extension_list, const uint32_t api_version) override;
 
    PFN_vkVoidFunction get_proc_addr(const char *name) override;
 

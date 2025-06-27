@@ -153,7 +153,7 @@ static VkResult get_available_device_extensions(VkPhysicalDevice physical_device
 
 VkResult add_device_extensions_required_by_layer(VkPhysicalDevice phys_dev,
                                                  const util::wsi_platform_set enabled_platforms,
-                                                 util::extension_list &extensions_to_enable)
+                                                 util::extension_list &extensions_to_enable, const uint32_t api_version)
 {
    util::allocator allocator{ extensions_to_enable.get_allocator(), VK_SYSTEM_ALLOCATION_SCOPE_COMMAND };
 
@@ -198,7 +198,7 @@ VkResult add_device_extensions_required_by_layer(VkPhysicalDevice phys_dev,
          return VK_ERROR_INITIALIZATION_FAILED;
       }
 
-      TRY_LOG(props->get_required_device_extensions(extensions_required_by_layer),
+      TRY_LOG(props->get_required_device_extensions(extensions_required_by_layer, api_version),
               "Failed to acquire required device extensions");
 
       bool supported = available_device_extensions.contains(extensions_required_by_layer);
@@ -219,7 +219,8 @@ VkResult add_device_extensions_required_by_layer(VkPhysicalDevice phys_dev,
 }
 
 VkResult add_instance_extensions_required_by_layer(const util::wsi_platform_set enabled_platforms,
-                                                   util::extension_list &extensions_to_enable)
+                                                   util::extension_list &extensions_to_enable,
+                                                   const uint32_t api_version)
 {
    util::allocator allocator{ extensions_to_enable.get_allocator(), VK_SYSTEM_ALLOCATION_SCOPE_COMMAND };
    /* Requesting available instance extensions (as it happens with the device)
@@ -241,7 +242,7 @@ VkResult add_instance_extensions_required_by_layer(const util::wsi_platform_set 
          return VK_ERROR_INITIALIZATION_FAILED;
       }
 
-      TRY_LOG(props->get_required_instance_extensions(extensions_required_by_layer),
+      TRY_LOG(props->get_required_instance_extensions(extensions_required_by_layer, api_version),
               "Failed to acquire required instance extensions");
 
       TRY_LOG_CALL(extensions_to_enable.add(extensions_required_by_layer));

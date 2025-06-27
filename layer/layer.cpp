@@ -143,13 +143,16 @@ VKAPI_ATTR VkResult create_instance(const VkInstanceCreateInfo *pCreateInfo, con
    /* Create a list of extensions to enable, including the provided extensions and those required by the layer. */
    TRY_LOG_CALL(extensions.add(pCreateInfo->ppEnabledExtensionNames, pCreateInfo->enabledExtensionCount));
 
+   uint32_t api_version =
+      pCreateInfo->pApplicationInfo != nullptr ? pCreateInfo->pApplicationInfo->apiVersion : VK_API_VERSION_1_3;
+
    if (!layer_platforms_to_enable.empty())
    {
       if (!extensions.contains(VK_KHR_SURFACE_EXTENSION_NAME))
       {
          return VK_ERROR_EXTENSION_NOT_PRESENT;
       }
-      TRY_LOG_CALL(wsi::add_instance_extensions_required_by_layer(layer_platforms_to_enable, extensions));
+      TRY_LOG_CALL(wsi::add_instance_extensions_required_by_layer(layer_platforms_to_enable, extensions, api_version));
    }
 
    TRY_LOG_CALL(extensions.get_extension_strings(modified_enabled_extensions));
@@ -181,9 +184,6 @@ VKAPI_ATTR VkResult create_instance(const VkInstanceCreateInfo *pCreateInfo, con
       return VK_ERROR_OUT_OF_HOST_MEMORY;
    }
 
-   uint32_t api_version =
-      pCreateInfo->pApplicationInfo != nullptr ? pCreateInfo->pApplicationInfo->apiVersion : VK_API_VERSION_1_3;
-
    TRY_LOG_CALL(table->populate(*pInstance, fpGetInstanceProcAddr, api_version));
    table->set_user_enabled_extensions(pCreateInfo->ppEnabledExtensionNames, pCreateInfo->enabledExtensionCount);
 
@@ -196,7 +196,7 @@ VKAPI_ATTR VkResult create_instance(const VkInstanceCreateInfo *pCreateInfo, con
     */
    VkResult result =
       instance_private_data::get(*pInstance)
-         .set_instance_enabled_extensions(modified_enabled_extensions.data(), modified_enabled_extensions.size());
+         .set_instance_enabled_extensions(pCreateInfo->ppEnabledExtensionNames, pCreateInfo->enabledExtensionCount);
    if (result != VK_SUCCESS)
    {
       instance_private_data::disassociate(*pInstance);
@@ -249,7 +249,8 @@ VKAPI_ATTR VkResult create_device(VkPhysicalDevice physicalDevice, const VkDevic
    if (!enabled_platforms.empty())
    {
       TRY_LOG_CALL(enabled_extensions.add(pCreateInfo->ppEnabledExtensionNames, pCreateInfo->enabledExtensionCount));
-      TRY_LOG_CALL(wsi::add_device_extensions_required_by_layer(physicalDevice, enabled_platforms, enabled_extensions));
+      TRY_LOG_CALL(wsi::add_device_extensions_required_by_layer(physicalDevice, enabled_platforms, enabled_extensions,
+                                                                inst_data.api_version));
       TRY_LOG_CALL(enabled_extensions.get_extension_strings(modified_enabled_extensions));
 
       modified_info.ppEnabledExtensionNames = modified_enabled_extensions.data();
@@ -339,8 +340,8 @@ VKAPI_ATTR VkResult create_device(VkPhysicalDevice physicalDevice, const VkDevic
    auto &device_data = layer::device_private_data::get(*pDevice);
    device_data.set_layer_frame_boundary_handling_enabled(should_layer_handle_frame_boundary_events);
 
-   result = device_data.set_device_enabled_extensions(modified_info.ppEnabledExtensionNames,
-                                                      modified_info.enabledExtensionCount);
+   result = device_data.set_device_enabled_extensions(pCreateInfo->ppEnabledExtensionNames,
+                                                      pCreateInfo->enabledExtensionCount);
    if (result != VK_SUCCESS)
    {
       layer::device_private_data::disassociate(*pDevice);
@@ -476,8 +477,8 @@ VWL_VKAPI_EXPORT wsi_layer_vkNegotiateLoaderLayerInterfaceVersion(VkNegotiateLay
 }
 
 VWL_VKAPI_CALL(void)
-wsi_layer_vkGetPhysicalDeviceFeatures2KHR(VkPhysicalDevice physical_device,
-                                          VkPhysicalDeviceFeatures2 *pFeatures) VWL_API_POST
+wsi_layer_vkGetPhysicalDeviceFeatures2(VkPhysicalDevice physical_device,
+                                       VkPhysicalDeviceFeatures2 *pFeatures) VWL_API_POST
 {
    auto &instance = layer::instance_private_data::get(physical_device);
 
@@ -555,68 +556,114 @@ wsi_layer_vkGetPhysicalDeviceFeatures2KHR(VkPhysicalDevice physical_device,
    if (!strcmp(funcName, #func)) \
       return (PFN_vkVoidFunction)&wsi_layer_##func;
 
+/**
+ * @brief Trampoline for **vkGetDeviceProcAddr** inside the WSI layer.
+ *
+ * Workflow:
+ * 1. Retrieve the device’s private state (enabled extensions and downstream dispatch table).
+ * 2. If the function is one that this layer intercepts, return the layer’s handler.
+ * 3. Otherwise, forward to the downstream dispatch table (next layer or ICD), or return nullptr if unavailable.
+ *
+ * This layer never exposes entrypoints for disabled extensions, preserving the Vulkan dispatch-chain contract.
+ *
+ * @param device   The VkDevice being queried.
+ * @param funcName Name of the device-level command to resolve.
+ * @return Pointer to the layer’s implementation, the next-layer/ICD function, or nullptr.
+ */
 VWL_VKAPI_CALL(PFN_vkVoidFunction)
 wsi_layer_vkGetDeviceProcAddr(VkDevice device, const char *funcName) VWL_API_POST
 {
-   uint64_t api_version = layer::device_private_data::get(device).instance_data.api_version;
-   if (layer::device_private_data::get(device).is_device_extension_enabled(VK_KHR_SWAPCHAIN_EXTENSION_NAME))
+   auto &device_data = layer::device_private_data::get(device);
+   const uint64_t api_version = device_data.instance_data.api_version;
+   const bool core_1_1 = api_version >= VK_API_VERSION_1_1;
+   if (device_data.is_device_extension_enabled(VK_KHR_SWAPCHAIN_EXTENSION_NAME))
    {
       GET_PROC_ADDR(vkCreateSwapchainKHR);
       GET_PROC_ADDR(vkDestroySwapchainKHR);
       GET_PROC_ADDR(vkGetSwapchainImagesKHR);
       GET_PROC_ADDR(vkAcquireNextImageKHR);
       GET_PROC_ADDR(vkQueuePresentKHR);
-      GET_PROC_ADDR(vkAcquireNextImage2KHR);
-      GET_PROC_ADDR(vkGetDeviceGroupPresentCapabilitiesKHR);
-      GET_PROC_ADDR(vkGetDeviceGroupSurfacePresentModesKHR);
+      if (device_data.is_device_extension_enabled(VK_KHR_DEVICE_GROUP_EXTENSION_NAME) || core_1_1)
+      {
+         GET_PROC_ADDR(vkAcquireNextImage2KHR);
+      }
+      if (core_1_1)
+      {
+         GET_PROC_ADDR(vkGetDeviceGroupSurfacePresentModesKHR);
+         GET_PROC_ADDR(vkGetDeviceGroupPresentCapabilitiesKHR);
+      }
    }
-   if (layer::device_private_data::get(device).is_device_extension_enabled(
-          VK_KHR_SHARED_PRESENTABLE_IMAGE_EXTENSION_NAME))
+
+   if (device_data.is_device_extension_enabled(VK_KHR_DEVICE_GROUP_EXTENSION_NAME) &&
+       device_data.is_device_extension_enabled(VK_KHR_SURFACE_EXTENSION_NAME))
+   {
+      GET_PROC_ADDR(vkGetDeviceGroupSurfacePresentModesKHR);
+      GET_PROC_ADDR(vkGetDeviceGroupPresentCapabilitiesKHR);
+   }
+
+   if (device_data.is_device_extension_enabled(VK_KHR_SHARED_PRESENTABLE_IMAGE_EXTENSION_NAME))
    {
       GET_PROC_ADDR(vkGetSwapchainStatusKHR);
    }
 #if VULKAN_WSI_LAYER_EXPERIMENTAL
-   if (layer::device_private_data::get(device).is_device_extension_enabled(VK_EXT_PRESENT_TIMING_EXTENSION_NAME))
+   if (device_data.is_device_extension_enabled(VK_EXT_PRESENT_TIMING_EXTENSION_NAME))
    {
       GET_PROC_ADDR(vkSetSwapchainPresentTimingQueueSizeEXT);
       GET_PROC_ADDR(vkGetSwapchainTimingPropertiesEXT);
       GET_PROC_ADDR(vkGetSwapchainTimeDomainPropertiesEXT);
       GET_PROC_ADDR(vkGetPastPresentationTimingEXT);
       GET_PROC_ADDR(vkGetCalibratedTimestampsKHR);
-      if (layer::device_private_data::get(device).is_device_extension_enabled(
-             VK_EXT_CALIBRATED_TIMESTAMPS_EXTENSION_NAME))
+      if (device_data.is_device_extension_enabled(VK_EXT_CALIBRATED_TIMESTAMPS_EXTENSION_NAME))
       {
          GET_PROC_ADDR(vkGetCalibratedTimestampsEXT);
       }
    }
 #endif
    GET_PROC_ADDR(vkDestroyDevice);
-
    GET_PROC_ADDR(vkCreateImage);
-   GET_PROC_ADDR(vkBindImageMemory2);
 
-   if (!strcmp(funcName, "vkBindImageMemory2KHR") &&
-       layer::device_private_data::get(device).disp.get_user_enabled_entrypoint(device, api_version, funcName) !=
-          nullptr)
+   if (device_data.is_device_extension_enabled(VK_KHR_BIND_MEMORY_2_EXTENSION_NAME))
    {
-      return (PFN_vkVoidFunction)&wsi_layer_vkBindImageMemory2;
+      if (!strcmp(funcName, "vkBindImageMemory2KHR"))
+      {
+         return (PFN_vkVoidFunction)&wsi_layer_vkBindImageMemory2;
+      }
+   }
+   if (core_1_1)
+   {
+      GET_PROC_ADDR(vkBindImageMemory2);
    }
 
    /* VK_EXT_swapchain_maintenance1 */
-   if (layer::device_private_data::get(device).is_device_extension_enabled(
-          VK_EXT_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME))
+   if (device_data.is_device_extension_enabled(VK_EXT_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME))
    {
       GET_PROC_ADDR(vkReleaseSwapchainImagesEXT);
    }
-   if (layer::device_private_data::get(device).is_device_extension_enabled(VK_KHR_PRESENT_WAIT_EXTENSION_NAME))
+   if (device_data.is_device_extension_enabled(VK_KHR_PRESENT_WAIT_EXTENSION_NAME))
    {
       GET_PROC_ADDR(vkWaitForPresentKHR);
    }
 
-   return layer::device_private_data::get(device).disp.get_user_enabled_entrypoint(
-      device, layer::device_private_data::get(device).instance_data.api_version, funcName);
+   return device_data.disp.get_user_enabled_entrypoint(device, funcName);
 }
 
+/**
+ * @brief Trampoline for **vkGetInstanceProcAddr** inside the WSI layer.
+ *
+ * Workflow:
+ * 1. Publish loader-critical symbols (i.e. `vkGetDeviceProcAddr`, `vkGetInstanceProcAddr`).
+ * 2. Retrieve the instance’s private state (API version and enabled extensions)
+ *    and intercept layer-handled commands.
+ * 3. Forward all other commands to the downstream instance dispatch table,
+ *    or return nullptr if unavailable.
+ *
+ * This layer only exposes core commands and enabled-extension entrypoints,
+ * preserving the Vulkan dispatch-chain contract.
+ *
+ * @param instance The VkInstance being queried (may be VK_NULL_HANDLE).
+ * @param funcName Name of the instance-level command to resolve.
+ * @return Pointer to this layer’s handler, the next-layer/ICD function, or nullptr.
+ */
 VWL_VKAPI_CALL(PFN_vkVoidFunction)
 wsi_layer_vkGetInstanceProcAddr(VkInstance instance, const char *funcName) VWL_API_POST
 {
@@ -625,18 +672,26 @@ wsi_layer_vkGetInstanceProcAddr(VkInstance instance, const char *funcName) VWL_A
    GET_PROC_ADDR(vkCreateInstance);
    GET_PROC_ADDR(vkDestroyInstance);
    GET_PROC_ADDR(vkCreateDevice);
-   GET_PROC_ADDR(vkGetPhysicalDevicePresentRectanglesKHR);
-
-   if (!strcmp(funcName, "vkGetPhysicalDeviceFeatures2"))
-   {
-      return (PFN_vkVoidFunction)wsi_layer_vkGetPhysicalDeviceFeatures2KHR;
-   }
 
    auto &instance_data = layer::instance_private_data::get(instance);
+   const bool core_1_1 = instance_data.api_version >= VK_API_VERSION_1_1;
+   if ((instance_data.is_instance_extension_enabled(VK_KHR_DEVICE_GROUP_EXTENSION_NAME) &&
+        instance_data.is_instance_extension_enabled(VK_KHR_SURFACE_EXTENSION_NAME)) ||
+       core_1_1)
+   {
+      GET_PROC_ADDR(vkGetPhysicalDevicePresentRectanglesKHR);
+   }
 
    if (instance_data.is_instance_extension_enabled(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME))
    {
-      GET_PROC_ADDR(vkGetPhysicalDeviceFeatures2KHR);
+      if (!strcmp(funcName, "vkGetPhysicalDeviceFeatures2KHR"))
+      {
+         return (PFN_vkVoidFunction)&wsi_layer_vkGetPhysicalDeviceFeatures2;
+      }
+   }
+   if (core_1_1)
+   {
+      GET_PROC_ADDR(vkGetPhysicalDeviceFeatures2);
    }
 
    if (instance_data.is_instance_extension_enabled(VK_KHR_SURFACE_EXTENSION_NAME))
@@ -660,5 +715,5 @@ wsi_layer_vkGetInstanceProcAddr(VkInstance instance, const char *funcName) VWL_A
       }
    }
 
-   return instance_data.disp.get_user_enabled_entrypoint(instance, instance_data.api_version, funcName);
+   return instance_data.disp.get_user_enabled_entrypoint(instance, funcName);
 }

@@ -277,9 +277,24 @@ static constexpr uint32_t API_VERSION_MAX = UINT32_MAX;
    EP(SetDebugUtilsObjectNameEXT, VK_EXT_DEBUG_UTILS_EXTENSION_NAME, API_VERSION_MAX, false, )                            \
    EP(SetDebugUtilsObjectTagEXT, VK_EXT_DEBUG_UTILS_EXTENSION_NAME, API_VERSION_MAX, false, )                             \
    EP(SubmitDebugUtilsMessageEXT, VK_EXT_DEBUG_UTILS_EXTENSION_NAME, API_VERSION_MAX, false, )                            \
-   /* VK_KHR_calibrated_timestamps */                                                                                     \
-   EP(GetPhysicalDeviceCalibrateableTimeDomainsKHR, VK_KHR_CALIBRATED_TIMESTAMPS_EXTENSION_NAME, API_VERSION_MAX,         \
-      false, )
+   /* Custom entrypoints */                                                                                               \
+   INSTANCE_ENTRYPOINTS_LIST_EXPANSION(EP)
+
+/*
+ * Extension list for INSTANCE_ENTRYPOINTS_LIST containing entrypoints that:
+ * - Are not part of core Vulkan,
+ * - Belong to device-level extensions,
+ * - Are queried via instance-level APIs.
+ *
+ * These entrypoints have an empty extension name ("") to ensure they are
+ * always exposed, regardless of extension enablement, as their use does not
+ * depend on any specific instance extension being advertised.
+ */
+#define INSTANCE_ENTRYPOINTS_LIST_EXPANSION(EP)                                   \
+   /* VK_KHR_calibrated_timestamps */                                             \
+   EP(GetPhysicalDeviceCalibrateableTimeDomainsKHR, "", API_VERSION_MAX, false, ) \
+   /* VK_EXT_calibrated_timestamps */                                             \
+   EP(GetPhysicalDeviceCalibrateableTimeDomainsEXT, "", API_VERSION_MAX, false, )
 
 /**
  * @brief Struct representing the instance dispatch table.
@@ -314,11 +329,10 @@ public:
     * @brief Get the user enabled instance extension entrypoint by name
     *
     * @param instance The Vulkan instance that the extension was enabled on.
-    * @param api_version The API version of the Vulkan instance.
     * @param fn_name The name of the function.
     * @return pointer to the function if it is enabled by the user, otherwise nullptr.
     */
-   PFN_vkVoidFunction get_user_enabled_entrypoint(VkInstance instance, uint32_t api_version, const char *fn_name) const;
+   PFN_vkVoidFunction get_user_enabled_entrypoint(VkInstance instance, const char *fn_name) const;
 
    /* Generate alias functions for internal use of the dispatch table entrypoints.
     * These will be named as the entrypoint, but without the "vk" prefix.
@@ -455,7 +469,7 @@ private:
    EP(GetBufferMemoryRequirements2KHR, VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME, VK_API_VERSION_1_1, false,          \
       GetBufferMemoryRequirements2)                                                                                         \
    EP(GetImageSparseMemoryRequirements2KHR, VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME, VK_API_VERSION_1_1,            \
-      false, GetImageSparseMemoryRequirements2KHR)                                                                          \
+      false, GetImageSparseMemoryRequirements2)                                                                             \
    /* VK_EXT_swapchain_maintenance1 */                                                                                      \
    EP(ReleaseSwapchainImagesEXT, VK_EXT_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME, VK_API_VERSION_1_1, false, )                \
    /* VK_EXT_calibrated_timestamps */                                                                                       \
@@ -500,11 +514,10 @@ public:
     * @brief Get the user enabled device extension entrypoint by name
     *
     * @param device The Vulkan device that the extension was enabled on.
-    * @param api_version The API version of the Vulkan instance.
     * @param fn_name The name of the function.
     * @return pointer to the function if it is enabled by the user, otherwise nullptr.
     */
-   PFN_vkVoidFunction get_user_enabled_entrypoint(VkDevice device, uint32_t api_version, const char *fn_name) const;
+   PFN_vkVoidFunction get_user_enabled_entrypoint(VkDevice device, const char *fn_name) const;
 
    /* Generate alias functions for internal use of the dispatch table entrypoints.
     * These will be named as the entrypoint, but without the "vk" prefix.
