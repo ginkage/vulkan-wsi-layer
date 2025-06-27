@@ -152,6 +152,15 @@ struct swapchain_presentation_entry
    bool is_complete(VkPresentStageFlagBitsEXT stage);
 
    /**
+    * @brief Check if a present stage is pending.
+    *
+    * @param stage The stage to get the status for.
+    *
+    * @return true when the stage is pending and false otherwise.
+    */
+   bool is_pending(VkPresentStageFlagBitsEXT stage);
+
+   /**
     * @brief Check if there are outstanding present stages.
     *
     * @return true when there are outstanding stages and false otherwise.
