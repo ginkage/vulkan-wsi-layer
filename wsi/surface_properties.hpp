@@ -78,17 +78,19 @@ public:
    /**
     * @brief Return the device extensions that this surface_properties implementation needs.
     */
-   virtual VkResult get_required_device_extensions(util::extension_list &extension_list)
+   virtual VkResult get_required_device_extensions(util::extension_list &extension_list, const uint32_t api_version)
    {
       /* Requires no additional extensions */
       UNUSED(extension_list);
+      UNUSED(api_version);
       return VK_SUCCESS;
    }
 
    /**
     * @brief Return the instance extensions that this surface_properties implementation needs.
     */
-   virtual VkResult get_required_instance_extensions(util::extension_list &extension_list) = 0;
+   virtual VkResult get_required_instance_extensions(util::extension_list &extension_list,
+                                                     const uint32_t api_version) = 0;
 
    /**
     * @brief Implements vkGetProcAddr for entrypoints specific to the surface type.

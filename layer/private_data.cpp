@@ -98,23 +98,29 @@ void dispatch_table::set_user_enabled_extensions(const char *const *extension_na
    }
 }
 
-PFN_vkVoidFunction instance_dispatch_table::get_user_enabled_entrypoint(VkInstance instance, uint32_t api_version,
-                                                                        const char *fn_name) const
+/**
+ * @brief Decide whether we should expose this Vulkan entrypoint to the application.
+ *
+ * An entrypoint is exposable if any of the following are true:
+ *   - The application explicitly enabled its extension/command.
+ *   - It’s part of core Vulkan 1.0.
+ *   - It has no associated extension name (`ep.ext_name` is empty), e.g.
+ *     `vkGetPhysicalDeviceCalibrateableTimeDomainsKHR`
+ *
+ * @param[in] ep  The entrypoint metadata to evaluate.
+ * @return `true` if the layer should expose this entrypoint, `false` otherwise.
+ */
+static inline bool should_expose_entrypoint(const entrypoint &ep)
 {
-   auto item = m_entrypoints->find(fn_name);
-   if (item != m_entrypoints->end())
+   return ep.user_visible || (ep.api_version == VK_API_VERSION_1_0) || (ep.ext_name && ep.ext_name[0] == '\0');
+}
+
+PFN_vkVoidFunction instance_dispatch_table::get_user_enabled_entrypoint(VkInstance instance, const char *fn_name) const
+{
+   auto itr = m_entrypoints->find(fn_name);
+   if (itr != m_entrypoints->end())
    {
-      /* An entrypoint is allowed to use if it has been enabled by the user or is included in the core specficiation of the API version.
-       * Entrypoints included in API version 1.0 are allowed by default. */
-      if (item->second.user_visible || item->second.api_version <= api_version ||
-          item->second.api_version == VK_API_VERSION_1_0)
-      {
-         return item->second.fn;
-      }
-      else
-      {
-         return nullptr;
-      }
+      return should_expose_entrypoint(itr->second) ? itr->second.fn : nullptr;
    }
 
    return GetInstanceProcAddr(instance, fn_name).value_or(nullptr);
@@ -159,36 +165,12 @@ VkResult device_dispatch_table::populate(VkDevice dev, PFN_vkGetDeviceProcAddr g
    return VK_SUCCESS;
 }
 
-PFN_vkVoidFunction device_dispatch_table::get_user_enabled_entrypoint(VkDevice device, uint32_t api_version,
-                                                                      const char *fn_name) const
+PFN_vkVoidFunction device_dispatch_table::get_user_enabled_entrypoint(VkDevice device, const char *fn_name) const
 {
    auto itr = m_entrypoints->find(fn_name);
    if (itr != m_entrypoints->end())
    {
-      /* An entrypoint is allowed to be used:
-       * - if it has been enabled by the user,
-       * - or if is included in the core specficiation of the API version.
-       * Entrypoints included in API version 1.0 are allowed by default.
-       */
-      const entrypoint &ep = itr->second;
-
-      if (ep.user_visible)
-      {
-         return ep.fn;
-      }
-
-      if (ep.api_version == VK_API_VERSION_1_0)
-      {
-         return ep.fn;
-      }
-
-      bool is_core = (ep.ext_name != nullptr && ep.ext_name[0] == '\0');
-      if (is_core && ep.api_version <= api_version)
-      {
-         return ep.fn;
-      }
-
-      return nullptr;
+      return should_expose_entrypoint(itr->second) ? itr->second.fn : nullptr;
    }
 
    return GetDeviceProcAddr(device, fn_name).value_or(nullptr);

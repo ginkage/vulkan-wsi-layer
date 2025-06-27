@@ -92,23 +92,27 @@ util::wsi_platform_set find_enabled_layer_platforms(const VkInstanceCreateInfo *
  * @param[in] phys_dev The physical device to check.
  * @param[in] enabled_platforms All the platforms that the layer must enable for @p phys_dev.
  * @param[in,out] extensions_to_enable All the extensions required by the layer are added to this list.
+ * @param[in] api_version The Vulkan API version being used.
  *
  * @retval @c VK_SUCCESS if the operation was successful.
  */
 VkResult add_device_extensions_required_by_layer(VkPhysicalDevice phys_dev,
                                                  const util::wsi_platform_set enabled_platforms,
-                                                 util::extension_list &extensions_to_enable);
+                                                 util::extension_list &extensions_to_enable,
+                                                 const uint32_t api_version);
 
 /**
  * @brief Add required instance extensions by the layer.
  *
  * @param[in] enabled_platforms All the enabled platforms for the current instance.
  * @param[in,out] extensions_to_enable All the extensions required by the layer are added to this list.
+ * @param[in] api_version The Vulkan API version being used.
  *
  * @retval @c VK_SUCCESS if the operation was successful.
  */
 VkResult add_instance_extensions_required_by_layer(const util::wsi_platform_set enabled_platforms,
-                                                   util::extension_list &extensions_to_enable);
+                                                   util::extension_list &extensions_to_enable,
+                                                   const uint32_t api_version);
 
 /**
  * @brief Return a function pointer for surface specific functions.

@@ -191,14 +191,21 @@ PFN_vkVoidFunction surface_properties::get_proc_addr(const char *name)
    return nullptr;
 }
 
-VkResult surface_properties::get_required_instance_extensions(util::extension_list &extension_list)
+VkResult surface_properties::get_required_instance_extensions(util::extension_list &extension_list,
+                                                              const uint32_t api_version)
 {
-   const std::array required_instance_extensions{
-      VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,
-      VK_KHR_EXTERNAL_FENCE_CAPABILITIES_EXTENSION_NAME,
-      VK_KHR_EXTERNAL_SEMAPHORE_CAPABILITIES_EXTENSION_NAME,
-   };
-   return extension_list.add(required_instance_extensions.data(), required_instance_extensions.size());
+   VkResult result = VK_SUCCESS;
+   /* Enable extensions that were promoted to core in Vulkan 1.1 when using API versions < 1.1 */
+   if (api_version < VK_API_VERSION_1_1)
+   {
+      const std::array required_extensions_pre_vulkan_1_1{
+         VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,
+         VK_KHR_EXTERNAL_FENCE_CAPABILITIES_EXTENSION_NAME,
+         VK_KHR_EXTERNAL_SEMAPHORE_CAPABILITIES_EXTENSION_NAME,
+      };
+      result = extension_list.add(required_extensions_pre_vulkan_1_1.data(), required_extensions_pre_vulkan_1_1.size());
+   }
+   return result;
 }
 
 bool surface_properties::is_surface_extension_enabled(const layer::instance_private_data &instance_data)

@@ -60,9 +60,9 @@ public:
 
    PFN_vkVoidFunction get_proc_addr(const char *name) override;
 
-   VkResult get_required_instance_extensions(util::extension_list &extension_list) override;
+   VkResult get_required_instance_extensions(util::extension_list &extension_list, const uint32_t api_version) override;
 
-   VkResult get_required_device_extensions(util::extension_list &extension_list) override;
+   VkResult get_required_device_extensions(util::extension_list &extension_list, const uint32_t api_version) override;
 
    bool is_surface_extension_enabled(const layer::instance_private_data &instance_data) override;
 
