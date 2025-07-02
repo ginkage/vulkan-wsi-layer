@@ -137,10 +137,19 @@ typedef struct VkPastPresentationTimingPropertiesEXT
    VkPastPresentationTimingEXT *pPresentationTimings;
 } VkPastPresentationTimingPropertiesEXT;
 
+typedef VkFlags VkPastPresentationTimingFlagsEXT;
+
+typedef enum VkPastPresentationTimingFlagBitsEXT
+{
+   VK_PAST_PRESENTATION_TIMING_ALLOW_PARTIAL_RESULTS_BIT_EXT = 0x00000001,
+   VK_PAST_PRESENTATION_TIMING_ALLOW_OUT_OF_ORDER_RESULTS_BIT_EXT = 0x00000002,
+} VkPastPresentationTimingFlagBitsEXT;
+
 typedef struct VkPastPresentationTimingInfoEXT
 {
    VkStructureType sType;
    const void *pNext;
+   VkPastPresentationTimingFlagsEXT flags;
    VkSwapchainKHR swapchain;
 } VkPastPresentationTimingInfoEXT;
 

@@ -117,6 +117,6 @@ wsi_layer_vkGetPastPresentationTimingEXT(
    }
    auto *sc = reinterpret_cast<wsi::swapchain_base *>(pPastPresentationTimingInfo->swapchain);
    auto *ext = sc->get_swapchain_extension<wsi::wsi_ext_present_timing>(true);
-   return ext->get_past_presentation_results(pPastPresentationTimingProperties);
+   return ext->get_past_presentation_results(pPastPresentationTimingProperties, pPastPresentationTimingInfo->flags);
 }
 #endif /* VULKAN_WSI_LAYER_EXPERIMENTAL */

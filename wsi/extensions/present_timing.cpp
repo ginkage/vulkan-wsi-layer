@@ -179,7 +179,7 @@ VkResult wsi_ext_present_timing::query_present_queue_end_timings()
 VkResult wsi_ext_present_timing::present_timing_queue_set_size(size_t queue_size)
 {
    const std::lock_guard<std::mutex> lock(m_queue_mutex);
-   if (present_timing_get_num_outstanding_results() > queue_size)
+   if (m_queue.size() > queue_size)
    {
       return VK_NOT_READY;
    }
@@ -283,21 +283,27 @@ VkSemaphore wsi_ext_present_timing::get_image_present_semaphore(uint32_t image_i
    return m_present_semaphore[image_index];
 }
 
-uint32_t wsi_ext_present_timing::get_num_available_results()
+uint32_t wsi_ext_present_timing::get_num_available_results(VkPastPresentationTimingFlagsEXT flags)
 {
    uint32_t num_pending_results = 0;
+   const bool allow_partial = (flags & VK_PAST_PRESENTATION_TIMING_ALLOW_PARTIAL_RESULTS_BIT_EXT) != 0;
+   const bool allow_out_of_order = (flags & VK_PAST_PRESENTATION_TIMING_ALLOW_OUT_OF_ORDER_RESULTS_BIT_EXT) != 0;
    for (auto &slot : m_queue)
    {
-      if (slot.has_completed_stages())
+      if (slot.has_completed_stages(allow_partial))
       {
          num_pending_results++;
+      }
+      else if (!allow_out_of_order)
+      {
+         break;
       }
    }
    return num_pending_results;
 }
 
 VkResult wsi_ext_present_timing::get_past_presentation_results(
-   VkPastPresentationTimingPropertiesEXT *past_present_timing_properties)
+   VkPastPresentationTimingPropertiesEXT *past_present_timing_properties, VkPastPresentationTimingFlagsEXT flags)
 {
    const std::lock_guard<std::mutex> lock(m_queue_mutex);
 
@@ -306,7 +312,7 @@ VkResult wsi_ext_present_timing::get_past_presentation_results(
    TRY_LOG_CALL(query_present_queue_end_timings());
    if (past_present_timing_properties->pPresentationTimings == nullptr)
    {
-      past_present_timing_properties->presentationTimingCount = get_num_available_results();
+      past_present_timing_properties->presentationTimingCount = get_num_available_results(flags);
       return VK_SUCCESS;
    }
 
@@ -317,6 +323,8 @@ VkResult wsi_ext_present_timing::get_past_presentation_results(
    uint64_t in = 0;
    uint64_t out = 0;
    uint64_t removed_entries = 0;
+   const bool allow_partial = (flags & VK_PAST_PRESENTATION_TIMING_ALLOW_PARTIAL_RESULTS_BIT_EXT) != 0;
+   const bool allow_out_of_order = (flags & VK_PAST_PRESENTATION_TIMING_ALLOW_OUT_OF_ORDER_RESULTS_BIT_EXT) != 0;
    /*
     * Single forward pass over the caller-supplied pPresentationTimings array:
     *
@@ -341,8 +349,21 @@ VkResult wsi_ext_present_timing::get_past_presentation_results(
          return (e.m_present_id == present_id) && zero_extra_cond;
       });
 
-      if (slot != m_queue.end() && slot->has_completed_stages())
+      if (slot != m_queue.end())
       {
+         if (!slot->has_completed_stages(allow_partial))
+         {
+            if (allow_out_of_order)
+            {
+               in++;
+               continue;
+            }
+            else
+            {
+               break;
+            }
+         }
+
          if (present_id == 0)
          {
             seen_zero = true;
@@ -370,7 +391,7 @@ VkResult wsi_ext_present_timing::get_past_presentation_results(
 
    past_present_timing_properties->presentationTimingCount = out;
 
-   const bool incomplete = (out < in) || (out < (get_num_available_results() + removed_entries));
+   const bool incomplete = (out < in) || (out < (get_num_available_results(flags) + removed_entries));
 
    return incomplete ? VK_INCOMPLETE : VK_SUCCESS;
 }
@@ -404,11 +425,14 @@ swapchain_presentation_entry::swapchain_presentation_entry(VkPresentStageFlagsEX
    }
 }
 
-bool swapchain_presentation_entry::is_complete(VkPresentStageFlagBitsEXT stage)
+std::optional<bool> swapchain_presentation_entry::is_complete(VkPresentStageFlagBitsEXT stage)
 {
    auto stage_timing_optional = get_stage_timing(stage);
-   return stage_timing_optional.has_value() ? stage_timing_optional->get().m_set.load(std::memory_order_relaxed) :
-                                              false;
+   if (!stage_timing_optional.has_value())
+   {
+      return std::nullopt;
+   }
+   return stage_timing_optional->get().m_set.load(std::memory_order_relaxed);
 }
 
 bool swapchain_presentation_entry::is_pending(VkPresentStageFlagBitsEXT stage)
@@ -426,12 +450,22 @@ bool swapchain_presentation_entry::has_outstanding_stages()
            is_pending(VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_VISIBLE_BIT_EXT));
 }
 
-bool swapchain_presentation_entry::has_completed_stages()
+bool swapchain_presentation_entry::has_completed_stages(bool allow_partial)
 {
-   return (is_complete(VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT) ||
-           is_complete(VK_PRESENT_STAGE_IMAGE_LATCHED_BIT_EXT) ||
-           is_complete(VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_OUT_BIT_EXT) ||
-           is_complete(VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_VISIBLE_BIT_EXT));
+   bool partial_result = false;
+   bool non_partial_result = true;
+
+   for (const auto &stage : g_present_stages)
+   {
+      auto complete = is_complete(stage);
+      if (complete.has_value())
+      {
+         partial_result |= complete.value();
+         non_partial_result &= complete.value();
+      }
+   }
+
+   return allow_partial ? partial_result : non_partial_result;
 }
 
 std::optional<std::reference_wrapper<swapchain_presentation_timing>> swapchain_presentation_entry::get_stage_timing(
@@ -489,7 +523,7 @@ void swapchain_presentation_entry::populate(VkPastPresentationTimingEXT &timing)
       }
    }
 
-   /* If atleast one entry is made to the timings, update the other fields. */
+   /* If at least one entry is made to the timings, update the other fields. */
    if (stage_index != 0)
    {
       timing.presentId = m_present_id;

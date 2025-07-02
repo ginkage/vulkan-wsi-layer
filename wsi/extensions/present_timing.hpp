@@ -149,7 +149,7 @@ struct swapchain_presentation_entry
     *
     * @return true when the stage is completed and false otherwise.
     */
-   bool is_complete(VkPresentStageFlagBitsEXT stage);
+   std::optional<bool> is_complete(VkPresentStageFlagBitsEXT stage);
 
    /**
     * @brief Check if a present stage is pending.
@@ -172,7 +172,7 @@ struct swapchain_presentation_entry
     *
     * @return true when there are completed stages and false otherwise.
     */
-   bool has_completed_stages();
+   bool has_completed_stages(bool allow_partial);
 
    /**
     * @brief Populate a VkPastPresentationTimingEXT object.
@@ -380,7 +380,8 @@ public:
     *
     * @return VK_SUCCESS when the requested results are returned, VK_INCOMPLETE when returning fewer results.
     */
-   VkResult get_past_presentation_results(VkPastPresentationTimingPropertiesEXT *past_present_timing_properties);
+   VkResult get_past_presentation_results(VkPastPresentationTimingPropertiesEXT *past_present_timing_properties,
+                                          VkPastPresentationTimingFlagsEXT flags);
 
    /**
     * @brief Get the swapchain time domains
@@ -502,7 +503,7 @@ private:
     *
     * @return The number of available results.
     */
-   uint32_t get_num_available_results();
+   uint32_t get_num_available_results(VkPastPresentationTimingFlagsEXT flags);
 
    /**
     * @pre Caller must hold m_queue_mutex
