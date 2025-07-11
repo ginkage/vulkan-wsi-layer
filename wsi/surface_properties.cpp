@@ -104,11 +104,12 @@ void get_surface_capabilities_common(VkPhysicalDevice physical_device, VkSurface
    surface_capabilities->currentExtent = { 0xffffffff, 0xffffffff };
    surface_capabilities->minImageExtent = { 1, 1 };
    /* Ask the device for max */
-   VkPhysicalDeviceProperties dev_props = {};
-   layer::instance_private_data::get(physical_device).disp.GetPhysicalDeviceProperties(physical_device, &dev_props);
+   VkPhysicalDeviceProperties2KHR dev_props{};
+   dev_props.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2_KHR;
+   layer::instance_private_data::get(physical_device).disp.GetPhysicalDeviceProperties2KHR(physical_device, &dev_props);
 
-   surface_capabilities->maxImageExtent = { dev_props.limits.maxImageDimension2D,
-                                            dev_props.limits.maxImageDimension2D };
+   surface_capabilities->maxImageExtent = { dev_props.properties.limits.maxImageDimension2D,
+                                            dev_props.properties.limits.maxImageDimension2D };
    surface_capabilities->maxImageArrayLayers = 1;
 
    /* Surface transforms */

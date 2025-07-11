@@ -530,14 +530,16 @@ wsi_layer_vkGetPhysicalDeviceFeatures2(VkPhysicalDevice physical_device,
       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_TIMING_FEATURES_EXT, pFeatures->pNext);
    if (present_timing_features != nullptr)
    {
-      VkPhysicalDeviceProperties physical_device_properties = {};
-      instance.disp.GetPhysicalDeviceProperties(physical_device, &physical_device_properties);
+      VkPhysicalDeviceProperties2KHR physical_device_properties{};
+      physical_device_properties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2_KHR;
+      instance.disp.GetPhysicalDeviceProperties2KHR(physical_device, &physical_device_properties);
       /* The presentTimingSupported is set based on whether the device can support timestamp queries
        * and the graphics, compute pipelines can support time stamps. Only the graphics and compute pipelines
        * are checked here which means queue present if happens on a different queue family,
        * the time stamps might not be supported. */
-      present_timing_features->presentTiming = ((physical_device_properties.limits.timestampPeriod != 0) &&
-                                                physical_device_properties.limits.timestampComputeAndGraphics);
+      present_timing_features->presentTiming =
+         ((physical_device_properties.properties.limits.timestampPeriod != 0) &&
+          physical_device_properties.properties.limits.timestampComputeAndGraphics);
       present_timing_features->presentAtAbsoluteTime = VK_TRUE;
       present_timing_features->presentAtRelativeTime = VK_TRUE;
    }

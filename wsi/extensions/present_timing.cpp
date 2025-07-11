@@ -29,6 +29,7 @@
  */
 #include <array>
 #include <cassert>
+#include <cmath>
 #include <wsi/swapchain_base.hpp>
 #include <util/helpers.hpp>
 
@@ -59,7 +60,14 @@ wsi_ext_present_timing::wsi_ext_present_timing(const util::allocator &allocator,
    , m_queue(allocator)
    , m_num_images(num_images)
    , m_present_semaphore(allocator)
+   , m_timestamp_period(0.f)
 {
+   VkPhysicalDeviceProperties2KHR physical_device_properties{};
+   physical_device_properties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2_KHR;
+   const auto &dev = layer::device_private_data::get(m_device);
+   auto &inst = layer::instance_private_data::get(dev.physical_device);
+   inst.disp.GetPhysicalDeviceProperties2KHR(dev.physical_device, &physical_device_properties);
+   m_timestamp_period = physical_device_properties.properties.limits.timestampPeriod;
 }
 
 wsi_ext_present_timing::~wsi_ext_present_timing()
@@ -143,6 +151,15 @@ VkResult wsi_ext_present_timing::init_timing_resources()
    return VK_SUCCESS;
 }
 
+static inline uint64_t ticks_to_ns(uint64_t ticks, const float &timestamp_period)
+{
+   /* timestamp_period is float (ns per tick).  Use double so we keep
+      52-bit integer precision (≈4.5×10¹⁵ ticks) without overflow. */
+   assert(std::isfinite(timestamp_period) && timestamp_period > 0.0f);
+   double ns = static_cast<double>(ticks) * static_cast<double>(timestamp_period);
+   return static_cast<uint64_t>(std::llround(ns));
+}
+
 VkResult wsi_ext_present_timing::get_queue_end_timing_to_queue(uint32_t image_index)
 {
    for (auto &slot : m_queue)
@@ -154,7 +171,7 @@ VkResult wsi_ext_present_timing::get_queue_end_timing_to_queue(uint32_t image_in
          const layer::device_private_data &device_data = layer::device_private_data::get(m_device);
          TRY(device_data.disp.GetQueryPoolResults(m_device, m_query_pool, image_index, 1, sizeof(time), &time, 0,
                                                   VK_QUERY_RESULT_64_BIT));
-         stage_timing_optional->get().m_time.store(time);
+         stage_timing_optional->get().m_time.store(ticks_to_ns(time, m_timestamp_period));
          stage_timing_optional->get().m_set.store(true, std::memory_order_release);
          /* For an image index, there can only be one entry in the internal queue with pending results. */
          break;
@@ -505,7 +522,7 @@ std::optional<std::reference_wrapper<swapchain_presentation_timing>> swapchain_p
 
 void swapchain_presentation_entry::populate(VkPastPresentationTimingEXT &timing)
 {
-   uint64_t stage_index = 0;
+   uint32_t stage_index = 0;
    for (const auto &stage : g_present_stages)
    {
       auto stage_timing_optional = get_stage_timing(stage);
@@ -549,30 +566,30 @@ VkResult swapchain_time_domains::calibrate(VkPresentStageFlagBitsEXT present_sta
 VkResult swapchain_time_domains::get_swapchain_time_domain_properties(
    VkSwapchainTimeDomainPropertiesEXT *pSwapchainTimeDomainProperties, uint64_t *pTimeDomainsCounter)
 {
+   /* Since we only have a single time domain available we don't need to check
+    * timeDomainCount since it can only be >= 1 */
+   constexpr uint32_t available_domains_count = 1;
+
    if (pTimeDomainsCounter != nullptr)
    {
       *pTimeDomainsCounter = 1;
    }
 
-   if (pSwapchainTimeDomainProperties != nullptr)
+   if (pSwapchainTimeDomainProperties->pTimeDomains == nullptr &&
+       pSwapchainTimeDomainProperties->pTimeDomainIds == nullptr)
    {
-      if ((pSwapchainTimeDomainProperties->pTimeDomains == nullptr &&
-           pSwapchainTimeDomainProperties->pTimeDomainIds == nullptr) ||
-          pSwapchainTimeDomainProperties->timeDomainCount == 0)
-      {
-         pSwapchainTimeDomainProperties->timeDomainCount = 1;
-      }
-      else
-      {
-         /* Since we only have a single time domain available we don't need to check
-          * timeDomainCount since it can only be >= 1 */
-         pSwapchainTimeDomainProperties->timeDomainCount = 1;
-         pSwapchainTimeDomainProperties->pTimeDomains[0] = VK_TIME_DOMAIN_PRESENT_STAGE_LOCAL_EXT;
-         pSwapchainTimeDomainProperties->pTimeDomainIds[0] = 0;
-      }
+      pSwapchainTimeDomainProperties->timeDomainCount = available_domains_count;
+      return VK_SUCCESS;
    }
 
-   return VK_SUCCESS;
+   const uint32_t requested_domains_count = pSwapchainTimeDomainProperties->timeDomainCount;
+   const uint32_t domains_count_to_write = std::min(requested_domains_count, available_domains_count);
+
+   pSwapchainTimeDomainProperties->pTimeDomains[0] = VK_TIME_DOMAIN_PRESENT_STAGE_LOCAL_EXT;
+   pSwapchainTimeDomainProperties->pTimeDomainIds[0] = 0;
+   pSwapchainTimeDomainProperties->timeDomainCount = domains_count_to_write;
+
+   return (domains_count_to_write < available_domains_count) ? VK_INCOMPLETE : VK_SUCCESS;
 }
 
 bool swapchain_time_domains::add_time_domain(util::unique_ptr<swapchain_time_domain> time_domain)
