@@ -456,6 +456,11 @@ private:
    util::vector<VkSemaphore> m_present_semaphore;
 
    /**
+    * @brief The timestamp period from the device properties.
+    */
+   float m_timestamp_period;
+
+   /**
     * @brief Perform a queue submission for getting the queue end timing.
     *
     * @param device      The device private data.
