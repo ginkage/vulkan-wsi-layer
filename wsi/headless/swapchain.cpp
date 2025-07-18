@@ -211,9 +211,37 @@ void swapchain::present_image(const pending_present_request &pending_present)
 {
    if (m_device_data.is_present_id_enabled())
    {
-      auto *ext = get_swapchain_extension<wsi_ext_present_id>(true);
-      ext->mark_delivered(pending_present.present_id);
+      auto *ext_present_id = get_swapchain_extension<wsi_ext_present_id>(true);
+      ext_present_id->mark_delivered(pending_present.present_id);
    }
+
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+   auto *ext_present_timing = get_swapchain_extension<wsi_ext_present_timing_headless>(false);
+   if (ext_present_timing && ext_present_timing->get_monotonic_domain().has_value())
+   {
+      clockid_t clockid = ext_present_timing->get_monotonic_domain().value() == VK_TIME_DOMAIN_CLOCK_MONOTONIC_EXT ?
+                             CLOCK_MONOTONIC :
+                             CLOCK_MONOTONIC_RAW;
+      struct timespec now = {};
+      if (clock_gettime(clockid, &now) != 0)
+      {
+         WSI_LOG_ERROR("Failed to get time of clock %d, error: %d (%s)", clockid, errno, strerror(errno));
+      }
+      else
+      {
+         uint64_t time = now.tv_sec * 1e9 + now.tv_nsec;
+         VkPresentStageFlagBitsEXT stages[] = {
+            VK_PRESENT_STAGE_IMAGE_LATCHED_BIT_EXT,
+            VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_OUT_BIT_EXT,
+            VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_VISIBLE_BIT_EXT,
+         };
+         for (auto stage : stages)
+         {
+            ext_present_timing->set_pending_stage_time(pending_present.image_index, stage, time);
+         }
+      }
+   }
+#endif
 
    unpresent_image(pending_present.image_index);
 }

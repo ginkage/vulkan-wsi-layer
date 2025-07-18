@@ -669,8 +669,6 @@ VkResult swapchain_base::queue_present(VkQueue queue, const VkPresentInfoKHR *pr
       TRY(sync_queue_submit(m_device_data, queue, submit_info.present_fence, wait_semaphores));
    }
 
-   TRY(notify_presentation_engine(submit_info.pending_present));
-
 #if VULKAN_WSI_LAYER_EXPERIMENTAL
    if (present_timing_info != nullptr)
    {
@@ -680,6 +678,9 @@ VkResult swapchain_base::queue_present(VkQueue queue, const VkPresentInfoKHR *pr
          present_timing_info->presentStageQueries));
    }
 #endif
+
+   TRY(notify_presentation_engine(submit_info.pending_present));
+
    return VK_SUCCESS;
 }
 

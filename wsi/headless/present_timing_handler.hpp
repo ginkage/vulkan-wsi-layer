@@ -48,11 +48,27 @@ public:
    VkResult get_swapchain_timing_properties(uint64_t &timing_properties_counter,
                                             VkSwapchainTimingPropertiesEXT &timing_properties) override;
 
+   /**
+    * @brief Get a monotonic time domain supported by the driver.
+    *
+    * If both MONOTONIC_RAW and MONOTONIC are supported, MONOTONIC_RAW is preferred.
+    *
+    * @return A supported monotonic time domain, or std::nullopt if no monotonic time domain is supported.
+    */
+   std::optional<VkTimeDomainEXT> get_monotonic_domain() const
+   {
+      return m_monotonic_domain;
+   }
+
 private:
-   wsi_ext_present_timing_headless(const util::allocator &allocator, VkDevice device, uint32_t num_images);
+   wsi_ext_present_timing_headless(const util::allocator &allocator, VkDevice device, uint32_t num_images,
+                                   std::optional<VkTimeDomainEXT> monotonic_domain);
 
    /* Allow util::allocator to access the private constructor */
    friend util::allocator;
+
+   /* Monotonic time domain supported by the driver */
+   std::optional<VkTimeDomainEXT> m_monotonic_domain;
 };
 
 #endif
