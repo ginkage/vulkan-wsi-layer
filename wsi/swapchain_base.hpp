@@ -657,7 +657,7 @@ private:
     * Uses a custom semaphore implementation that uses a condition variable.
     * it is slower, but has a safe timedwait implementation.
     *
-    * This is kept private as waiting should be done via wait_for_free_buffer().
+    * This is kept private as waiting should be done via wait_and_get_free_buffer().
     */
    util::timed_semaphore m_free_image_semaphore;
 
@@ -682,8 +682,10 @@ private:
 
    /**
     * @brief Wait for a buffer to become free.
+    *
+    * It decrements the semaphore once a free buffer is available.
     */
-   VkResult wait_for_free_buffer(uint64_t timeout);
+   VkResult wait_and_get_free_buffer(uint64_t timeout);
 
    /**
     * @brief Per swapchain thread function that handles page flipping.
