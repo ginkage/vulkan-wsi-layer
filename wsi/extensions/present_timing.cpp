@@ -62,7 +62,7 @@ wsi_ext_present_timing::wsi_ext_present_timing(const util::allocator &allocator,
    , m_present_semaphore(allocator)
    , m_timestamp_period(0.f)
 {
-   if (layer::device_private_data::get(m_device).is_present_id_enabled())
+   if (!layer::device_private_data::get(m_device).is_present_id_enabled())
    {
       WSI_LOG_ERROR(VK_EXT_PRESENT_TIMING_EXTENSION_NAME
                     " enabled but required extension " VK_KHR_PRESENT_ID_EXTENSION_NAME " is not enabled.");
