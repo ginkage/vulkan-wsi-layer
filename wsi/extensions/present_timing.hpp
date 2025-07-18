@@ -66,36 +66,29 @@ struct swapchain_presentation_timing
    /**
     * Timestamp for this entry.
     */
-   std::atomic<uint64_t> m_time{};
+   uint64_t m_time{};
 
    /**
     * Needed to mark “logically complete” timings even for presentations that the WSI
     * implementation ultimately rejected (e.g. in MAILBOX the presentation engine
     * rejected the one present request)
     */
-   std::atomic<bool> m_set{};
+   bool m_set{};
 
    swapchain_presentation_timing()
    {
    }
 
-   swapchain_presentation_timing(swapchain_presentation_timing &&rhs) noexcept
-   {
-      m_timedomain_id = rhs.m_timedomain_id;
-      m_time.store(rhs.m_time.load());
-      m_set.store(rhs.m_set.load());
-   }
-
-   swapchain_presentation_timing &operator=(swapchain_presentation_timing &&rhs) noexcept
-   {
-      m_timedomain_id = rhs.m_timedomain_id;
-      m_time.store(rhs.m_time.load());
-      m_set.store(rhs.m_set.load());
-      return *this;
-   }
-
+   swapchain_presentation_timing(swapchain_presentation_timing &&) noexcept = default;
+   swapchain_presentation_timing &operator=(swapchain_presentation_timing &&) noexcept = default;
    swapchain_presentation_timing(const swapchain_presentation_timing &) = delete;
    swapchain_presentation_timing &operator=(const swapchain_presentation_timing &) = delete;
+
+   void set_time(uint64_t time)
+   {
+      m_time = time;
+      m_set = true;
+   }
 };
 
 /**
@@ -299,12 +292,12 @@ public:
     */
    WSI_DEFINE_EXTENSION(VK_EXT_PRESENT_TIMING_EXTENSION_NAME);
 
-   template <typename T>
+   template <typename T, typename... arg_types>
    static util::unique_ptr<T> create(const util::allocator &allocator,
                                      util::unique_ptr<wsi::vulkan_time_domain> *domains, size_t domain_count,
-                                     VkDevice device, uint32_t num_images)
+                                     VkDevice device, uint32_t num_images, arg_types &&...args)
    {
-      auto present_timing = allocator.make_unique<T>(allocator, device, num_images);
+      auto present_timing = allocator.make_unique<T>(allocator, device, num_images, std::forward<arg_types>(args)...);
       for (size_t i = 0; i < domain_count; i++)
       {
          if (!present_timing->get_swapchain_time_domains().add_time_domain(std::move(domains[i])))
@@ -363,6 +356,22 @@ public:
     */
    VkResult add_presentation_entry(const layer::device_private_data &device, VkQueue queue, uint64_t present_id,
                                    uint32_t image_index, VkPresentStageFlagsEXT present_stage_queries);
+
+   /**
+    * @brief Set the time for a stage, if it exists and is pending.
+    *
+    * @param image_index The index of the image in the present queue.
+    * @param stage The present stage to set the time for.
+    * @param time The time to set for the stage.
+    */
+   void set_pending_stage_time(uint32_t image_index, VkPresentStageFlagBitsEXT stage, uint64_t time)
+   {
+      const std::lock_guard<std::mutex> lock(m_queue_mutex);
+      if (auto timing = get_pending_stage_timing(image_index, stage))
+      {
+         timing->set_time(time);
+      }
+   }
 
    /**
     * @brief Get the image's present semaphore.
@@ -480,15 +489,32 @@ private:
    VkResult init_timing_resources();
 
    /**
+    * @pre Caller must hold m_queue_mutex for the call and lifetime of the returned pointer.
+    *
+    * @brief Search for a pending presentation entry and access its timing info.
+    *
+    * For an image index, there can only be one entry in the queue with pending stages.
+    * This does not take a present ID because zero is a valid, nonunique value and thus cannot uniquely identify an
+    * entry.
+    *
+    * @param image_index The index of the image in the present queue.
+    * @param stage The present stage to get the entry for.
+    *
+    * @return Pointer to timing information for the stage, or nullptr if it is not found or it is not pending.
+    */
+   swapchain_presentation_timing *get_pending_stage_timing(uint32_t image_index, VkPresentStageFlagBitsEXT stage);
+
+   /**
     * @pre Caller must hold m_queue_mutex.
     *
     * @brief Get the queue end timings for an image.
     *
     * Gets the queue end timings for a swapchain image and stores it in the internal queue.
+    * If there is no pending entry for the image index, no-op.
     *
     * @param image_index The index of the image in the swapchain.
     *
-    * @return VK_SUCCESS if the query is successful and error if otherwise.
+    * @return VK_SUCCESS if the query is successful and error otherwise. VK_SUCCESS if no pending entry is found.
     */
    VkResult get_queue_end_timing_to_queue(uint32_t image_index);
 

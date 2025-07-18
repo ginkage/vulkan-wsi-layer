@@ -35,8 +35,10 @@
 #include "layer/private_data.hpp"
 
 wsi_ext_present_timing_headless::wsi_ext_present_timing_headless(const util::allocator &allocator, VkDevice device,
-                                                                 uint32_t num_images)
+                                                                 uint32_t num_images,
+                                                                 std::optional<VkTimeDomainEXT> monotonic_domain)
    : wsi::wsi_ext_present_timing(allocator, device, num_images)
+   , m_monotonic_domain(monotonic_domain)
 {
 }
 
@@ -61,14 +63,12 @@ util::unique_ptr<wsi_ext_present_timing_headless> wsi_ext_present_timing_headles
       return nullptr;
    }
 
-   VkTimeDomainEXT monotonic_domain_to_use = VK_TIME_DOMAIN_CLOCK_MONOTONIC_RAW_EXT;
-   bool monotonic_time_domain_supported = false;
+   std::optional<VkTimeDomainEXT> monotonic_domain;
    for (auto [domain, supported] : monotonic_domains)
    {
-      monotonic_domain_to_use = domain;
       if (supported)
       {
-         monotonic_time_domain_supported = true;
+         monotonic_domain = domain;
          break;
       }
    }
@@ -80,27 +80,27 @@ util::unique_ptr<wsi_ext_present_timing_headless> wsi_ext_present_timing_headles
       return nullptr;
    }
 
-   if (monotonic_time_domain_supported)
+   if (monotonic_domain)
    {
-      if (!domains.try_push_back(allocator.make_unique<wsi::vulkan_time_domain>(VK_PRESENT_STAGE_IMAGE_LATCHED_BIT_EXT,
-                                                                                monotonic_domain_to_use)))
+      if (!domains.try_push_back(
+             allocator.make_unique<wsi::vulkan_time_domain>(VK_PRESENT_STAGE_IMAGE_LATCHED_BIT_EXT, *monotonic_domain)))
       {
          return nullptr;
       }
       if (!domains.try_push_back(allocator.make_unique<wsi::vulkan_time_domain>(
-             VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_OUT_BIT_EXT, monotonic_domain_to_use)))
+             VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_OUT_BIT_EXT, *monotonic_domain)))
       {
          return nullptr;
       }
       if (!domains.try_push_back(allocator.make_unique<wsi::vulkan_time_domain>(
-             VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_VISIBLE_BIT_EXT, monotonic_domain_to_use)))
+             VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_VISIBLE_BIT_EXT, *monotonic_domain)))
       {
          return nullptr;
       }
    }
 
    return wsi_ext_present_timing::create<wsi_ext_present_timing_headless>(allocator, domains.data(), domains.size(),
-                                                                          device, num_images);
+                                                                          device, num_images, monotonic_domain);
 }
 
 VkResult wsi_ext_present_timing_headless::get_swapchain_timing_properties(

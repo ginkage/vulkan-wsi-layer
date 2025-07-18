@@ -62,6 +62,12 @@ wsi_ext_present_timing::wsi_ext_present_timing(const util::allocator &allocator,
    , m_present_semaphore(allocator)
    , m_timestamp_period(0.f)
 {
+   if (layer::device_private_data::get(m_device).is_present_id_enabled())
+   {
+      WSI_LOG_ERROR(VK_EXT_PRESENT_TIMING_EXTENSION_NAME
+                    " enabled but required extension " VK_KHR_PRESENT_ID_EXTENSION_NAME " is not enabled.");
+   }
+
    VkPhysicalDeviceProperties2KHR physical_device_properties{};
    physical_device_properties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2_KHR;
    const auto &dev = layer::device_private_data::get(m_device);
@@ -160,22 +166,28 @@ static inline uint64_t ticks_to_ns(uint64_t ticks, const float &timestamp_period
    return static_cast<uint64_t>(std::llround(ns));
 }
 
+swapchain_presentation_timing *wsi_ext_present_timing::get_pending_stage_timing(uint32_t image_index,
+                                                                                VkPresentStageFlagBitsEXT stage)
+{
+   for (auto &entry : m_queue)
+   {
+      if (entry.m_image_index == image_index && entry.is_pending(stage))
+      {
+         return &entry.get_stage_timing(stage)->get();
+      }
+   }
+   return nullptr;
+}
+
 VkResult wsi_ext_present_timing::get_queue_end_timing_to_queue(uint32_t image_index)
 {
-   for (auto &slot : m_queue)
+   if (auto timing = get_pending_stage_timing(image_index, VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT))
    {
-      if ((slot.m_image_index == image_index) && slot.is_pending(VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT))
-      {
-         uint64_t time;
-         auto stage_timing_optional = slot.get_stage_timing(VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT);
-         const layer::device_private_data &device_data = layer::device_private_data::get(m_device);
-         TRY(device_data.disp.GetQueryPoolResults(m_device, m_query_pool, image_index, 1, sizeof(time), &time, 0,
-                                                  VK_QUERY_RESULT_64_BIT));
-         stage_timing_optional->get().m_time.store(ticks_to_ns(time, m_timestamp_period));
-         stage_timing_optional->get().m_set.store(true, std::memory_order_release);
-         /* For an image index, there can only be one entry in the internal queue with pending results. */
-         break;
-      }
+      uint64_t time;
+      const layer::device_private_data &device_data = layer::device_private_data::get(m_device);
+      TRY(device_data.disp.GetQueryPoolResults(m_device, m_query_pool, image_index, 1, sizeof(time), &time, 0,
+                                               VK_QUERY_RESULT_64_BIT));
+      timing->set_time(ticks_to_ns(time, m_timestamp_period));
    }
    return VK_SUCCESS;
 }
@@ -449,14 +461,13 @@ std::optional<bool> swapchain_presentation_entry::is_complete(VkPresentStageFlag
    {
       return std::nullopt;
    }
-   return stage_timing_optional->get().m_set.load(std::memory_order_relaxed);
+   return stage_timing_optional->get().m_set;
 }
 
 bool swapchain_presentation_entry::is_pending(VkPresentStageFlagBitsEXT stage)
 {
    auto stage_timing_optional = get_stage_timing(stage);
-   return stage_timing_optional.has_value() ? !stage_timing_optional->get().m_set.load(std::memory_order_relaxed) :
-                                              false;
+   return stage_timing_optional.has_value() ? !stage_timing_optional->get().m_set : false;
 }
 
 bool swapchain_presentation_entry::has_outstanding_stages()
@@ -531,12 +542,11 @@ void swapchain_presentation_entry::populate(VkPastPresentationTimingEXT &timing)
          continue;
       }
 
-      if (stage_timing_optional->get().m_set.load(std::memory_order_acquire))
+      if (stage_timing_optional->get().m_set)
       {
          timing.timeDomainId = stage_timing_optional->get().m_timedomain_id;
          timing.pPresentStages[stage_index].stage = stage;
-         timing.pPresentStages[stage_index++].time =
-            stage_timing_optional->get().m_time.load(std::memory_order_relaxed);
+         timing.pPresentStages[stage_index++].time = stage_timing_optional->get().m_time;
       }
    }
 
