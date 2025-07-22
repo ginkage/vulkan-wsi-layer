@@ -75,6 +75,7 @@ public:
          m_allocator = nullptr;
       }
       std::swap(m_allocator, other.m_allocator);
+      return *this;
    }
 
    ~swapchain_wsialloc_allocator()
