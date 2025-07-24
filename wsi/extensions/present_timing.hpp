@@ -183,6 +183,14 @@ struct swapchain_presentation_entry
     */
    std::optional<std::reference_wrapper<swapchain_presentation_timing>> get_stage_timing(
       VkPresentStageFlagBitsEXT stage);
+
+   /**
+    * @brief Sets the stage timing.
+    *
+    * @param stage The stage to set the timing for.
+    * @param time The time value to be updated.
+    */
+   void set_stage_timing(VkPresentStageFlagBitsEXT stage, uint64_t time);
 };
 
 /* Predefined struct for calibrated time */
@@ -398,15 +406,37 @@ public:
    swapchain_time_domains &get_swapchain_time_domains();
 
    /**
+    * @brief Check whether the stage is pending with the provided image index.
+    *
+    * @param image_index The index of the image.
+    * @param present_stage The present stage to be checked.
+    *
+    * @return true when the stage is pending of the image index provided and false otherwise.
+    */
+   bool is_stage_pending_for_image_index(uint32_t image_index, VkPresentStageFlagBitsEXT present_stage);
+
+   /**
     * @brief Backend specific implementation of the vkGetSwapchainTimingPropertiesEXT
     * entrypoint.
     *
     * @param timing_properties_counter Timing properties counter.
     * @param timing_properties Timing properties.
+    *
     * @return Vulkan result code.
     */
    virtual VkResult get_swapchain_timing_properties(uint64_t &timing_properties_counter,
                                                     VkSwapchainTimingPropertiesEXT &timing_properties) = 0;
+   /**
+    * @brief This function will get called to update the first visible pixel timing in the internal queue.
+    * Backends could optionally override the API to implement backend specific update for the stage.
+    *
+    * @param image_index The index of the image.
+    * @param stage_timing_optional The optional stage timing reference wrapper.
+    *
+    * @return Vulkan result code.
+    */
+   virtual VkResult get_pixel_out_timing_to_queue(
+      uint32_t image_index, std::optional<std::reference_wrapper<swapchain_presentation_timing>> stage_timing_optional);
 
 protected:
    /**
@@ -489,6 +519,10 @@ private:
    VkResult init_timing_resources();
 
    /**
+    * @brief Get all the pending results that are available to the queue.
+    *
+    * @retval VK_SUCCESS if there are no errors with copying the results,
+    * error otherwise.
     * @pre Caller must hold m_queue_mutex for the call and lifetime of the returned pointer.
     *
     * @brief Search for a pending presentation entry and access its timing info.
@@ -505,27 +539,14 @@ private:
    swapchain_presentation_timing *get_pending_stage_timing(uint32_t image_index, VkPresentStageFlagBitsEXT stage);
 
    /**
-    * @pre Caller must hold m_queue_mutex.
+    * @pre Caller must hold m_queue_mutex
     *
-    * @brief Get the queue end timings for an image.
+    * @brief Get all the pending results that are available to the queue.
     *
-    * Gets the queue end timings for a swapchain image and stores it in the internal queue.
-    * If there is no pending entry for the image index, no-op.
-    *
-    * @param image_index The index of the image in the swapchain.
-    *
-    * @return VK_SUCCESS if the query is successful and error otherwise. VK_SUCCESS if no pending entry is found.
+    * @retval VK_SUCCESS if there are no errors with copying the results,
+    * error otherwise.
     */
-   VkResult get_queue_end_timing_to_queue(uint32_t image_index);
-
-   /**
-    * @brief Query and get every completed queue-end timing.
-    *
-    * Any slots that were read are then reset so they can be reused.
-    *
-    * @retval VK_SUCCESS if the records are copied successfully or partially
-    */
-   VkResult query_present_queue_end_timings();
+   VkResult write_pending_results();
 
    /**
     * @pre Caller must hold m_queue_mutex

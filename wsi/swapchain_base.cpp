@@ -678,7 +678,6 @@ VkResult swapchain_base::queue_present(VkQueue queue, const VkPresentInfoKHR *pr
          present_timing_info->presentStageQueries));
    }
 #endif
-
    TRY(notify_presentation_engine(submit_info.pending_present));
 
    return VK_SUCCESS;

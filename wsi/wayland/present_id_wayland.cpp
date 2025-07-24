@@ -40,7 +40,7 @@ presentation_feedback *wsi_ext_present_id_wayland::insert_into_pending_present_f
    uint64_t present_id, struct wp_presentation_feedback *feedback_obj)
 {
    scoped_mutex lock(m_pending_presents_lock);
-   bool ret = m_pending_presents.push_back(presentation_feedback(present_id, feedback_obj, this));
+   bool ret = m_pending_presents.push_back(presentation_feedback(feedback_obj, this, present_id));
    if (!ret)
    {
       return nullptr;
@@ -51,7 +51,7 @@ presentation_feedback *wsi_ext_present_id_wayland::insert_into_pending_present_f
 void wsi_ext_present_id_wayland::remove_from_pending_present_feedback_list(uint64_t present_id)
 {
    scoped_mutex lock(m_pending_presents_lock);
-   while (m_pending_presents.size() > 0 && m_pending_presents.front()->present_id() <= present_id)
+   while (m_pending_presents.size() > 0 && m_pending_presents.front()->get_present_id() <= present_id)
    {
       m_pending_presents.pop_front();
    }
