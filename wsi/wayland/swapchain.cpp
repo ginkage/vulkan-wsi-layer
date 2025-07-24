@@ -203,6 +203,13 @@ VkResult swapchain::init_platform(VkDevice device, const VkSwapchainCreateInfoKH
    {
       present_wait->set_wayland_dispatcher(m_display, m_buffer_queue);
    }
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+   auto *present_timing_ext = get_swapchain_extension<wsi_ext_present_timing_wayland>();
+   if (present_timing_ext != nullptr)
+   {
+      present_timing_ext->init(m_display, m_buffer_queue);
+   }
+#endif
 
    return VK_SUCCESS;
 }
@@ -572,6 +579,27 @@ void swapchain::present_image(const pending_present_request &pending_present)
          wl_proxy_set_queue(reinterpret_cast<wl_proxy *>(feedback), m_buffer_queue);
          presentation_feedback *feedback_obj =
             ext->insert_into_pending_present_feedback_list(pending_present.present_id, feedback);
+         if (feedback_obj == nullptr)
+         {
+            WSI_LOG_ERROR("Error adding to pending present feedback list");
+            set_error_state(VK_ERROR_SURFACE_LOST_KHR);
+            return;
+         }
+         register_wp_presentation_feedback_listener(feedback, feedback_obj);
+      }
+   }
+   auto *present_timing_ext = get_swapchain_extension<wsi_ext_present_timing_wayland>();
+   if (present_timing_ext != nullptr)
+   {
+      if ((present_timing_ext->is_stage_pending_for_image_index(pending_present.image_index,
+                                                                VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_OUT_BIT_EXT)) &&
+          (m_wsi_surface->get_presentation_time_interface() != nullptr))
+      {
+         wp_presentation *pres = m_wsi_surface->get_presentation_time_interface();
+         struct wp_presentation_feedback *feedback = wp_presentation_feedback(pres, m_wsi_surface->get_wl_surface());
+         wl_proxy_set_queue(reinterpret_cast<wl_proxy *>(feedback), m_buffer_queue);
+         presentation_feedback *feedback_obj =
+            present_timing_ext->insert_into_pending_present_feedback_list(pending_present.image_index, feedback);
          if (feedback_obj == nullptr)
          {
             WSI_LOG_ERROR("Error adding to pending present feedback list");

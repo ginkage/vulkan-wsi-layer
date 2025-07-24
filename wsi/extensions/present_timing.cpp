@@ -157,6 +157,14 @@ VkResult wsi_ext_present_timing::init_timing_resources()
    return VK_SUCCESS;
 }
 
+VkResult wsi_ext_present_timing::get_pixel_out_timing_to_queue(
+   uint32_t image_index, std::optional<std::reference_wrapper<swapchain_presentation_timing>> stage_timing_optional)
+{
+   UNUSED(image_index);
+   UNUSED(stage_timing_optional);
+   return VK_SUCCESS;
+}
+
 static inline uint64_t ticks_to_ns(uint64_t ticks, const float &timestamp_period)
 {
    /* timestamp_period is float (ns per tick).  Use double so we keep
@@ -179,27 +187,22 @@ swapchain_presentation_timing *wsi_ext_present_timing::get_pending_stage_timing(
    return nullptr;
 }
 
-VkResult wsi_ext_present_timing::get_queue_end_timing_to_queue(uint32_t image_index)
+VkResult wsi_ext_present_timing::write_pending_results()
 {
-   if (auto timing = get_pending_stage_timing(image_index, VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT))
+   for (auto &slot : m_queue)
    {
-      uint64_t time;
-      const layer::device_private_data &device_data = layer::device_private_data::get(m_device);
-      TRY(device_data.disp.GetQueryPoolResults(m_device, m_query_pool, image_index, 1, sizeof(time), &time, 0,
-                                               VK_QUERY_RESULT_64_BIT));
-      timing->set_time(ticks_to_ns(time, m_timestamp_period));
-   }
-   return VK_SUCCESS;
-}
-
-VkResult wsi_ext_present_timing::query_present_queue_end_timings()
-{
-   for (uint32_t image_index = 0; image_index < m_num_images; ++image_index)
-   {
-      VkResult result = get_queue_end_timing_to_queue(image_index);
-      if ((result != VK_SUCCESS) && (result != VK_NOT_READY))
+      if (slot.is_pending(VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT))
       {
-         return result;
+         uint64_t time;
+         const layer::device_private_data &device_data = layer::device_private_data::get(m_device);
+         TRY(device_data.disp.GetQueryPoolResults(m_device, m_query_pool, slot.m_image_index, 1, sizeof(time), &time, 0,
+                                                  VK_QUERY_RESULT_64_BIT));
+         slot.set_stage_timing(VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT, ticks_to_ns(time, m_timestamp_period));
+      }
+      if (slot.is_pending(VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_OUT_BIT_EXT))
+      {
+         TRY_LOG_CALL(get_pixel_out_timing_to_queue(
+            slot.m_image_index, slot.get_stage_timing(VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_OUT_BIT_EXT)));
       }
    }
    return VK_SUCCESS;
@@ -275,14 +278,7 @@ VkResult wsi_ext_present_timing::add_presentation_entry(const layer::device_priv
                                                         VkPresentStageFlagsEXT present_stage_queries)
 {
    const std::lock_guard<std::mutex> lock(m_queue_mutex);
-
-   if (present_stage_queries & VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT)
-   {
-      /* Get results for the previous presentation. The queue end stage of
-       * the previous presentation for the same image must had
-       * finished when the same image is going to be presented again. */
-      TRY_LOG_CALL(get_queue_end_timing_to_queue(image_index));
-   }
+   TRY_LOG_CALL(write_pending_results());
 
    /* Keep the internal queue to the limit defined by the application. */
    if (m_queue.size() == m_queue.capacity())
@@ -337,8 +333,8 @@ VkResult wsi_ext_present_timing::get_past_presentation_results(
    const std::lock_guard<std::mutex> lock(m_queue_mutex);
 
    assert(past_present_timing_properties != nullptr);
-   /* Get any outstanding timings in the query pool to the internal queue. */
-   TRY_LOG_CALL(query_present_queue_end_timings());
+   /* Get any outstanding timings to the internal queue. */
+   TRY_LOG_CALL(write_pending_results());
    if (past_present_timing_properties->pPresentationTimings == nullptr)
    {
       past_present_timing_properties->presentationTimingCount = get_num_available_results(flags);
@@ -423,6 +419,13 @@ VkResult wsi_ext_present_timing::get_past_presentation_results(
    const bool incomplete = (out < in) || (out < (get_num_available_results(flags) + removed_entries));
 
    return incomplete ? VK_INCOMPLETE : VK_SUCCESS;
+}
+
+bool wsi_ext_present_timing::is_stage_pending_for_image_index(uint32_t image_index,
+                                                              VkPresentStageFlagBitsEXT present_stage)
+{
+   const std::lock_guard<std::mutex> lock(m_queue_mutex);
+   return (get_pending_stage_timing(image_index, present_stage) != nullptr);
 }
 
 swapchain_presentation_entry::swapchain_presentation_entry(VkPresentStageFlagsEXT present_stage_queries,
@@ -529,6 +532,16 @@ std::optional<std::reference_wrapper<swapchain_presentation_timing>> swapchain_p
       assert(0);
    }
    return std::nullopt;
+}
+
+void swapchain_presentation_entry::set_stage_timing(VkPresentStageFlagBitsEXT stage, uint64_t time)
+{
+   auto stage_timing_optional = get_stage_timing(stage);
+   if (stage_timing_optional->get().m_set)
+   {
+      return;
+   }
+   stage_timing_optional->get().set_time(time);
 }
 
 void swapchain_presentation_entry::populate(VkPastPresentationTimingEXT &timing)

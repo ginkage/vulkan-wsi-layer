@@ -120,5 +120,4 @@ VkResult wsi_ext_present_timing_headless::get_swapchain_timing_properties(
 
    return VK_SUCCESS;
 }
-
 #endif

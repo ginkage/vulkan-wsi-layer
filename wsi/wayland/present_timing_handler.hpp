@@ -33,6 +33,14 @@
 
 #include <wsi/extensions/present_timing.hpp>
 #include <optional>
+#include "surface_properties.hpp"
+#include "wp_presentation_feedback.hpp"
+#include "wl_helpers.hpp"
+
+namespace wsi
+{
+namespace wayland
+{
 
 /**
  * @brief Present timing extension class
@@ -49,11 +57,84 @@ public:
    VkResult get_swapchain_timing_properties(uint64_t &timing_properties_counter,
                                             VkSwapchainTimingPropertiesEXT &timing_properties) override;
 
+   /**
+    * @brief Insert into pending present id list.
+    *
+    * @param image_index The index of the image to be inserted in the list.
+    *
+    * @param feedback_obj The feedback object containing the callback.
+    *
+    * @return Pointer to the presentation feedback object in the pending presents list.
+    */
+   presentation_feedback *insert_into_pending_present_feedback_list(uint32_t image_index,
+                                                                    struct wp_presentation_feedback *feedback_obj);
+   /**
+    * @brief Remove a present id from the pending present id list.
+    *
+    * @param image_index The index of the image to be inserted in the list.
+    *
+    */
+   void remove_from_pending_present_feedback_list(uint32_t image_index);
+
+   /**
+    * @brief Updates the first pixel out timing in the internal array.
+    *
+    * @param image_index The index of the image in the swapchain.
+    *
+    * @param time The time to set for the first pixel out stage.
+    *
+    */
+   void pixelout_callback(uint32_t image_index, uint64_t time);
+
+   /*
+    * @brief Copies the pixel out timestamp from the internal array to the present timing queue.
+    *
+    * @param image_index The index of the image.
+    *
+    * @param stage_timing_optional The optional stage timing reference wrapper.
+    *
+    * @return VK_SUCCESS when success, VK_ERROR_SURFACE_LOST_KHR otherwise.
+    */
+   VkResult get_pixel_out_timing_to_queue(
+      uint32_t image_index,
+      std::optional<std::reference_wrapper<swapchain_presentation_timing>> stage_timing_optional) override;
+
+   /*
+    * @brief Initializes the member variables display and event queue.
+    *
+    * @param display Pointer to the Wayland display.
+    *
+    * @param queue Pointer to the Wayland event queue.
+    */
+   void init(wl_display *display, struct wl_event_queue *queue);
+
 private:
-   wsi_ext_present_timing_wayland(const util::allocator &allocator, VkDevice device, uint32_t num_images);
+   /**
+    * @brief Mutex for synchronising accesses to the pending present id list.
+    */
+   std::mutex m_pending_presents_lock;
+
+   /**
+    * @brief Stores the presentation feedbacks that have been queued.
+    */
+
+   util::vector<presentation_feedback> m_pending_presents;
+   wsi_ext_present_timing_wayland(const util::allocator &allocator, VkDevice device, uint32_t num_images,
+                                  util::vector<std::optional<uint64_t>> &&timestamp_first_pixel_out_storage);
+
+   wl_display *m_display{};
+   struct wl_event_queue *m_queue{};
+   /**
+    * @brief Placeholder for wp_presentation and wp_discarded to write the timestamps.
+    * The timestamps are later copied to the first pixel out timing stage in presen_timing's m_queue.
+    */
+   util::vector<std::optional<uint64_t>> m_timestamp_first_pixel_out;
 
    /* Allow util::allocator to access the private constructor */
    friend util::allocator;
 };
+
+} // namespace wayland
+} // namespace wsi
 
 #endif
