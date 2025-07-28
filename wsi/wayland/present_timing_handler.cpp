@@ -137,11 +137,18 @@ void wsi_ext_present_timing_wayland::pixelout_callback(uint32_t image_index, uin
 VkResult wsi_ext_present_timing_wayland::get_pixel_out_timing_to_queue(
    uint32_t image_index, std::optional<std::reference_wrapper<swapchain_presentation_timing>> stage_timing_optional)
 {
-   if (!m_timestamp_first_pixel_out[image_index].has_value())
+   /* Try to get the event until there are no more events in
+    * the queue or till we get the presentation callback. */
+   while (!m_timestamp_first_pixel_out[image_index].has_value())
    {
-      if (dispatch_queue(m_display, m_queue, 0) < 0)
+      int res = dispatch_queue(m_display, m_queue, 0);
+      if (res < 0)
       {
          return VK_ERROR_SURFACE_LOST_KHR;
+      }
+      else if (res == 0)
+      {
+         break;
       }
    }
    if (m_timestamp_first_pixel_out[image_index].has_value())
