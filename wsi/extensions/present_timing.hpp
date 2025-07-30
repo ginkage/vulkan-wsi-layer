@@ -287,6 +287,27 @@ private:
 };
 
 /**
+ * @brief Structure describing a scheduled present target.
+ */
+struct scheduled_present_target
+{
+   scheduled_present_target(const VkPresentTimingInfoEXT &timing_info)
+      : m_target_stage(timing_info.targetPresentStage)
+      , m_time_domain_id(timing_info.timeDomainId)
+      , m_present_at_nearest_refresh_cycle(timing_info.presentAtNearestRefreshCycle)
+      , m_present_at_relative_time(timing_info.presentAtRelativeTime)
+      , m_target_present_time(timing_info.time)
+   {
+   }
+
+   VkPresentStageFlagsEXT m_target_stage;
+   uint64_t m_time_domain_id;
+   bool m_present_at_nearest_refresh_cycle;
+   bool m_present_at_relative_time;
+   VkPresentTimeEXT m_target_present_time;
+};
+
+/**
  * @brief Present timing extension class
  *
  * This class implements or act as a base class for the present timing extension
@@ -362,8 +383,44 @@ public:
     * @return VK_SUCCESS when the entry was inserted successfully and VK_ERROR_OUT_OF_HOST_MEMORY
     * when there is no host memory.
     */
-   VkResult add_presentation_entry(const layer::device_private_data &device, VkQueue queue, uint64_t present_id,
-                                   uint32_t image_index, VkPresentStageFlagsEXT present_stage_queries);
+   VkResult add_presentation_query_entry(VkQueue queue, uint64_t present_id, uint32_t image_index,
+                                         VkPresentStageFlagsEXT present_stage_queries);
+
+   /**
+    * @brief Add a presentation target entry.
+    *
+    * @param image_index The index of the image in the swapchain.
+    * @param timing_info The timing info for the presentation target.
+    */
+   void add_presentation_target_entry(uint32_t image_index, const VkPresentTimingInfoEXT &timing_info);
+
+   /**
+    * @brief Remove a presentation target entry.
+    *
+    * @param image_index The index of the image in the swapchain for which to remove the entry.
+    */
+   void remove_presentation_target_entry(uint32_t image_index);
+
+   /**
+    * @brief Get the presentation target entry for @p image_index if any
+    *
+    * @param image_index The index of the image in the swapchain.
+    * @return Scheduled present target if any exists currently for the image.
+    */
+   std::optional<scheduled_present_target> get_presentation_target_entry(uint32_t image_index);
+
+   /**
+    * @brief Add a presentation entry to the present timing queue.
+    *
+    * @param queue                 The Vulkan queue used to submit synchronization commands.
+    * @param present_id            The present id of the current presentation.
+    * @param image_index           The index of the image in the swapchain.
+    * @param timing_info           The timing info for the presentation.
+    *
+    * @return VK_SUCCESS when the entry was inserted successfully, error otherwise.
+    */
+   VkResult add_presentation_entry(VkQueue queue, uint64_t present_id, uint32_t image_index,
+                                   const VkPresentTimingInfoEXT &timing_info);
 
    /**
     * @brief Set the time for a stage, if it exists and is pending.
@@ -451,9 +508,9 @@ private:
    swapchain_time_domains m_time_domains;
 
    /**
-    *  @brief The Vulkan device.
+    *  @brief The Vulkan layer device.
     */
-   VkDevice m_device;
+   layer::device_private_data &m_device;
 
    /**
     * @brief Query pool to allocate for present stage timing queries.
@@ -483,6 +540,11 @@ private:
     * @brief The presentation timing queue.
     */
    util::vector<swapchain_presentation_entry> m_queue;
+
+   /**
+    * @brief The presentation target entries.
+    */
+   util::vector<std::optional<scheduled_present_target>> m_scheduled_present_targets;
 
    /**
     * @brief The number of images in the swapchain.

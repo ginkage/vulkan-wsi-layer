@@ -209,6 +209,43 @@ VkResult swapchain::create_swapchain_image(VkImageCreateInfo image_create_info, 
 
 void swapchain::present_image(const pending_present_request &pending_present)
 {
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+   auto *ext_present_timing = get_swapchain_extension<wsi_ext_present_timing_headless>();
+   if (ext_present_timing)
+   {
+      auto presentation_target = ext_present_timing->get_presentation_target_entry(pending_present.image_index);
+      if (presentation_target)
+      {
+         const VkPresentStageFlagsEXT supported_target_stages = VK_PRESENT_STAGE_IMAGE_LATCHED_BIT_EXT |
+                                                                VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_OUT_BIT_EXT |
+                                                                VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_VISIBLE_BIT_EXT;
+         if ((presentation_target->m_target_stage & supported_target_stages) != 0)
+         {
+            /* No support for relative presentation mode currently */
+            assert(!presentation_target->m_present_at_relative_time);
+            if (!presentation_target->m_present_at_relative_time)
+            {
+               /* No need to check whether we need to present at nearest refresh cycle since this backend is not
+                  limited by the refresh cycles. */
+               uint64_t absolute_future_present_time_ns = presentation_target->m_target_present_time.targetPresentTime;
+               auto current_time_ns = ext_present_timing->get_current_clock_time_ns();
+               if (*current_time_ns < absolute_future_present_time_ns)
+               {
+                  /* Sleep until we can schedule the image for completion.
+                   * This is OK as the sleep should only be dispatched on the page_flip thread and not on main. */
+                  assert(m_page_flip_thread_run);
+
+                  int64_t time_diff = absolute_future_present_time_ns - *current_time_ns;
+                  std::this_thread::sleep_for(std::chrono::nanoseconds(time_diff));
+               }
+            }
+         }
+      }
+
+      ext_present_timing->remove_presentation_target_entry(pending_present.image_index);
+   }
+#endif
+
    if (m_device_data.is_present_id_enabled())
    {
       auto *ext_present_id = get_swapchain_extension<wsi_ext_present_id>(true);
@@ -216,29 +253,23 @@ void swapchain::present_image(const pending_present_request &pending_present)
    }
 
 #if VULKAN_WSI_LAYER_EXPERIMENTAL
-   auto *ext_present_timing = get_swapchain_extension<wsi_ext_present_timing_headless>(false);
    if (ext_present_timing && ext_present_timing->get_monotonic_domain().has_value())
    {
-      clockid_t clockid = ext_present_timing->get_monotonic_domain().value() == VK_TIME_DOMAIN_CLOCK_MONOTONIC_EXT ?
-                             CLOCK_MONOTONIC :
-                             CLOCK_MONOTONIC_RAW;
-      struct timespec now = {};
-      if (clock_gettime(clockid, &now) != 0)
+      auto current_time = ext_present_timing->get_current_clock_time_ns();
+      if (!current_time.has_value())
       {
-         WSI_LOG_ERROR("Failed to get time of clock %d, error: %d (%s)", clockid, errno, strerror(errno));
+         /* Set all times to 0 as we were not able to query them. */
+         current_time = 0;
       }
-      else
+
+      VkPresentStageFlagBitsEXT stages[] = {
+         VK_PRESENT_STAGE_IMAGE_LATCHED_BIT_EXT,
+         VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_OUT_BIT_EXT,
+         VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_VISIBLE_BIT_EXT,
+      };
+      for (auto stage : stages)
       {
-         uint64_t time = now.tv_sec * 1e9 + now.tv_nsec;
-         VkPresentStageFlagBitsEXT stages[] = {
-            VK_PRESENT_STAGE_IMAGE_LATCHED_BIT_EXT,
-            VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_OUT_BIT_EXT,
-            VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_VISIBLE_BIT_EXT,
-         };
-         for (auto stage : stages)
-         {
-            ext_present_timing->set_pending_stage_time(pending_present.image_index, stage, time);
-         }
+         ext_present_timing->set_pending_stage_time(pending_present.image_index, stage, *current_time);
       }
    }
 #endif
