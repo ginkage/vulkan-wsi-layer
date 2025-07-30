@@ -60,6 +60,13 @@ public:
       return m_monotonic_domain;
    }
 
+   /**
+    * @brief Get the current clock time by using clock_gettime with the monotonic time domain
+    *
+    * @return Current time in specified domain or std::nullopt in case of error.
+    */
+   std::optional<uint64_t> get_current_clock_time_ns() const;
+
 private:
    wsi_ext_present_timing_headless(const util::allocator &allocator, VkDevice device, uint32_t num_images,
                                    std::optional<VkTimeDomainEXT> monotonic_domain);

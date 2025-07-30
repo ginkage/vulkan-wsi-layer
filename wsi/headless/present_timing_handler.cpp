@@ -120,4 +120,35 @@ VkResult wsi_ext_present_timing_headless::get_swapchain_timing_properties(
 
    return VK_SUCCESS;
 }
+
+std::optional<uint64_t> wsi_ext_present_timing_headless::get_current_clock_time_ns() const
+{
+   if (!m_monotonic_domain.has_value())
+   {
+      return std::nullopt;
+   }
+
+   clockid_t clockid = CLOCK_MONOTONIC_RAW;
+   switch (*m_monotonic_domain)
+   {
+   case VK_TIME_DOMAIN_CLOCK_MONOTONIC_RAW_KHR:
+      clockid = CLOCK_MONOTONIC_RAW;
+      break;
+   case VK_TIME_DOMAIN_CLOCK_MONOTONIC_KHR:
+      clockid = CLOCK_MONOTONIC;
+      break;
+   default:
+      return std::nullopt;
+   }
+
+   struct timespec now = {};
+   if (clock_gettime(clockid, &now) != 0)
+   {
+      WSI_LOG_ERROR("Failed to get time of clock %d, error: %d (%s)", clockid, errno, strerror(errno));
+      return std::nullopt;
+   }
+
+   return now.tv_sec * static_cast<uint64_t>(1e9) + now.tv_nsec;
+}
+
 #endif

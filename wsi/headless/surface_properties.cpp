@@ -232,7 +232,7 @@ VkResult surface_properties::get_present_timing_surface_caps(
 {
    present_timing_surface_caps->presentTimingSupported = VK_TRUE;
    present_timing_surface_caps->presentAtAbsoluteTimeSupported = VK_TRUE;
-   present_timing_surface_caps->presentAtRelativeTimeSupported = VK_TRUE;
+   present_timing_surface_caps->presentAtRelativeTimeSupported = VK_FALSE;
 
    VkPresentStageFlagsEXT monotonic_present_stages_supported = 0;
    std::array monotonic_domains = {

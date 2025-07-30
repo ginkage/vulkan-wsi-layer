@@ -674,8 +674,7 @@ VkResult swapchain_base::queue_present(VkQueue queue, const VkPresentInfoKHR *pr
    {
       auto *ext_present_timing = get_swapchain_extension<wsi::wsi_ext_present_timing>(true);
       TRY_LOG_CALL(ext_present_timing->add_presentation_entry(
-         m_device_data, queue, submit_info.pending_present.present_id, submit_info.pending_present.image_index,
-         present_timing_info->presentStageQueries));
+         queue, submit_info.pending_present.present_id, submit_info.pending_present.image_index, *present_timing_info));
    }
 #endif
    TRY(notify_presentation_engine(submit_info.pending_present));
