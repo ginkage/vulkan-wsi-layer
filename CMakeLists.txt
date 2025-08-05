@@ -33,8 +33,19 @@ if (NOT CLANG_TIDY STREQUAL "CLANG_TIDY-NOTFOUND")
    set(CMAKE_CXX_CLANG_TIDY ${CLANG_TIDY} -checks=bugprone-*,modernize-*)
 endif()
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Werror -Wextra -pthread -fPIC")
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIC")
+string(APPEND CMAKE_CXX_FLAGS
+    " -Wall -Werror -Wextra"
+    " -Wdouble-promotion -Wnon-virtual-dtor -Wdelete-non-virtual-dtor"
+    " -Wcast-qual -Werror=return-type -Wmissing-format-attribute"
+    " -pthread -fPIC"
+)
+
+string(APPEND CMAKE_C_FLAGS
+    " -Wall -Werror -Wextra"
+    " -Wstrict-prototypes"
+    " -fPIC"
+)
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -199,12 +210,17 @@ if(BUILD_WSI_WAYLAND)
       ${CMAKE_CURRENT_BINARY_DIR}/presentation-time-client-protocol.h)
    add_dependencies(wayland_wsi wayland_generated_files)
 
-   target_include_directories(wayland_wsi PRIVATE
-      ${PROJECT_SOURCE_DIR}
-      ${VULKAN_CXX_INCLUDE}
+   # Mark Wayland headers as system to suppress third-party warnings like -Wcast-qual
+   target_include_directories(wayland_wsi SYSTEM PRIVATE
       ${WAYLAND_CLIENT_INCLUDE_DIRS}
       ${CMAKE_CURRENT_BINARY_DIR})
 
+   # Keep project and Vulkan includes normal for full warnings
+   target_include_directories(wayland_wsi PRIVATE
+      ${PROJECT_SOURCE_DIR}
+      ${VULKAN_CXX_INCLUDE})
+
+   # Suppress cast-qual warnings coming from Wayland headers
    target_compile_options(wayland_wsi PRIVATE ${WAYLAND_CLIENT_CFLAGS})
    target_compile_options(wayland_wsi INTERFACE "-DBUILD_WSI_WAYLAND=1")
    if(NOT EXTERNAL_WSIALLOC_LIBRARY STREQUAL "")
