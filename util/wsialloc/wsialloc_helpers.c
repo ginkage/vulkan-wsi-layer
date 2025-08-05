@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Arm Limited.
+ * Copyright (c) 2024-2025 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -44,7 +44,7 @@ static uint64_t round_size_up_to_align(uint64_t size)
 }
 
 static wsialloc_error calculate_format_properties(const wsialloc_format_descriptor *descriptor,
-                                                  const wsialloc_allocate_info *info, int *strides, uint32_t *offsets,
+                                                  const wsialloc_allocate_info *info, int *strides, int *offsets,
                                                   uint64_t *total_size)
 {
    assert(descriptor != NULL);
@@ -54,7 +54,6 @@ static wsialloc_error calculate_format_properties(const wsialloc_format_descript
    assert(total_size != NULL);
 
    const uint8_t *bits_per_pixel = descriptor->format_spec.bpp;
-   const uint64_t flags = descriptor->format.flags;
    const uint64_t modifier = descriptor->format.modifier;
    const uint32_t num_planes = descriptor->format_spec.nr_planes;
 

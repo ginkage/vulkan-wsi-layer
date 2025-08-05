@@ -123,6 +123,11 @@ public:
       VkPhysicalDevice physical_device, VkPresentTimingSurfaceCapabilitiesEXT *present_timing_surface_caps) = 0;
 #endif
 
+   /**
+    * @brief Virtual destructor.
+    */
+   virtual ~surface_properties() = default;
+
 private:
    /**
     * @brief Set which presentation modes are compatible with each other for a particular surface
