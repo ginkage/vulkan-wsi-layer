@@ -365,6 +365,15 @@ VKAPI_ATTR VkResult create_device(VkPhysicalDevice physicalDevice, const VkDevic
       device_data.set_present_id_feature_enabled(present_id_features->presentId);
    }
 
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+   const auto present_id2_features = util::find_extension<VkPhysicalDevicePresentId2FeaturesKHR>(
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_ID_2_FEATURES_KHR, pCreateInfo->pNext);
+   if (present_id2_features != nullptr)
+   {
+      device_data.set_present_id2_feature_enabled(present_id2_features->presentId2);
+   }
+#endif
+
    const auto present_mode_fifo_latest_ready_features =
       util::find_extension<VkPhysicalDevicePresentModeFifoLatestReadyFeaturesEXT>(
          VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_MODE_FIFO_LATEST_READY_FEATURES_EXT, pCreateInfo->pNext);
@@ -513,6 +522,15 @@ wsi_layer_vkGetPhysicalDeviceFeatures2(VkPhysicalDevice physical_device,
    {
       present_id_features->presentId = VK_TRUE;
    }
+
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+   auto *present_id2_features = util::find_extension<VkPhysicalDevicePresentId2FeaturesKHR>(
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_ID_2_FEATURES_KHR, pFeatures->pNext);
+   if (present_id2_features != nullptr)
+   {
+      present_id2_features->presentId2 = VK_TRUE;
+   }
+#endif
 
    wsi::set_swapchain_maintenance1_state(physical_device, swapchain_maintenance1_features);
 

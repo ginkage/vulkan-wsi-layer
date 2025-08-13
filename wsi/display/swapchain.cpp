@@ -85,7 +85,11 @@ VkResult swapchain::add_required_extensions(VkDevice device, const VkSwapchainCr
       }
    }
 
-   if (m_device_data.is_present_id_enabled())
+   if (m_device_data.is_present_id_enabled()
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+       || (swapchain_create_info->flags & VK_SWAPCHAIN_CREATE_PRESENT_ID_2_BIT_KHR)
+#endif
+   )
    {
       if (!add_swapchain_extension(m_allocator.make_unique<wsi_ext_present_id>()))
       {
@@ -568,9 +572,9 @@ void swapchain::present_image(const pending_present_request &pending_present)
    /* The image is on screen, change the image status to PRESENTED. */
    m_swapchain_images[pending_present.image_index].status = swapchain_image::PRESENTED;
 
-   if (m_device_data.is_present_id_enabled())
+   auto *ext = get_swapchain_extension<wsi_ext_present_id>();
+   if (ext != nullptr)
    {
-      auto *ext = get_swapchain_extension<wsi_ext_present_id>(true);
       ext->mark_delivered(pending_present.present_id);
    }
 

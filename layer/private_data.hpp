@@ -931,6 +931,22 @@ public:
     */
    bool is_present_id_enabled();
 
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+   /**
+    * @brief Set whether the device supports the present ID2 feature.
+    *
+    * @param enable Value to set m_present_id2_enabled member variable.
+    */
+   void set_present_id2_feature_enabled(bool enable);
+
+   /**
+    * @brief Check whether the device can support the present ID2 feature.
+    *
+    * @return true if supported, false otherwise.
+    */
+   bool is_present_id2_enabled();
+#endif
+
    /**
     * @brief Selectively enable/disable the fifo_latest_ready for this device
     *
@@ -1034,6 +1050,12 @@ private:
     * @brief Stores whether the device has enabled support for the present timing features.
     */
    bool present_timing_enabled{ false };
+
+   /**
+    * @brief Stores whether the device supports the present ID2 feature.
+    *
+    */
+   bool present_id2_enabled{ false };
 #endif
 
    /**

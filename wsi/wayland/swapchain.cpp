@@ -92,7 +92,11 @@ VkResult swapchain::add_required_extensions(VkDevice device, const VkSwapchainCr
       }
    }
 
-   if (m_device_data.is_present_id_enabled())
+   if (m_device_data.is_present_id_enabled()
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+       || (swapchain_create_info->flags & VK_SWAPCHAIN_CREATE_PRESENT_ID_2_BIT_KHR)
+#endif
+   )
    {
 #if VULKAN_WSI_LAYER_EXPERIMENTAL
       if (!add_swapchain_extension(m_allocator.make_unique<wsi_ext_present_id_wayland>()))
@@ -623,14 +627,20 @@ void swapchain::present_image(const pending_present_request &pending_present)
    if (m_device_data.is_present_id_enabled())
    {
 #if VULKAN_WSI_LAYER_EXPERIMENTAL
-      auto *ext = get_swapchain_extension<wsi_ext_present_id_wayland>(true);
-      if (m_wsi_surface->get_presentation_time_interface() == nullptr)
-#else
-      auto *ext = get_swapchain_extension<wsi_ext_present_id>(true);
-#endif
+      auto *ext = get_swapchain_extension<wsi_ext_present_id_wayland>();
+      if (ext != nullptr)
       {
-         ext->mark_delivered(pending_present.present_id);
+         if (m_wsi_surface->get_presentation_time_interface() == nullptr)
+#else
+      auto *ext = get_swapchain_extension<wsi_ext_present_id>();
+      if (ext != nullptr)
+#endif
+         {
+            ext->mark_delivered(pending_present.present_id);
+         }
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
       }
+#endif
    }
 }
 
