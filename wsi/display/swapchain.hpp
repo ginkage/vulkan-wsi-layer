@@ -84,7 +84,9 @@ class swapchain : public wsi::swapchain_base
 {
 public:
    swapchain(layer::device_private_data &dev_data, const VkAllocationCallbacks *pAllocator, surface &wsi_surface);
+
    virtual ~swapchain();
+
    virtual VkResult init_platform(VkDevice device, const VkSwapchainCreateInfoKHR *swapchain_create_info,
                                   bool &use_presentation_thread) override;
 

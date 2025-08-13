@@ -71,9 +71,15 @@ swapchain::~swapchain()
 VkResult swapchain::add_required_extensions(VkDevice device, const VkSwapchainCreateInfoKHR *swapchain_create_info)
 {
    UNUSED(device);
+#if !VULKAN_WSI_LAYER_EXPERIMENTAL
    UNUSED(swapchain_create_info);
+#endif
 
-   if (m_device_data.is_present_id_enabled())
+   if (m_device_data.is_present_id_enabled()
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+       || (swapchain_create_info->flags & VK_SWAPCHAIN_CREATE_PRESENT_ID_2_BIT_KHR)
+#endif
+   )
    {
       if (!add_swapchain_extension(m_allocator.make_unique<wsi_ext_present_id>()))
       {
@@ -246,10 +252,10 @@ void swapchain::present_image(const pending_present_request &pending_present)
    }
 #endif
 
-   if (m_device_data.is_present_id_enabled())
+   auto *ext = get_swapchain_extension<wsi_ext_present_id>();
+   if (ext != nullptr)
    {
-      auto *ext_present_id = get_swapchain_extension<wsi_ext_present_id>(true);
-      ext_present_id->mark_delivered(pending_present.present_id);
+      ext->mark_delivered(pending_present.present_id);
    }
 
 #if VULKAN_WSI_LAYER_EXPERIMENTAL

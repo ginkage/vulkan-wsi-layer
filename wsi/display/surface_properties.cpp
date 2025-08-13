@@ -99,6 +99,15 @@ VkResult surface_properties::get_surface_capabilities(VkPhysicalDevice physical_
       surface_scaling_capabilities->maxScaledImageExtent = pSurfaceCapabilities->surfaceCapabilities.maxImageExtent;
    }
 
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+   auto present_id2_surface_cap = util::find_extension<VkSurfaceCapabilitiesPresentId2KHR>(
+      VK_STRUCTURE_TYPE_SURFACE_CAPABILITIES_PRESENT_ID_2_KHR, pSurfaceCapabilities->pNext);
+   if (present_id2_surface_cap != nullptr)
+   {
+      present_id2_surface_cap->presentId2Supported = VK_TRUE;
+   }
+#endif
+
    return VK_SUCCESS;
 }
 
