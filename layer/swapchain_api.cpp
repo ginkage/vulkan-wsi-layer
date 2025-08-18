@@ -191,7 +191,43 @@ wsi_layer_vkQueuePresentKHR(VkQueue queue, const VkPresentInfoKHR *pPresentInfo)
 
    VkResult ret = VK_SUCCESS;
 
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+   struct present_ids
+   {
+      uint32_t ids_num{ 0 };
+      const uint64_t *p_present_ids{ nullptr };
+
+      bool has_ids()
+      {
+         return ids_num > 0;
+      }
+   };
+
+   present_ids present_ids{};
+
+   if (device_data.is_present_id2_enabled())
+   {
+      auto *ext2 = util::find_extension<VkPresentIdKHR>(VK_STRUCTURE_TYPE_PRESENT_ID_2_KHR, pPresentInfo->pNext);
+      if (ext2 != nullptr)
+      {
+         present_ids.ids_num = ext2->swapchainCount;
+         present_ids.p_present_ids = ext2->pPresentIds;
+      }
+   }
+
+   if (!present_ids.has_ids())
+   {
+      auto *ext = util::find_extension<VkPresentIdKHR>(VK_STRUCTURE_TYPE_PRESENT_ID_KHR, pPresentInfo->pNext);
+      if (ext != nullptr)
+      {
+         present_ids.ids_num = ext->swapchainCount;
+         present_ids.p_present_ids = ext->pPresentIds;
+      }
+   }
+#else
    auto *present_ids = util::find_extension<VkPresentIdKHR>(VK_STRUCTURE_TYPE_PRESENT_ID_KHR, pPresentInfo->pNext);
+#endif
+
    const auto present_fence_info = util::find_extension<VkSwapchainPresentFenceInfoEXT>(
       VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_FENCE_INFO_EXT, present_info->pNext);
    const auto swapchain_present_mode_info = util::find_extension<VkSwapchainPresentModeInfoEXT>(
@@ -211,10 +247,18 @@ wsi_layer_vkQueuePresentKHR(VkQueue queue, const VkPresentInfoKHR *pPresentInfo)
       assert(sc != nullptr);
 
       uint64_t present_id = 0; /* No present ID by default */
+
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+      if (present_ids.p_present_ids && present_ids.ids_num == pPresentInfo->swapchainCount)
+      {
+         present_id = present_ids.p_present_ids[i];
+      }
+#else
       if (present_ids && present_ids->pPresentIds && present_ids->swapchainCount == pPresentInfo->swapchainCount)
       {
          present_id = present_ids->pPresentIds[i];
       }
+#endif
 
       wsi::swapchain_presentation_parameters present_params{};
       present_params.present_fence = (present_fence_info == nullptr) ? VK_NULL_HANDLE : present_fence_info->pFences[i];
