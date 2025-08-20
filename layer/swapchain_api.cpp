@@ -191,7 +191,6 @@ wsi_layer_vkQueuePresentKHR(VkQueue queue, const VkPresentInfoKHR *pPresentInfo)
 
    VkResult ret = VK_SUCCESS;
 
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
    struct present_ids
    {
       uint32_t ids_num{ 0 };
@@ -224,9 +223,6 @@ wsi_layer_vkQueuePresentKHR(VkQueue queue, const VkPresentInfoKHR *pPresentInfo)
          present_ids.p_present_ids = ext->pPresentIds;
       }
    }
-#else
-   auto *present_ids = util::find_extension<VkPresentIdKHR>(VK_STRUCTURE_TYPE_PRESENT_ID_KHR, pPresentInfo->pNext);
-#endif
 
    const auto present_fence_info = util::find_extension<VkSwapchainPresentFenceInfoEXT>(
       VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_FENCE_INFO_EXT, present_info->pNext);
@@ -248,17 +244,10 @@ wsi_layer_vkQueuePresentKHR(VkQueue queue, const VkPresentInfoKHR *pPresentInfo)
 
       uint64_t present_id = 0; /* No present ID by default */
 
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
       if (present_ids.p_present_ids && present_ids.ids_num == pPresentInfo->swapchainCount)
       {
          present_id = present_ids.p_present_ids[i];
       }
-#else
-      if (present_ids && present_ids->pPresentIds && present_ids->swapchainCount == pPresentInfo->swapchainCount)
-      {
-         present_id = present_ids->pPresentIds[i];
-      }
-#endif
 
       wsi::swapchain_presentation_parameters present_params{};
       present_params.present_fence = (present_fence_info == nullptr) ? VK_NULL_HANDLE : present_fence_info->pFences[i];

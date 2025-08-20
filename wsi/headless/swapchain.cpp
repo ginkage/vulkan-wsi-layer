@@ -71,15 +71,9 @@ swapchain::~swapchain()
 VkResult swapchain::add_required_extensions(VkDevice device, const VkSwapchainCreateInfoKHR *swapchain_create_info)
 {
    UNUSED(device);
-#if !VULKAN_WSI_LAYER_EXPERIMENTAL
-   UNUSED(swapchain_create_info);
-#endif
 
-   if (m_device_data.is_present_id_enabled()
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
-       || (swapchain_create_info->flags & VK_SWAPCHAIN_CREATE_PRESENT_ID_2_BIT_KHR)
-#endif
-   )
+   if (m_device_data.is_present_id_enabled() ||
+       (swapchain_create_info->flags & VK_SWAPCHAIN_CREATE_PRESENT_ID_2_BIT_KHR))
    {
       if (!add_swapchain_extension(m_allocator.make_unique<wsi_ext_present_id>()))
       {

@@ -433,9 +433,9 @@ device_private_data::device_private_data(instance_private_data &inst_data, VkPhy
    , swapchain_maintenance1_enabled{ false }
 #if VULKAN_WSI_LAYER_EXPERIMENTAL
    , present_timing_enabled { true }
-   , present_id2_enabled { false }  
 #endif
-    , present_mode_fifo_latest_ready_enabled { false }
+   , present_id2_enabled { false }
+   , present_mode_fifo_latest_ready_enabled { false }
 /* clang-format on */
 {
 }
@@ -607,7 +607,6 @@ bool device_private_data::is_present_id_enabled()
    return present_id_enabled;
 }
 
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
 void device_private_data::set_present_id2_feature_enabled(bool enable)
 {
    present_id2_enabled = enable;
@@ -617,7 +616,6 @@ bool device_private_data::is_present_id2_enabled()
 {
    return present_id2_enabled;
 }
-#endif
 
 void device_private_data::set_swapchain_maintenance1_enabled(bool enable)
 {
