@@ -109,7 +109,12 @@ VkResult swapchain::add_required_extensions(VkDevice device, const VkSwapchainCr
    }
 #endif
 
-   if (m_device_data.is_present_wait_enabled())
+   if (m_device_data.is_present_wait_enabled()
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+       || (swapchain_create_info->flags &
+           (VK_SWAPCHAIN_CREATE_PRESENT_ID_2_BIT_KHR | VK_SWAPCHAIN_CREATE_PRESENT_WAIT_2_BIT_KHR))
+#endif
+   )
    {
       if (!add_swapchain_extension(m_allocator.make_unique<wsi_ext_present_wait_headless>(
              *get_swapchain_extension<wsi_ext_present_id>(true))))

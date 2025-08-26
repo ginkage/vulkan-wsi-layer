@@ -126,6 +126,15 @@ VkResult surface_properties::get_surface_capabilities(VkPhysicalDevice physical_
       present_id2_surface_cap->presentId2Supported = VK_TRUE;
    }
 
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+   auto present_wait2_surface_cap = util::find_extension<VkSurfaceCapabilitiesPresentWait2KHR>(
+      VK_STRUCTURE_TYPE_SURFACE_CAPABILITIES_PRESENT_WAIT_2_KHR, pSurfaceCapabilities->pNext);
+   if (present_wait2_surface_cap != nullptr)
+   {
+      present_wait2_surface_cap->presentWait2Supported = VK_TRUE;
+   }
+#endif
+
    return VK_SUCCESS;
 }
 

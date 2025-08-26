@@ -63,6 +63,13 @@
                 ]
             },
             {
+                "name": "VK_KHR_present_wait2",
+                "spec_version": "1",
+                "entrypoints": [
+                    "vkWaitForPresent2KHR"
+                ]
+            },
+            {
                 "name": "VK_EXT_present_mode_fifo_latest_ready",
                 "spec_version": "1"
             }

@@ -980,6 +980,22 @@ public:
     */
    bool is_present_wait_enabled();
 
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+   /**
+    * @brief Set whether present wait2 feature is enabled.
+    *
+    * @return true if enabled, false otherwise.
+    */
+   void set_present_wait2_enabled(bool enable);
+
+   /**
+    * @brief Check whether present wait2 feature has been enabled.
+    *
+    * @return true if supported, false otherwise.
+    */
+   bool is_present_wait2_enabled();
+#endif
+
 private:
    /* Allow util::allocator to access the private constructor */
    friend util::allocator;
@@ -1048,6 +1064,12 @@ private:
     * @brief Stores whether the device has enabled support for the present timing features.
     */
    bool present_timing_enabled{ false };
+
+   /**
+    * @brief Stores whether the device supports the present wait2 feature.
+    *
+    */
+   bool present_wait2_enabled{ false };
 #endif
 
    /**

@@ -397,6 +397,15 @@ VKAPI_ATTR VkResult create_device(VkPhysicalDevice physicalDevice, const VkDevic
       device_data.set_present_wait_enabled(present_wait_features->presentWait);
    }
 
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+   auto *present_wait2_features = util::find_extension<VkPhysicalDevicePresentWait2FeaturesKHR>(
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_WAIT_2_FEATURES_KHR, pCreateInfo->pNext);
+   if (present_wait2_features != nullptr)
+   {
+      device_data.set_present_wait2_enabled(present_wait2_features->presentWait2);
+   }
+#endif
+
    return VK_SUCCESS;
 }
 
@@ -502,6 +511,15 @@ wsi_layer_vkGetPhysicalDeviceFeatures2(VkPhysicalDevice physical_device,
    {
       present_wait_features->presentWait = VK_FALSE;
    }
+
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+   auto *present_wait2_features = util::find_extension<VkPhysicalDevicePresentWait2FeaturesKHR>(
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_WAIT_2_FEATURES_KHR, pFeatures->pNext);
+   if (present_wait2_features != nullptr)
+   {
+      present_wait2_features->presentWait2 = VK_TRUE;
+   }
+#endif
 
    instance.disp.GetPhysicalDeviceFeatures2KHR(physical_device, pFeatures);
 

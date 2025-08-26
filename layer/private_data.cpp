@@ -433,6 +433,7 @@ device_private_data::device_private_data(instance_private_data &inst_data, VkPhy
    , swapchain_maintenance1_enabled{ false }
 #if VULKAN_WSI_LAYER_EXPERIMENTAL
    , present_timing_enabled { true }
+   , present_wait2_enabled { false }
 #endif
    , present_id2_enabled { false }
    , present_mode_fifo_latest_ready_enabled { false }
@@ -636,6 +637,18 @@ bool device_private_data::is_present_wait_enabled()
 {
    return present_wait_enabled;
 }
+
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+void device_private_data::set_present_wait2_enabled(bool enable)
+{
+   present_wait2_enabled = enable;
+}
+
+bool device_private_data::is_present_wait2_enabled()
+{
+   return present_wait2_enabled;
+}
+#endif
 
 void device_private_data::set_present_mode_fifo_latest_ready_enabled(bool enable)
 {
