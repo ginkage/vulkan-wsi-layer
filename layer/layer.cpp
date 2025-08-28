@@ -673,10 +673,19 @@ wsi_layer_vkGetDeviceProcAddr(VkDevice device, const char *funcName) VWL_API_POS
    {
       GET_PROC_ADDR(vkReleaseSwapchainImagesEXT);
    }
+
+   /* VK_KHR_present_wait */
    if (device_data.is_device_extension_enabled(VK_KHR_PRESENT_WAIT_EXTENSION_NAME))
    {
       GET_PROC_ADDR(vkWaitForPresentKHR);
    }
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+   /* VK_KHR_present_wait2 */
+   if (device_data.is_device_extension_enabled(VK_KHR_PRESENT_WAIT_2_EXTENSION_NAME))
+   {
+      GET_PROC_ADDR(vkWaitForPresent2KHR);
+   }
+#endif
 
    return device_data.disp.get_user_enabled_entrypoint(device, funcName);
 }

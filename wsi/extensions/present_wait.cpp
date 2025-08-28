@@ -34,8 +34,9 @@
 namespace wsi
 {
 
-wsi_ext_present_wait::wsi_ext_present_wait(wsi_ext_present_id &present_id_extension)
+wsi_ext_present_wait::wsi_ext_present_wait(wsi_ext_present_id &present_id_extension, bool present_wait2)
    : m_present_id_ext(present_id_extension)
+   , m_present_wait2(present_wait2)
 {
 }
 

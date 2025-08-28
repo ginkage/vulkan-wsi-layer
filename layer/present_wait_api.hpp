@@ -33,3 +33,9 @@
 VWL_VKAPI_CALL(VkResult)
 wsi_layer_vkWaitForPresentKHR(VkDevice device, VkSwapchainKHR swapchain, uint64_t present_id,
                               uint64_t timeout) VWL_API_POST;
+
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+VWL_VKAPI_CALL(VkResult)
+wsi_layer_vkWaitForPresent2KHR(VkDevice device, VkSwapchainKHR swapchain,
+                               const VkPresentWait2InfoKHR *pPresentWait2Info) VWL_API_POST;
+#endif

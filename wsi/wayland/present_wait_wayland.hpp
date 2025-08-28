@@ -52,10 +52,11 @@ public:
     * @brief Constructs present ID class.
     *
     * @param present_id_extension Present ID extension that this class will use to query
-    * the last delivered present ID for the swapchain. This extension pointer must outlive
-    * this class.
+    *        the last delivered present ID for the swapchain. This extension pointer must outlive
+    *        this class.
+    * @param present_wait2 Indication for using/not using the Present Wait2 extension.
     */
-   wsi_ext_present_wait_wayland(wsi_ext_present_id &present_id_extension);
+   wsi_ext_present_wait_wayland(wsi_ext_present_id &present_id_extension, bool present_wait2);
 
    /**
     * @brief Set the wayland dispatch object.

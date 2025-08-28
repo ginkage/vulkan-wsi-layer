@@ -58,8 +58,9 @@ public:
     * @param present_id_extension Present ID extension that this class will use to query
     * the last delivered present ID for the swapchain. This extension pointer must outlive
     * this class.
+    * @param present_wait2 Indication for using/not using the Present Wait2 extension.
     */
-   wsi_ext_present_wait(wsi_ext_present_id &present_id_extension);
+   wsi_ext_present_wait(wsi_ext_present_id &present_id_extension, bool present_wait2);
 
    /**
     * @brief Waits for present ID to be updated.
@@ -70,6 +71,14 @@ public:
     *         Other error codes otherwise.
     */
    VkResult wait_for_present_id(uint64_t present_id, uint64_t timeout_in_ns);
+
+   /**
+    * @brief Getter for the present_wait2.
+    */
+   bool is_present_wait2() const
+   {
+      return m_present_wait2;
+   };
 
 protected:
    /**
@@ -86,6 +95,12 @@ protected:
     * @brief Present ID extension pointer.
     */
    wsi_ext_present_id &m_present_id_ext;
+
+private:
+   /**
+    * @brief Present Wait2 indication.
+    */
+   bool m_present_wait2{ false };
 };
 
 } /* namespace wsi */
