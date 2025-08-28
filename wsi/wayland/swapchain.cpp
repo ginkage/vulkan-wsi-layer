@@ -113,15 +113,19 @@ VkResult swapchain::add_required_extensions(VkDevice device, const VkSwapchainCr
       }
    }
 
-   if (m_device_data.is_present_wait_enabled()
+   bool present_wait2;
 #if VULKAN_WSI_LAYER_EXPERIMENTAL
-       || (swapchain_create_info->flags &
-           (VK_SWAPCHAIN_CREATE_PRESENT_ID_2_BIT_KHR | VK_SWAPCHAIN_CREATE_PRESENT_WAIT_2_BIT_KHR))
+   constexpr VkSwapchainCreateFlagsKHR present_wait2_mask =
+      (VK_SWAPCHAIN_CREATE_PRESENT_ID_2_BIT_KHR | VK_SWAPCHAIN_CREATE_PRESENT_WAIT_2_BIT_KHR);
+   present_wait2 = (swapchain_create_info->flags & present_wait2_mask) == present_wait2_mask;
+#else
+   present_wait2 = false;
 #endif
-   )
+
+   if (m_device_data.is_present_wait_enabled() || present_wait2)
    {
-      if (!add_swapchain_extension(
-             m_allocator.make_unique<wsi_ext_present_wait_wayland>(*get_swapchain_extension<wsi_ext_present_id>(true))))
+      if (!add_swapchain_extension(m_allocator.make_unique<wsi_ext_present_wait_wayland>(
+             *get_swapchain_extension<wsi_ext_present_id>(true), present_wait2)))
       {
          return VK_ERROR_OUT_OF_HOST_MEMORY;
       }

@@ -384,7 +384,9 @@ private:
    EP(GetSwapchainTimeDomainPropertiesEXT, VK_EXT_PRESENT_TIMING_EXTENSION_NAME, API_VERSION_MAX, false, )   \
    EP(GetSwapchainTimingPropertiesEXT, VK_EXT_PRESENT_TIMING_EXTENSION_NAME, API_VERSION_MAX, false, )       \
    EP(SetSwapchainPresentTimingQueueSizeEXT, VK_EXT_PRESENT_TIMING_EXTENSION_NAME, API_VERSION_MAX, false, ) \
-   EP(GetPastPresentationTimingEXT, VK_EXT_PRESENT_TIMING_EXTENSION_NAME, API_VERSION_MAX, false, )
+   EP(GetPastPresentationTimingEXT, VK_EXT_PRESENT_TIMING_EXTENSION_NAME, API_VERSION_MAX, false, )          \
+   /* VK_KHR_present_wait2 */                                                                                \
+   EP(WaitForPresent2KHR, VK_KHR_PRESENT_WAIT_2_EXTENSION_NAME, API_VERSION_MAX, false, )
 #else
 #define DEVICE_ENTRYPOINTS_LIST_EXPERIMENTAL(EP)
 #endif

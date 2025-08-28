@@ -38,8 +38,8 @@ namespace wsi
 namespace wayland
 {
 
-wsi_ext_present_wait_wayland::wsi_ext_present_wait_wayland(wsi_ext_present_id &present_id_extension)
-   : wsi_ext_present_wait(present_id_extension)
+wsi_ext_present_wait_wayland::wsi_ext_present_wait_wayland(wsi_ext_present_id &present_id_extension, bool present_wait2)
+   : wsi_ext_present_wait(present_id_extension, present_wait2)
 {
 }
 

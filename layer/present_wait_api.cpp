@@ -34,7 +34,7 @@
 #include "present_wait_api.hpp"
 
 /**
- * @brief Implements vkSetSwapchainPresentTimingQueueSizeEXT Vulkan entrypoint.
+ * @brief Implements vkWaitForPresentKHR Vulkan entrypoint.
  */
 VWL_VKAPI_CALL(VkResult)
 wsi_layer_vkWaitForPresentKHR(VkDevice device, VkSwapchainKHR swapchain, uint64_t present_id,
@@ -51,5 +51,32 @@ wsi_layer_vkWaitForPresentKHR(VkDevice device, VkSwapchainKHR swapchain, uint64_
    auto *sc = reinterpret_cast<wsi::swapchain_base *>(swapchain);
    auto *ext = sc->get_swapchain_extension<wsi::wsi_ext_present_wait>(true);
 
+   assert(!ext->is_present_wait2());
+
    return ext->wait_for_present_id(present_id, timeout);
 }
+
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+/**
+ * @brief Implements vkWaitForPresent2KHR Vulkan entrypoint.
+ */
+VWL_VKAPI_CALL(VkResult)
+wsi_layer_vkWaitForPresent2KHR(VkDevice device, VkSwapchainKHR swapchain,
+                               const VkPresentWait2InfoKHR *pPresentWait2Info) VWL_API_POST
+{
+   assert(swapchain != VK_NULL_HANDLE);
+
+   auto &device_data = layer::device_private_data::get(device);
+   if (!device_data.layer_owns_swapchain(swapchain))
+   {
+      return device_data.disp.WaitForPresent2KHR(device, swapchain, pPresentWait2Info);
+   }
+
+   auto *sc = reinterpret_cast<wsi::swapchain_base *>(swapchain);
+   auto *ext = sc->get_swapchain_extension<wsi::wsi_ext_present_wait>(true);
+
+   assert(ext->is_present_wait2());
+
+   return ext->wait_for_present_id(pPresentWait2Info->presentId, pPresentWait2Info->timeout);
+}
+#endif
