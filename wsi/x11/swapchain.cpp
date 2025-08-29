@@ -36,6 +36,7 @@
 #include <cstdlib>
 #include <ctime>
 #include <system_error>
+#include <thread>
 
 #include <dlfcn.h>
 #include <fcntl.h>
@@ -44,7 +45,6 @@
 #include <util/timed_semaphore.hpp>
 #include <vulkan/vulkan_core.h>
 
-#include <xcb/present.h>
 #include <xcb/dri3.h>
 #include <xcb/xcb.h>
 #include <xcb/xproto.h>
@@ -55,6 +55,8 @@
 #include "util/macros.hpp"
 #include "wsi/external_memory.hpp"
 #include "wsi/swapchain_base.hpp"
+#include "wsi/extensions/present_id.hpp"
+#include "shm_presenter.hpp"
 
 namespace wsi
 {
@@ -63,7 +65,8 @@ namespace x11
 
 #define X11_SWAPCHAIN_MAX_PENDING_COMPLETIONS 128
 
-swapchain::swapchain(layer::device_private_data &dev_data, const VkAllocationCallbacks *pAllocator, surface &wsi_surface)
+swapchain::swapchain(layer::device_private_data &dev_data, const VkAllocationCallbacks *pAllocator,
+                     surface &wsi_surface)
    : swapchain_base(dev_data, pAllocator)
    , m_connection(wsi_surface.get_connection())
    , m_window(wsi_surface.get_window())
@@ -72,7 +75,6 @@ swapchain::swapchain(layer::device_private_data &dev_data, const VkAllocationCal
    , m_image_creation_parameters({}, m_allocator, {}, {})
    , m_send_sbc(0)
    , m_target_msc(0)
-   , m_last_present_msc(0)
    , m_thread_status_lock()
    , m_thread_status_cond()
 {
@@ -96,8 +98,6 @@ swapchain::~swapchain()
 
       thread_status_lock.lock();
    }
-
-   xcb_unregister_for_special_event(m_connection, m_special_event);
 
    thread_status_lock.unlock();
 
@@ -124,11 +124,29 @@ VkResult swapchain::init_platform(VkDevice device, const VkSwapchainCreateInfoKH
       return VK_ERROR_INITIALIZATION_FAILED;
    }
 
-   auto eid = xcb_generate_id(m_connection);
-   m_special_event = xcb_register_for_special_xge(m_connection, &xcb_present_id, eid, nullptr);
-   xcb_present_select_input(m_connection, eid, m_window,
-                            XCB_PRESENT_EVENT_MASK_IDLE_NOTIFY | XCB_PRESENT_EVENT_MASK_COMPLETE_NOTIFY |
-                               XCB_PRESENT_EVENT_MASK_CONFIGURE_NOTIFY);
+   try
+   {
+      m_shm_presenter = std::make_unique<shm_presenter>();
+
+      if (!m_shm_presenter->is_available(m_connection, m_wsi_surface))
+      {
+         WSI_LOG_ERROR("SHM presenter is not available");
+         return VK_ERROR_INITIALIZATION_FAILED;
+      }
+
+      VkResult init_result = m_shm_presenter->init(m_connection, m_window, m_wsi_surface);
+      if (init_result != VK_SUCCESS)
+      {
+         WSI_LOG_ERROR("Failed to initialize SHM presenter");
+         return init_result;
+      }
+   }
+   catch (const std::exception &e)
+   {
+      WSI_LOG_ERROR("Exception creating presentation strategy: %s", e.what());
+
+      return VK_ERROR_INITIALIZATION_FAILED;
+   }
 
    try
    {
@@ -339,26 +357,6 @@ VkResult swapchain::allocate_wsialloc(VkImageCreateInfo &image_create_info, x11_
    return VK_SUCCESS;
 }
 
-static VkResult fill_image_create_info(VkImageCreateInfo &image_create_info,
-                                       util::vector<VkSubresourceLayout> &image_plane_layouts,
-                                       VkImageDrmFormatModifierExplicitCreateInfoEXT &drm_mod_info,
-                                       VkExternalMemoryImageCreateInfoKHR &external_info,
-                                       x11_image_data &image_data, uint64_t modifier)
-{
-   TRY_LOG_CALL(image_data.external_mem.fill_image_plane_layouts(image_plane_layouts));
-
-   if (image_data.external_mem.is_disjoint())
-   {
-      image_create_info.flags |= VK_IMAGE_CREATE_DISJOINT_BIT;
-   }
-
-   image_data.external_mem.fill_drm_mod_info(image_create_info.pNext, drm_mod_info, image_plane_layouts, modifier);
-   image_data.external_mem.fill_external_info(external_info, &drm_mod_info);
-   image_create_info.pNext = &external_info;
-   image_create_info.tiling = VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT;
-   return VK_SUCCESS;
-}
-
 VkResult swapchain::allocate_image(VkImageCreateInfo &image_create_info, x11_image_data *image_data)
 {
    UNUSED(image_create_info);
@@ -373,74 +371,6 @@ VkResult swapchain::allocate_image(VkImageCreateInfo &image_create_info, x11_ima
    return VK_SUCCESS;
 }
 
-static int os_dupfd_cloexec(int fd)
-{
-   int minfd = 3;
-   int newfd = fcntl(fd, F_DUPFD_CLOEXEC, minfd);
-
-   if (newfd >= 0)
-      return newfd;
-
-   if (errno != EINVAL)
-      return -1;
-
-   newfd = fcntl(fd, F_DUPFD, minfd);
-
-   if (newfd < 0)
-      return -1;
-
-   long flags = fcntl(newfd, F_GETFD);
-   if (flags == -1) {
-      close(newfd);
-      return -1;
-   }
-
-   if (fcntl(newfd, F_SETFD, flags | FD_CLOEXEC) == -1) {
-      close(newfd);
-      return -1;
-   }
-
-   return newfd;
-}
-
-VkResult swapchain::create_pixmap(const VkImageCreateInfo &image_create_info, swapchain_image &image,
-                                  x11_image_data *image_data)
-{
-   UNUSED(image);
-   auto &mem = image_data->external_mem;
-   auto &offset = mem.get_offsets();
-   auto &stride = mem.get_strides();
-   auto pixmap = xcb_generate_id(m_connection);
-
-   int fds[4] = { -1, -1, -1, -1 };
-   for (uint32_t i = 0; i < mem.get_num_planes(); i++) {
-      fds[i] = os_dupfd_cloexec(mem.get_buffer_fds()[i]);
-      if (fds[i] == -1) {
-         for (uint32_t j = 0; j < i; j++)
-            close(fds[j]);
-
-         return VK_ERROR_OUT_OF_HOST_MEMORY;
-      }
-   }
-
-   auto cookie = xcb_dri3_pixmap_from_buffers_checked(
-      m_connection, pixmap, m_window,
-      mem.get_num_planes(),
-      image_create_info.extent.width, image_create_info.extent.height,
-      stride[0], offset[0], stride[1], offset[1], stride[2], offset[2], stride[3], offset[3],
-      24, 32, m_image_creation_parameters.m_allocated_format.modifier, &fds[0]);
-
-   auto error = xcb_request_check(m_connection, cookie);
-   if (error)
-   {
-      free(error);
-      return VK_ERROR_FORMAT_NOT_SUPPORTED;
-   }
-
-   image_data->pixmap = pixmap;
-   return VK_SUCCESS;
-}
-
 VkResult swapchain::allocate_and_bind_swapchain_image(VkImageCreateInfo image_create_info, swapchain_image &image)
 {
    std::unique_lock<std::recursive_mutex> image_status_lock(m_image_status_mutex);
@@ -448,13 +378,16 @@ VkResult swapchain::allocate_and_bind_swapchain_image(VkImageCreateInfo image_cr
 
    assert(image.data != nullptr);
    auto image_data = static_cast<x11_image_data *>(image.data);
-   TRY_LOG(allocate_image(image_create_info, image_data), "Failed to allocate image");
+
    image_status_lock.unlock();
 
-   TRY_LOG(create_pixmap(image_create_info, image, image_data), "Failed to create pixmap");
+   uint32_t width = image_create_info.extent.width;
+   uint32_t height = image_create_info.extent.height;
 
-   TRY_LOG(image_data->external_mem.import_memory_and_bind_swapchain_image(image.image),
-           "Failed to import memory and bind swapchain image");
+   int depth = 24; // Default depth, may need to be queried from surface later
+
+   TRY_LOG(m_shm_presenter->create_image_resources(image_data, width, height, depth),
+           "Failed to create presentation image resources");
 
    /* Initialize presentation fence. */
    auto present_fence = sync_fd_fence_sync::create(m_device_data);
@@ -476,47 +409,27 @@ VkResult swapchain::create_swapchain_image(VkImageCreateInfo image_create_info, 
       return VK_ERROR_OUT_OF_HOST_MEMORY;
    }
    image.data = image_data;
+   image_data->device = m_device;
+   image_data->device_data = &m_device_data;
 
-   if (m_image_create_info.format == VK_FORMAT_UNDEFINED)
+   if (m_shm_presenter)
    {
-      util::vector<wsialloc_format> importable_formats(
-         util::allocator(m_allocator, VK_SYSTEM_ALLOCATION_SCOPE_COMMAND));
-      util::vector<uint64_t> exportable_modifiers(util::allocator(m_allocator, VK_SYSTEM_ALLOCATION_SCOPE_COMMAND));
+      VkMemoryPropertyFlags optimal = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT |
+                                      VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
+      VkMemoryPropertyFlags required = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
 
-      /* Query supported modifers. */
-      util::vector<VkDrmFormatModifierPropertiesEXT> drm_format_props(
-         util::allocator(m_allocator, VK_SYSTEM_ALLOCATION_SCOPE_COMMAND));
+      TRY_LOG_CALL(image_data->external_mem.configure_for_host_visible(image_create_info, required, optimal));
 
-      TRY_LOG_CALL(
-         get_surface_compatible_formats(image_create_info, importable_formats, exportable_modifiers, drm_format_props));
+      image_create_info.tiling = VK_IMAGE_TILING_LINEAR;
+      TRY_LOG(m_device_data.disp.CreateImage(m_device, &image_create_info, get_allocation_callbacks(), &image.image),
+              "Failed to create image for SHM");
 
-      /* TODO: Handle exportable images which use ICD allocated memory in preference to an external allocator. */
-      if (importable_formats.empty())
-      {
-         WSI_LOG_ERROR("Export/Import not supported.");
-         return VK_ERROR_INITIALIZATION_FAILED;
-      }
-
-      wsialloc_format allocated_format = { 0, 0, 0 };
-      TRY_LOG_CALL(allocate_wsialloc(image_create_info, image_data, importable_formats, &allocated_format, true));
-
-      for (auto &prop : drm_format_props)
-      {
-         if (prop.drmFormatModifier == allocated_format.modifier)
-         {
-            image_data->external_mem.set_num_memories(prop.drmFormatModifierPlaneCount);
-         }
-      }
-
-      TRY_LOG_CALL(fill_image_create_info(
-         image_create_info, m_image_creation_parameters.m_image_layout, m_image_creation_parameters.m_drm_mod_info,
-         m_image_creation_parameters.m_external_info, *image_data, allocated_format.modifier));
-
-      m_image_create_info = image_create_info;
-      m_image_creation_parameters.m_allocated_format = allocated_format;
+      return image_data->external_mem.allocate_and_bind_image(image.image, image_create_info);
    }
-
-   return m_device_data.disp.CreateImage(m_device, &m_image_create_info, get_allocation_callbacks(), &image.image);
+   else
+   {
+      return allocate_image(image_create_info, image_data);
+   }
 }
 
 void swapchain::present_event_thread()
@@ -554,64 +467,8 @@ void swapchain::present_event_thread()
 
       thread_status_lock.unlock();
 
-      auto event = xcb_wait_for_special_event(m_connection, m_special_event);
-      if (event == nullptr)
-      {
-         set_error_state(VK_ERROR_SURFACE_LOST_KHR);
-         break;
-      }
-
       thread_status_lock.lock();
-
-      auto pe = reinterpret_cast<xcb_present_generic_event_t *>(event);
-      switch (pe->evtype)
-      {
-      case XCB_PRESENT_EVENT_CONFIGURE_NOTIFY:
-      {
-         auto config = reinterpret_cast<xcb_present_configure_notify_event_t *>(event);
-         if (config->pixmap_flags & (1 << 0))
-         {
-            set_error_state(VK_ERROR_SURFACE_LOST_KHR);
-         }
-         else if (config->width != m_image_create_info.extent.width ||
-                  config->height != m_image_create_info.extent.height)
-         {
-            set_error_state(VK_SUBOPTIMAL_KHR);
-         }
-         break;
-      }
-      case XCB_PRESENT_EVENT_IDLE_NOTIFY:
-      {
-         auto idle = reinterpret_cast<xcb_present_idle_notify_event_t *>(event);
-         m_free_buffer_pool.push_back(idle->pixmap);
-         m_thread_status_cond.notify_all();
-         break;
-      }
-      case XCB_PRESENT_EVENT_COMPLETE_NOTIFY:
-      {
-         auto complete = reinterpret_cast<xcb_present_complete_notify_event_t *>(event);
-         if (complete->kind == XCB_PRESENT_COMPLETE_KIND_PIXMAP)
-         {
-            for (auto &image : m_swapchain_images)
-            {
-               auto data = reinterpret_cast<x11_image_data *>(image.data);
-               auto iter = std::find_if(data->pending_completions.begin(), data->pending_completions.end(),
-                                        [complete](auto &pending_completion) -> bool {
-                                           return complete->serial == pending_completion.serial;
-                                        });
-               if (iter != data->pending_completions.end())
-               {
-                  set_present_id(iter->present_id);
-                  data->pending_completions.erase(iter);
-                  m_thread_status_cond.notify_all();
-               }
-            }
-            m_last_present_msc = complete->msc;
-         }
-         break;
-      }
-      }
-      free(event);
+      std::this_thread::sleep_for(std::chrono::milliseconds(1)); // Short polling interval
    }
 
    m_present_event_thread_run = false;
@@ -627,7 +484,11 @@ void swapchain::present_image(const pending_present_request &pending_present)
    {
       if (!m_present_event_thread_run)
       {
-         set_present_id(pending_present.present_id);
+         if (m_device_data.is_present_id_enabled())
+         {
+            auto *ext = get_swapchain_extension<wsi_ext_present_id>(true);
+            ext->set_present_id(pending_present.present_id);
+         }
          return unpresent_image(pending_present.image_index);
       }
       m_thread_status_cond.wait(thread_status_lock);
@@ -635,27 +496,41 @@ void swapchain::present_image(const pending_present_request &pending_present)
 
    m_send_sbc++;
    uint32_t serial = (uint32_t)m_send_sbc;
-   uint32_t options = XCB_PRESENT_OPTION_NONE;
 
-   auto cookie = xcb_present_pixmap_checked(m_connection, m_window, image_data->pixmap, serial, 0, 0, 0, 0, 0, 0, 0,
-                                            options, m_target_msc, 0, 0, 0, nullptr);
-   xcb_discard_reply(m_connection, cookie.sequence);
-   xcb_flush(m_connection);
+   VkResult present_result = m_shm_presenter->present_image(image_data, serial);
+   if (present_result != VK_SUCCESS)
+   {
+      WSI_LOG_ERROR("Failed to present image using presentation strategy: %d", present_result);
+   }
 
-   image_data->pending_completions.push_back({ serial, pending_present.present_id });
+   if (m_device_data.is_present_id_enabled())
+   {
+      auto *ext = get_swapchain_extension<wsi_ext_present_id>(true);
+      ext->set_present_id(pending_present.present_id);
+   }
+
+   uint32_t image_index_to_unpresent = 0;
+   bool should_unpresent = false;
+
+   if (present_result == VK_SUCCESS)
+   {
+      image_index_to_unpresent = pending_present.image_index;
+      should_unpresent = true;
+   }
+   else
+   {
+      WSI_LOG_ERROR("Present failed with result %d, performing immediate cleanup", present_result);
+      image_index_to_unpresent = pending_present.image_index;
+      should_unpresent = true;
+   }
+
    m_thread_status_cond.notify_all();
 
-   if (m_present_mode == VK_PRESENT_MODE_FIFO_KHR)
+   thread_status_lock.unlock();
+
+   if (should_unpresent)
    {
-      while (image_data->pending_completions.size() > 0)
-      {
-         if (!m_present_event_thread_run)
-         {
-            return;
-         }
-         m_thread_status_cond.wait(thread_status_lock);
-      }
-      m_target_msc = m_last_present_msc + 1;
+      unpresent_image(image_index_to_unpresent);
    }
 }
 
@@ -742,10 +617,12 @@ void swapchain::destroy_image(wsi::swapchain_image &image)
    if (image.data != nullptr)
    {
       auto data = reinterpret_cast<x11_image_data *>(image.data);
-      if (data->pixmap)
+
+      if (m_shm_presenter && data != nullptr)
       {
-         xcb_free_pixmap(m_connection, data->pixmap);
+         m_shm_presenter->destroy_image_resources(data);
       }
+
       m_allocator.destroy(1, data);
       image.data = nullptr;
    }
@@ -771,6 +648,22 @@ VkResult swapchain::bind_swapchain_image(VkDevice &device, const VkBindImageMemo
    const wsi::swapchain_image &swapchain_image = m_swapchain_images[bind_sc_info->imageIndex];
    auto image_data = reinterpret_cast<x11_image_data *>(swapchain_image.data);
    return image_data->external_mem.bind_swapchain_image_memory(bind_image_mem_info->image);
+}
+
+VkResult swapchain::add_required_extensions(VkDevice device, const VkSwapchainCreateInfoKHR *swapchain_create_info)
+{
+   UNUSED(device);
+   UNUSED(swapchain_create_info);
+
+   if (m_device_data.is_present_id_enabled())
+   {
+      if (!add_swapchain_extension(m_allocator.make_unique<wsi_ext_present_id>()))
+      {
+         return VK_ERROR_OUT_OF_HOST_MEMORY;
+      }
+   }
+
+   return VK_SUCCESS;
 }
 
 } /* namespace x11 */

@@ -28,8 +28,7 @@
 
 #include <xcb/xcb.h>
 #include <xcb/xproto.h>
-#include <xcb/dri3.h>
-#include <xcb/present.h>
+#include <xcb/shm.h>
 #include "surface.hpp"
 #include "swapchain.hpp"
 #include "surface_properties.hpp"
@@ -60,22 +59,11 @@ surface::~surface()
 
 bool surface::init()
 {
-   auto dri3_cookie = xcb_dri3_query_version_unchecked(m_connection, 1, 2);
-   auto dri3_reply = xcb_dri3_query_version_reply(m_connection, dri3_cookie, nullptr);
-   auto has_dri3 = dri3_reply && (dri3_reply->major_version > 1 || dri3_reply->minor_version >= 2);
-   free(dri3_reply);
+   auto shm_cookie = xcb_shm_query_version_unchecked(m_connection);
+   auto shm_reply = xcb_shm_query_version_reply(m_connection, shm_cookie, nullptr);
 
-   auto present_cookie = xcb_present_query_version_unchecked(m_connection, 1, 2);
-   auto present_reply = xcb_present_query_version_reply(m_connection, present_cookie, nullptr);
-   auto has_present = present_reply && (present_reply->major_version > 1 || present_reply->minor_version >= 2);
-   free(present_reply);
-
-   if (!has_dri3 || !has_present)
-   {
-      WSI_LOG_ERROR("DRI3 extension not present");
-      return false;
-   }
-
+   m_has_shm = shm_reply != nullptr;
+   free(shm_reply);
    return true;
 }
 
@@ -108,6 +96,22 @@ util::unique_ptr<swapchain_base> surface::allocate_swapchain(layer::device_priva
 util::unique_ptr<surface> surface::make_surface(const util::allocator &allocator, xcb_connection_t *conn,
                                                 xcb_window_t window)
 {
+   xcb_get_geometry_cookie_t test_cookie = xcb_get_geometry(conn, window);
+   xcb_generic_error_t *test_error = nullptr;
+   xcb_get_geometry_reply_t *test_geom = xcb_get_geometry_reply(conn, test_cookie, &test_error);
+   if (test_error)
+   {
+      free(test_error);
+   }
+   else if (test_geom)
+   {
+      free(test_geom);
+   }
+   else
+   {
+      WSI_LOG_WARNING("Window 0x%x query returned NULL during surface creation\n", window);
+   }
+
    init_parameters params{ allocator, conn, window };
    auto wsi_surface = allocator.make_unique<surface>(params);
    if (wsi_surface != nullptr)
@@ -116,6 +120,14 @@ util::unique_ptr<surface> surface::make_surface(const util::allocator &allocator
       {
          return wsi_surface;
       }
+      else
+      {
+         WSI_LOG_ERROR("Surface init failed for window 0x%x\n", window);
+      }
+   }
+   else
+   {
+      WSI_LOG_ERROR("Failed to allocate surface for window 0x%x\n", window);
    }
    return nullptr;
 }

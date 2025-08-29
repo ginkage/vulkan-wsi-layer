@@ -380,6 +380,9 @@ private:
    EP(BindImageMemory, "", VK_API_VERSION_1_0, true)                                                               \
    EP(AllocateMemory, "", VK_API_VERSION_1_0, true)                                                                \
    EP(FreeMemory, "", VK_API_VERSION_1_0, true)                                                                    \
+   EP(MapMemory, "", VK_API_VERSION_1_0, true)                                                                     \
+   EP(UnmapMemory, "", VK_API_VERSION_1_0, true)                                                                   \
+   EP(GetImageSubresourceLayout, "", VK_API_VERSION_1_0, true)                                                     \
    EP(CreateFence, "", VK_API_VERSION_1_0, true)                                                                   \
    EP(DestroyFence, "", VK_API_VERSION_1_0, true)                                                                  \
    EP(CreateSemaphore, "", VK_API_VERSION_1_0, true)                                                               \

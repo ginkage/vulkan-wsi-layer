@@ -30,6 +30,7 @@
 #include <vulkan/vk_icd.h>
 #include <xcb/xcb.h>
 #include <xcb/xproto.h>
+#include <xcb/shm.h>
 #include "wsi/surface.hpp"
 #include "surface_properties.hpp"
 
@@ -72,11 +73,19 @@ public:
       return m_window;
    };
 
+   bool has_shm() const
+   {
+      return m_has_shm;
+   }
+
 private:
    xcb_connection_t *m_connection;
    xcb_window_t m_window;
    /** Surface properties specific to the X11 surface. */
    surface_properties properties;
+
+   /** X11 extension capabilities */
+   bool m_has_shm = false;
 };
 
 } /* namespace x11 */
