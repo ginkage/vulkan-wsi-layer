@@ -547,7 +547,11 @@ bool shm_presenter::init_fence_sync()
       return false;
    }
 
-   xcb_flush(m_connection);
+   int fence_flush_result = xcb_flush(m_connection);
+   if (fence_flush_result <= 0)
+   {
+      WSI_LOG_ERROR("SHM presenter xcb_flush failed: result=%d", fence_flush_result);
+   }
 
    xcb_get_input_focus_cookie_t sync_cookie = xcb_get_input_focus(m_connection);
    xcb_get_input_focus_reply_t *sync_reply = xcb_get_input_focus_reply(m_connection, sync_cookie, nullptr);
@@ -588,9 +592,17 @@ void shm_presenter::wait_for_presentation_fence()
    }
 
    xcb_sync_await_fence(m_connection, 1, &m_presentation_fence);
-   xcb_flush(m_connection);
+   int flush_result = xcb_flush(m_connection);
+   if (flush_result <= 0)
+   {
+      WSI_LOG_ERROR("SHM presenter xcb_flush failed: result=%d", flush_result);
+   }
    xcb_sync_reset_fence(m_connection, m_presentation_fence);
-   xcb_flush(m_connection);
+   int flush_result2 = xcb_flush(m_connection);
+   if (flush_result2 <= 0)
+   {
+      WSI_LOG_ERROR("SHM presenter xcb_flush failed: result=%d", flush_result2);
+   }
 }
 
 void shm_presenter::trigger_presentation_fence()
@@ -601,7 +613,11 @@ void shm_presenter::trigger_presentation_fence()
    }
 
    xcb_sync_trigger_fence(m_connection, m_presentation_fence);
-   xcb_flush(m_connection);
+   int trigger_flush_result = xcb_flush(m_connection);
+   if (trigger_flush_result <= 0)
+   {
+      WSI_LOG_ERROR("SHM presenter xcb_flush failed: result=%d", trigger_flush_result);
+   }
 }
 
 void shm_presenter::cache_x11_formats()
@@ -703,7 +719,11 @@ VkResult shm_presenter::create_image_resources(x11_image_data *image_data, uint3
       }
    }
 
-   xcb_flush(m_connection);
+   int create_resources_flush_result = xcb_flush(m_connection);
+   if (create_resources_flush_result <= 0)
+   {
+      WSI_LOG_ERROR("SHM presenter xcb_flush failed: result=%d", create_resources_flush_result);
+   }
 
    xcb_get_input_focus_cookie_t sync_cookie = xcb_get_input_focus(m_connection);
    xcb_get_input_focus_reply_t *sync_reply = xcb_get_input_focus_reply(m_connection, sync_cookie, nullptr);
@@ -737,7 +757,11 @@ bool shm_presenter::init_xrandr_events()
 
    xcb_randr_select_input(m_connection, root, XCB_RANDR_NOTIFY_MASK_CRTC_CHANGE | XCB_RANDR_NOTIFY_MASK_OUTPUT_CHANGE);
 
-   xcb_flush(m_connection);
+   int randr_flush_result = xcb_flush(m_connection);
+   if (randr_flush_result <= 0)
+   {
+      WSI_LOG_ERROR("SHM presenter xcb_flush failed: result=%d", randr_flush_result);
+   }
 
    m_xrandr_events_available = true;
    return true;
@@ -772,7 +796,11 @@ void shm_presenter::check_window_events()
       }
 
       xcb_send_event(m_connection, false, target_window, 0, (char *)event);
-      xcb_flush(m_connection);
+      int send_event_flush_result = xcb_flush(m_connection);
+      if (send_event_flush_result <= 0)
+      {
+         WSI_LOG_ERROR("SHM presenter xcb_flush failed: result=%d", send_event_flush_result);
+      }
       free(event);
    }
 }
@@ -814,7 +842,11 @@ VkResult shm_presenter::present_image(x11_image_data *image_data, uint32_t /*ser
    }
    m_first_frame = false;
 
-   xcb_flush(m_connection);
+   int present_flush_result = xcb_flush(m_connection);
+   if (present_flush_result <= 0)
+   {
+      WSI_LOG_ERROR("SHM presenter xcb_flush failed: result=%d", present_flush_result);
+   }
 
    image_data->use_alt_buffer = !image_data->use_alt_buffer;
    xcb_shm_seg_t active_seg =
@@ -921,7 +953,11 @@ VkResult shm_presenter::present_image(x11_image_data *image_data, uint32_t /*ser
       start_async_sync();
    }
 
-   xcb_flush(m_connection);
+   int final_flush_result = xcb_flush(m_connection);
+   if (final_flush_result <= 0)
+   {
+      WSI_LOG_ERROR("SHM presenter xcb_flush failed: result=%d", final_flush_result);
+   }
 
    return VK_SUCCESS;
 }
@@ -929,25 +965,49 @@ void shm_presenter::destroy_image_resources(x11_image_data *image_data)
 {
    if (image_data->shm_seg != XCB_NONE)
    {
-      xcb_shm_detach(m_connection, image_data->shm_seg);
+      xcb_generic_error_t *error = xcb_request_check(m_connection, 
+          xcb_shm_detach_checked(m_connection, image_data->shm_seg));
+      if (error)
+      {
+         WSI_LOG_ERROR("SHM detach failed: error_code=%d, sequence=%d", 
+                      error->error_code, error->sequence);
+         free(error);
+      }
+      
       image_data->shm_seg = XCB_NONE;
    }
 
    if (image_data->shm_seg_alt != XCB_NONE)
    {
-      xcb_shm_detach(m_connection, image_data->shm_seg_alt);
+      xcb_generic_error_t *error = xcb_request_check(m_connection, 
+          xcb_shm_detach_checked(m_connection, image_data->shm_seg_alt));
+      if (error)
+      {
+         WSI_LOG_ERROR("SHM alt detach failed: error_code=%d, sequence=%d", 
+                      error->error_code, error->sequence);
+         free(error);
+      }
+      
       image_data->shm_seg_alt = XCB_NONE;
    }
 
    if (image_data->shm_addr && image_data->shm_addr != (void *)-1)
    {
-      shmdt(image_data->shm_addr);
+      int detach_result = shmdt(image_data->shm_addr);
+      if (detach_result != 0)
+      {
+         WSI_LOG_ERROR("Failed to detach shared memory: errno=%d", errno);
+      }
       image_data->shm_addr = nullptr;
    }
 
    if (image_data->shm_addr_alt && image_data->shm_addr_alt != (void *)-1)
    {
-      shmdt(image_data->shm_addr_alt);
+      int detach_result = shmdt(image_data->shm_addr_alt);
+      if (detach_result != 0)
+      {
+         WSI_LOG_ERROR("Failed to detach alternate shared memory: errno=%d", errno);
+      }
       image_data->shm_addr_alt = nullptr;
    }
 
@@ -972,7 +1032,11 @@ VkResult shm_presenter::create_graphics_context()
 
    xcb_create_gc(m_connection, m_gc, m_window, mask, values);
 
-   xcb_flush(m_connection);
+   int create_gc_flush_result = xcb_flush(m_connection);
+   if (create_gc_flush_result <= 0)
+   {
+      WSI_LOG_ERROR("SHM presenter xcb_flush failed: result=%d", create_gc_flush_result);
+   }
 
    return VK_SUCCESS;
 }

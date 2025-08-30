@@ -114,6 +114,7 @@ VkResult swapchain::init_platform(VkDevice device, const VkSwapchainCreateInfoKH
                                                                           &m_memory_props);
    if (m_wsi_surface == nullptr)
    {
+      WSI_LOG_ERROR("X11 swapchain init_platform: m_wsi_surface is null");
       return VK_ERROR_INITIALIZATION_FAILED;
    }
 
@@ -385,7 +386,12 @@ VkResult swapchain::allocate_and_bind_swapchain_image(VkImageCreateInfo image_cr
    uint32_t height = image_create_info.extent.height;
 
    int depth = 24; // Default depth, may need to be queried from surface later
-
+   uint32_t dummy_w, dummy_h;
+   if (!m_wsi_surface->get_size_and_depth(&dummy_w, &dummy_h, &depth))
+   {
+      WSI_LOG_WARNING("Could not get surface depth, using default: %d", depth);
+   }
+   
    TRY_LOG(m_shm_presenter->create_image_resources(image_data, width, height, depth),
            "Failed to create presentation image resources");
 
