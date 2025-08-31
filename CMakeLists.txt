@@ -57,7 +57,7 @@ endif()
 
 # Backend support
 option(BUILD_WSI_HEADLESS "Build with support for VK_EXT_headless_surface" OFF)
-option(BUILD_WSI_X11 "Build with support for VK_KHR_xcb_surface" OFF)
+option(BUILD_WSI_X11 "Build with support for VK_KHR_xcb_surface" ON)
 option(BUILD_WSI_WAYLAND "Build with support for VK_KHR_wayland_surface" ON)
 option(BUILD_WSI_DISPLAY "Build with support for VK_KHR_display" OFF)
 
