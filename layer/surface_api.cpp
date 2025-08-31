@@ -168,7 +168,11 @@ wsi_layer_vkDestroySurfaceKHR(VkInstance instance, VkSurfaceKHR surface,
 {
    auto &instance_data = layer::instance_private_data::get(instance);
 
-   instance_data.disp.DestroySurfaceKHR(instance, surface, pAllocator);
+   // Only call driver destroy if the layer is not handling the surface
+   if (!instance_data.should_layer_handle_surface(VK_NULL_HANDLE, surface))
+   {
+      instance_data.disp.DestroySurfaceKHR(instance, surface, pAllocator);
+   }
 
    instance_data.remove_surface(
       surface, util::allocator{ instance_data.get_allocator(), VK_SYSTEM_ALLOCATION_SCOPE_OBJECT, pAllocator });

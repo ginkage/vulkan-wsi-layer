@@ -118,11 +118,8 @@ VkResult surface_properties::get_surface_capabilities(VkPhysicalDevice physical_
 }
 
 std::vector<VkFormat> support_formats {
-   VK_FORMAT_R8G8B8A8_UNORM,
-   VK_FORMAT_B8G8R8A8_SRGB,
-   VK_FORMAT_B8G8R8A8_UNORM,
-   VK_FORMAT_R8G8B8A8_SRGB,
-   VK_FORMAT_R5G6B5_UNORM_PACK16
+   VK_FORMAT_B8G8R8A8_UNORM, 
+   VK_FORMAT_B8G8R8A8_SRGB
 };
 
 VkResult surface_properties::get_surface_formats(VkPhysicalDevice physical_device, uint32_t *surface_format_count,
@@ -187,7 +184,7 @@ VWL_VKAPI_CALL(VkResult)
 CreateXcbSurfaceKHR(VkInstance instance, const VkXcbSurfaceCreateInfoKHR *pCreateInfo,
                     const VkAllocationCallbacks *pAllocator, VkSurfaceKHR *pSurface) VWL_API_POST
 {
-
+   
    auto &instance_data = layer::instance_private_data::get(instance);
    util::allocator allocator{ instance_data.get_allocator(), VK_SYSTEM_ALLOCATION_SCOPE_OBJECT, pAllocator };
 
@@ -197,14 +194,13 @@ CreateXcbSurfaceKHR(VkInstance instance, const VkXcbSurfaceCreateInfoKHR *pCreat
       return VK_ERROR_OUT_OF_HOST_MEMORY;
    }
    auto surface_base = util::unique_ptr<wsi::surface>(std::move(wsi_surface));
-   VkResult res = instance_data.disp.CreateXcbSurfaceKHR(instance, pCreateInfo, pAllocator, pSurface);
-   if (res == VK_SUCCESS)
+      
+   *pSurface = reinterpret_cast<VkSurfaceKHR>(surface_base.get());
+   
+   VkResult res = instance_data.add_surface(*pSurface, surface_base);
+   if (res != VK_SUCCESS)
    {
-      res = instance_data.add_surface(*pSurface, surface_base);
-      if (res != VK_SUCCESS)
-      {
-         instance_data.disp.DestroySurfaceKHR(instance, *pSurface, pAllocator);
-      }
+      WSI_LOG_ERROR("Failed to add surface to instance data, result: %d\n", res);
    }
    return res;
 }

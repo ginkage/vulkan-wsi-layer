@@ -44,6 +44,13 @@ namespace wsi
 
 using util::MAX_PLANES;
 
+enum class wsi_memory_type
+{
+   EXTERNAL_DMA_BUF,      // External file descriptors (current default)
+   HOST_VISIBLE,          // Host-accessible memory
+   EXTERNAL_HOST_POINTER  // Future: external host pointers
+};
+
 class external_memory
 {
 public:
@@ -138,6 +145,34 @@ public:
    }
 
    /**
+    * @brief Configure for host-visible memory allocation.
+    * 
+    * @param image_info       Image creation info for memory requirements
+    * @param required_props   Required memory property flags
+    * @param optimal_props    Optimal memory property flags (fallback to required)
+    * 
+    * @return VK_SUCCESS on success, error code on failure
+    */
+   VkResult configure_for_host_visible(const VkImageCreateInfo &image_info,
+                                       VkMemoryPropertyFlags required_props,
+                                       VkMemoryPropertyFlags optimal_props);
+
+   /**
+    * @brief Check if external_memory instance is properly configured.
+    */
+   bool is_valid() const;
+
+   /**
+    * @brief Check if configured for host-visible memory.
+    */
+   bool is_host_visible() const;
+
+   /**
+    * @brief Get current memory type.
+    */
+   wsi_memory_type get_memory_type() const;
+
+   /**
     * @brief Set the number of memory planes.
     */
    void set_num_memories(uint32_t num_memory_planes)
@@ -185,6 +220,44 @@ public:
    VkResult import_memory_and_bind_swapchain_image(const VkImage &image);
 
    /**
+    * @brief Unified interface for allocating and binding memory to image based on configured memory type.
+    *
+    * @param image           The swapchain image
+    * @param image_info      Image creation info (required for host-visible memory allocation)
+    *
+    * @return VK_SUCCESS on success, error code on failure
+    */
+   VkResult allocate_and_bind_image(const VkImage &image, const VkImageCreateInfo &image_info);
+
+   /**
+    * @brief Map host-visible memory for CPU access.
+    *
+    * @param mapped_ptr      Output pointer to mapped memory
+    *
+    * @return VK_SUCCESS on success, error code on failure
+    */
+   VkResult map_host_memory(void **mapped_ptr);
+
+   /**
+    * @brief Unmap previously mapped host memory.
+    */
+   void unmap_host_memory();
+
+   /**
+    * @brief Get host-visible memory handle.
+    *
+    * @return VkDeviceMemory handle or VK_NULL_HANDLE if not host-visible
+    */
+   VkDeviceMemory get_host_memory() const;
+
+   /**
+    * @brief Get host memory layout information.
+    *
+    * @return Reference to subresource layout
+    */
+   const VkSubresourceLayout& get_host_layout() const;
+
+   /**
     * @brief Fills out a list of VkSubresourceLayout for each plane using the stored planes layout data.
     *
     * @param image_plane_layouts    A list of plane layouts to fill.
@@ -219,6 +292,13 @@ private:
 
    VkResult import_plane_memory(int fd, VkDeviceMemory *memory);
 
+   // Host-visible memory methods
+   VkResult allocate_host_visible_and_bind(const VkImage &image, const VkImageCreateInfo &image_info);
+   VkResult find_host_visible_memory_type(const VkMemoryRequirements &mem_requirements, uint32_t *memory_type_index);
+   void cleanup_host_visible_memory();
+   void cleanup_external_memory();
+
+   // External DMA-BUF memory data
    std::array<int, MAX_PLANES> m_buffer_fds{ -1, -1, -1, -1 };
    std::array<int, MAX_PLANES> m_strides{ 0, 0, 0, 0 };
    std::array<uint32_t, MAX_PLANES> m_offsets{ 0, 0, 0, 0 };
@@ -227,6 +307,15 @@ private:
    uint32_t m_num_planes{ 0 };
    uint32_t m_num_memories{ 0 };
    VkExternalMemoryHandleTypeFlagBits m_handle_type{ VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT };
+
+   wsi_memory_type m_memory_type = wsi_memory_type::EXTERNAL_DMA_BUF;
+   
+   VkDeviceMemory m_host_memory = VK_NULL_HANDLE;
+   void* m_host_mapped_ptr = nullptr;
+   VkSubresourceLayout m_host_layout = {};
+   VkMemoryPropertyFlags m_required_props = 0;
+   VkMemoryPropertyFlags m_optimal_props = 0;
+
    const VkDevice &m_device;
    const util::allocator &m_allocator;
 };

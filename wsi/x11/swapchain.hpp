@@ -41,16 +41,20 @@ extern "C" {
 #define __STDC_VERSION__ 0
 #endif
 
+#include <chrono>
 #include <condition_variable>
 #include <cstdint>
+#include <memory>
+#include <optional>
+#include <sys/shm.h>
 #include <xcb/xcb.h>
 #include <xcb/shm.h>
-#include <xcb/present.h>
 #include <xcb/xproto.h>
 
 #include "surface.hpp"
 #include "util/wsialloc/wsialloc.h"
 #include "wsi/external_memory.hpp"
+#include "shm_presenter.hpp"
 
 namespace wsi
 {
@@ -61,6 +65,7 @@ struct pending_completion
 {
    uint32_t serial;
    uint64_t present_id;
+   std::optional<std::chrono::steady_clock::time_point> timestamp;
 };
 
 struct x11_image_data
@@ -71,10 +76,31 @@ struct x11_image_data
    }
 
    external_memory external_mem;
-   xcb_pixmap_t pixmap;
+   xcb_pixmap_t pixmap = XCB_PIXMAP_NONE;
    std::vector<pending_completion> pending_completions;
 
    fence_sync present_fence;
+
+   xcb_shm_seg_t shm_seg = XCB_NONE;
+   int shm_id = -1;
+   void *shm_addr = nullptr;
+   size_t shm_size = 0;
+
+   xcb_shm_seg_t shm_seg_alt = XCB_NONE;
+   int shm_id_alt = -1;
+   void *shm_addr_alt = nullptr;
+   bool use_alt_buffer = false;
+
+   uint32_t width = 0;
+   uint32_t height = 0;
+   uint32_t stride = 0;
+   int depth = 0;
+
+   void *cpu_buffer = nullptr;
+   size_t cpu_buffer_size = 0;
+
+   VkDevice device = VK_NULL_HANDLE;
+   layer::device_private_data *device_data = nullptr;
 };
 
 struct image_creation_parameters
@@ -199,9 +225,17 @@ protected:
     */
    VkResult get_free_buffer(uint64_t *timeout) override;
 
+   /**
+    * @brief Add required swapchain extensions.
+    *
+    * @param device               The Vulkan device.
+    * @param swapchain_create_info Swapchain create info.
+    *
+    * @return VK_SUCCESS on success, other result codes on failure.
+    */
+   VkResult add_required_extensions(VkDevice device, const VkSwapchainCreateInfoKHR *swapchain_create_info) override;
+
 private:
-   VkResult create_pixmap(const VkImageCreateInfo &image_create_info, swapchain_image &image,
-                          x11_image_data *image_data);
    VkResult allocate_image(VkImageCreateInfo &image_create_info, x11_image_data *image_data);
    VkResult allocate_wsialloc(VkImageCreateInfo &image_create_info, x11_image_data *image_data,
                               util::vector<wsialloc_format> &importable_formats, wsialloc_format *allocated_format,
@@ -218,6 +252,11 @@ private:
     * @brief Handle to the WSI allocator.
     */
    wsialloc_allocator *m_wsi_allocator;
+
+   /**
+    * @brief Presentation strategy for this swapchain.
+    */
+   std::unique_ptr<shm_presenter> m_shm_presenter;
 
    /**
     * @brief Image creation parameters used for all swapchain images.
@@ -240,9 +279,7 @@ private:
 
    uint64_t m_send_sbc;
    uint64_t m_target_msc;
-   uint64_t m_last_present_msc;
 
-   xcb_special_event_t *m_special_event;
    VkPhysicalDeviceMemoryProperties2 m_memory_props;
 
    void present_event_thread();
