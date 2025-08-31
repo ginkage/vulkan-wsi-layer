@@ -6,7 +6,7 @@ include /usr/share/dpkg/pkg-info.mk
 ifeq (linux,$(DEB_HOST_ARCH_OS))
 EXTRA_CMAKE_ARGS += -DBUILD_WSI_HEADLESS=0 \
                     -DBUILD_WSI_WAYLAND=1 \
-		    -DBUILD_WSI_X11=0 \
+		    -DBUILD_WSI_X11=1 \
 		    -DENABLE_WAYLAND_FIFO_PRESENTATION_THREAD=1
 endif
 
