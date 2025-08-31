@@ -57,7 +57,7 @@ endif()
 
 # Backend support
 option(BUILD_WSI_HEADLESS "Build with support for VK_EXT_headless_surface" OFF)
-option(BUILD_WSI_X11 "Build with support for VK_KHR_xcb_surface" OFF)
+option(BUILD_WSI_X11 "Build with support for VK_KHR_xcb_surface" ON)
 option(BUILD_WSI_WAYLAND "Build with support for VK_KHR_wayland_surface" ON)
 option(BUILD_WSI_DISPLAY "Build with support for VK_KHR_display" OFF)
 
@@ -287,7 +287,7 @@ if(BUILD_WSI_X11)
       option(ENABLE_ARM_NEON "Enable ARM NEON optimizations for X11 SHM" ON)
       if(ENABLE_ARM_NEON)
          target_compile_definitions(wsi_x11 PRIVATE "ENABLE_ARM_NEON=1")
-         target_compile_options(wsi_x11 PRIVATE "-mcpu=native")
+         target_compile_options(wsi_x11 PRIVATE "-march=armv8-a+simd")
          message(STATUS "Enabled ARM NEON optimizations for X11 SHM presentation")
       endif()
    else()

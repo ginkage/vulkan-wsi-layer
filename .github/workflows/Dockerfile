@@ -13,7 +13,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     pkg-config \
     libdrm-dev \
     libx11-dev \
+    libx11-xcb-dev \
     libxcb1-dev \
+    libxcb-dri3-dev \
+    libxcb-randr0-dev \
+    libxcb-shm0-dev \
+    libxcb-sync-dev \
+    libxrandr-dev \
     libvulkan-dev \
     libwayland-bin \
     libwayland-client0 \
