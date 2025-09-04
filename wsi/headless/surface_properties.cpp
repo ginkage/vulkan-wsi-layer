@@ -261,14 +261,13 @@ VkResult surface_properties::get_present_timing_surface_caps(
                                               [](auto &domain) { return std::get<1>(domain); });
    if (it_monotonic_supported != monotonic_domains.end())
    {
-      monotonic_present_stages_supported |= VK_PRESENT_STAGE_IMAGE_LATCHED_BIT_EXT |
+      monotonic_present_stages_supported |= VK_PRESENT_STAGE_REQUEST_DEQUEUED_BIT_EXT |
                                             VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_OUT_BIT_EXT |
                                             VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_VISIBLE_BIT_EXT;
    }
 
    present_timing_surface_caps->presentStageQueries =
       VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT | monotonic_present_stages_supported;
-   present_timing_surface_caps->presentStageTargets = monotonic_present_stages_supported;
 
    return VK_SUCCESS;
 }

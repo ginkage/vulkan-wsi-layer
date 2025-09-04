@@ -77,6 +77,7 @@ swapchain::~swapchain()
 
    if (m_buffer_queue != nullptr)
    {
+      wl_display_roundtrip_queue(m_display, m_buffer_queue);
       wl_event_queue_destroy(m_buffer_queue);
    }
 }

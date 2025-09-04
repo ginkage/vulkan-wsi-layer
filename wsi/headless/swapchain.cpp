@@ -225,28 +225,22 @@ void swapchain::present_image(const pending_present_request &pending_present)
       auto presentation_target = ext_present_timing->get_presentation_target_entry(pending_present.image_index);
       if (presentation_target)
       {
-         const VkPresentStageFlagsEXT supported_target_stages = VK_PRESENT_STAGE_IMAGE_LATCHED_BIT_EXT |
-                                                                VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_OUT_BIT_EXT |
-                                                                VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_VISIBLE_BIT_EXT;
-         if ((presentation_target->m_target_stage & supported_target_stages) != 0)
+         /* No support for relative presentation mode currently */
+         assert(!(presentation_target->m_flags & VK_PRESENT_TIMING_INFO_PRESENT_AT_RELATIVE_TIME_BIT_EXT));
+         if (!(presentation_target->m_flags & VK_PRESENT_TIMING_INFO_PRESENT_AT_RELATIVE_TIME_BIT_EXT))
          {
-            /* No support for relative presentation mode currently */
-            assert(!presentation_target->m_present_at_relative_time);
-            if (!presentation_target->m_present_at_relative_time)
+            /* No need to check whether we need to present at nearest refresh cycle since this backend is not
+               limited by the refresh cycles. */
+            uint64_t absolute_future_present_time_ns = presentation_target->m_target_present_time;
+            auto current_time_ns = ext_present_timing->get_current_clock_time_ns();
+            if (*current_time_ns < absolute_future_present_time_ns)
             {
-               /* No need to check whether we need to present at nearest refresh cycle since this backend is not
-                  limited by the refresh cycles. */
-               uint64_t absolute_future_present_time_ns = presentation_target->m_target_present_time.targetPresentTime;
-               auto current_time_ns = ext_present_timing->get_current_clock_time_ns();
-               if (*current_time_ns < absolute_future_present_time_ns)
-               {
-                  /* Sleep until we can schedule the image for completion.
-                   * This is OK as the sleep should only be dispatched on the page_flip thread and not on main. */
-                  assert(m_page_flip_thread_run);
+               /* Sleep until we can schedule the image for completion.
+                * This is OK as the sleep should only be dispatched on the page_flip thread and not on main. */
+               assert(m_page_flip_thread_run);
 
-                  int64_t time_diff = absolute_future_present_time_ns - *current_time_ns;
-                  std::this_thread::sleep_for(std::chrono::nanoseconds(time_diff));
-               }
+               int64_t time_diff = absolute_future_present_time_ns - *current_time_ns;
+               std::this_thread::sleep_for(std::chrono::nanoseconds(time_diff));
             }
          }
       }
@@ -272,7 +266,7 @@ void swapchain::present_image(const pending_present_request &pending_present)
       }
 
       VkPresentStageFlagBitsEXT stages[] = {
-         VK_PRESENT_STAGE_IMAGE_LATCHED_BIT_EXT,
+         VK_PRESENT_STAGE_REQUEST_DEQUEUED_BIT_EXT,
          VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_OUT_BIT_EXT,
          VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_VISIBLE_BIT_EXT,
       };

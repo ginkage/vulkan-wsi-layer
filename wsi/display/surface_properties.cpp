@@ -576,7 +576,6 @@ VkResult surface_properties::get_present_timing_surface_caps(
    present_timing_surface_caps->presentAtAbsoluteTimeSupported = VK_FALSE;
    present_timing_surface_caps->presentAtRelativeTimeSupported = VK_FALSE;
    present_timing_surface_caps->presentStageQueries = 0;
-   present_timing_surface_caps->presentStageTargets = 0;
 
    return VK_SUCCESS;
 }

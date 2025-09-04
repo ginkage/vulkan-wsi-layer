@@ -100,6 +100,11 @@ struct swapchain_presentation_timing
 struct swapchain_presentation_entry
 {
    /**
+    * Target time used in the present request.
+    */
+   uint64_t m_target_time{ 0 };
+
+   /**
     * The target stages for the presentation entry.
     */
    VkPresentStageFlagsEXT m_target_stages{ 0 };
@@ -127,7 +132,7 @@ struct swapchain_presentation_entry
    std::optional<swapchain_presentation_timing> m_first_pixel_out_timing;
    std::optional<swapchain_presentation_timing> m_first_pixel_visible_timing;
 
-   swapchain_presentation_entry(VkPresentStageFlagsEXT present_stage_queries, uint64_t present_id,
+   swapchain_presentation_entry(uint64_t target_time, VkPresentStageFlagsEXT present_stage_queries, uint64_t present_id,
                                 uint32_t image_index);
    swapchain_presentation_entry(swapchain_presentation_entry &&) noexcept = default;
    swapchain_presentation_entry &operator=(swapchain_presentation_entry &&) noexcept = default;
@@ -292,19 +297,15 @@ private:
 struct scheduled_present_target
 {
    scheduled_present_target(const VkPresentTimingInfoEXT &timing_info)
-      : m_target_stage(timing_info.targetPresentStage)
-      , m_time_domain_id(timing_info.timeDomainId)
-      , m_present_at_nearest_refresh_cycle(timing_info.presentAtNearestRefreshCycle)
-      , m_present_at_relative_time(timing_info.presentAtRelativeTime)
-      , m_target_present_time(timing_info.time)
+      : m_time_domain_id(timing_info.timeDomainId)
+      , m_flags(timing_info.flags)
+      , m_target_present_time(timing_info.targetTime)
    {
    }
 
-   VkPresentStageFlagsEXT m_target_stage;
    uint64_t m_time_domain_id;
-   bool m_present_at_nearest_refresh_cycle;
-   bool m_present_at_relative_time;
-   VkPresentTimeEXT m_target_present_time;
+   VkPresentTimingInfoFlagsEXT m_flags;
+   uint64_t m_target_present_time;
 };
 
 /**
@@ -378,12 +379,13 @@ public:
     * @param queue                 The Vulkan queue used to submit synchronization commands.
     * @param present_id            The present id of the current presentation.
     * @param image_index           The index of the image in the swapchain.
+    * @param target_time           The target time for the presentation.
     * @param present_stage_queries The present stages application had requested timings for.
     *
     * @return VK_SUCCESS when the entry was inserted successfully and VK_ERROR_OUT_OF_HOST_MEMORY
     * when there is no host memory.
     */
-   VkResult add_presentation_query_entry(VkQueue queue, uint64_t present_id, uint32_t image_index,
+   VkResult add_presentation_query_entry(VkQueue queue, uint64_t present_id, uint32_t image_index, uint64_t target_time,
                                          VkPresentStageFlagsEXT present_stage_queries);
 
    /**

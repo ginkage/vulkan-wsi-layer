@@ -82,8 +82,8 @@ util::unique_ptr<wsi_ext_present_timing_headless> wsi_ext_present_timing_headles
 
    if (monotonic_domain)
    {
-      if (!domains.try_push_back(
-             allocator.make_unique<wsi::vulkan_time_domain>(VK_PRESENT_STAGE_IMAGE_LATCHED_BIT_EXT, *monotonic_domain)))
+      if (!domains.try_push_back(allocator.make_unique<wsi::vulkan_time_domain>(
+             VK_PRESENT_STAGE_REQUEST_DEQUEUED_BIT_EXT, *monotonic_domain)))
       {
          return nullptr;
       }
@@ -116,7 +116,7 @@ VkResult wsi_ext_present_timing_headless::get_swapchain_timing_properties(
 
    timing_properties_counter = 1;
    timing_properties.refreshDuration = fixed_refresh_duration_ns;
-   timing_properties.variableRefreshDelay = UINT64_MAX;
+   timing_properties.refreshInterval = fixed_refresh_duration_ns;
 
    return VK_SUCCESS;
 }

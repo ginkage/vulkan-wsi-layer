@@ -467,10 +467,10 @@ VkResult surface_properties::get_present_timing_surface_caps(
 
    /* The extension supports scheduling targets only on FIFO & FIFO_RELAXED modes. We currently only have
       support for scheduling presents when using the presentation thread. While FIFO runs on Wayland in
-      threaded mode, FIFO_RELAXED does not. If you are adding any supported stage to presentStageTargets,
-      make sure to check that swapchain cannot be created with present timing support on present modes that
+      threaded mode, FIFO_RELAXED does not. If you are setting presentAtAbsoluteTimeSupported or
+      presentAtRelativeTimeSupported to VK_TRUE, make sure to check that swapchain cannot be created
+      with present timing support on present modes that
       do not use presentation thread unless support has been added in other ways. */
-   present_timing_surface_caps->presentStageTargets = 0;
 
    if (specific_surface->get_presentation_time_interface() != nullptr)
    {
