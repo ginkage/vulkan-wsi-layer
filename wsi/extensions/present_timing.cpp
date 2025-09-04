@@ -39,13 +39,13 @@
 namespace wsi
 {
 /* VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT,
- * VK_PRESENT_STAGE_IMAGE_LATCHED_BIT_EXT,
+ * VK_PRESENT_STAGE_REQUEST_DEQUEUED_BIT_EXT,
  * VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_OUT_BIT_EXT,
  * VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_VISIBLE_BIT_EXT
  */
 static constexpr size_t MAX_PRESENT_STAGES = 4;
 const std::array<VkPresentStageFlagBitsEXT, MAX_PRESENT_STAGES> g_present_stages = {
-   VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT, VK_PRESENT_STAGE_IMAGE_LATCHED_BIT_EXT,
+   VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT, VK_PRESENT_STAGE_REQUEST_DEQUEUED_BIT_EXT,
    VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_OUT_BIT_EXT, VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_VISIBLE_BIT_EXT
 };
 
@@ -276,6 +276,7 @@ VkResult wsi_ext_present_timing::queue_submit_queue_end_timing(const layer::devi
 }
 
 VkResult wsi_ext_present_timing::add_presentation_query_entry(VkQueue queue, uint64_t present_id, uint32_t image_index,
+                                                              uint64_t target_time,
                                                               VkPresentStageFlagsEXT present_stage_queries)
 {
    const std::lock_guard<std::mutex> lock(m_queue_mutex);
@@ -287,7 +288,7 @@ VkResult wsi_ext_present_timing::add_presentation_query_entry(VkQueue queue, uin
       return VK_ERROR_PRESENT_TIMING_QUEUE_FULL_EXT;
    }
 
-   wsi::swapchain_presentation_entry presentation_entry(present_stage_queries, present_id, image_index);
+   wsi::swapchain_presentation_entry presentation_entry(target_time, present_stage_queries, present_id, image_index);
    if (!m_queue.try_push_back(std::move(presentation_entry)))
    {
       return VK_ERROR_OUT_OF_HOST_MEMORY;
@@ -303,7 +304,7 @@ VkResult wsi_ext_present_timing::add_presentation_query_entry(VkQueue queue, uin
 void wsi_ext_present_timing::add_presentation_target_entry(uint32_t image_index,
                                                            const VkPresentTimingInfoEXT &timing_info)
 {
-   assert(timing_info.targetPresentStage);
+   assert(timing_info.targetTime != 0);
    m_scheduled_present_targets[image_index] = scheduled_present_target(timing_info);
 }
 
@@ -322,9 +323,10 @@ VkResult wsi_ext_present_timing::add_presentation_entry(VkQueue queue, uint64_t 
 {
    if (timing_info.presentStageQueries)
    {
-      TRY_LOG_CALL(add_presentation_query_entry(queue, present_id, image_index, timing_info.presentStageQueries));
+      TRY_LOG_CALL(add_presentation_query_entry(queue, present_id, image_index, timing_info.targetTime,
+                                                timing_info.presentStageQueries));
    }
-   if (timing_info.targetPresentStage)
+   if (timing_info.targetTime != 0)
    {
       add_presentation_target_entry(image_index, timing_info);
    }
@@ -462,9 +464,11 @@ bool wsi_ext_present_timing::is_stage_pending_for_image_index(uint32_t image_ind
    return (get_pending_stage_timing(image_index, present_stage) != nullptr);
 }
 
-swapchain_presentation_entry::swapchain_presentation_entry(VkPresentStageFlagsEXT present_stage_queries,
+swapchain_presentation_entry::swapchain_presentation_entry(uint64_t target_time,
+                                                           VkPresentStageFlagsEXT present_stage_queries,
                                                            uint64_t present_id, uint32_t image_index)
-   : m_target_stages(0)
+   : m_target_time(target_time)
+   , m_target_stages(0)
    , m_present_id(present_id)
    , m_image_index(image_index)
    , m_num_present_stages(0)
@@ -474,7 +478,7 @@ swapchain_presentation_entry::swapchain_presentation_entry(VkPresentStageFlagsEX
       m_queue_end_timing = swapchain_presentation_timing();
       m_num_present_stages++;
    }
-   if (present_stage_queries & VK_PRESENT_STAGE_IMAGE_LATCHED_BIT_EXT)
+   if (present_stage_queries & VK_PRESENT_STAGE_REQUEST_DEQUEUED_BIT_EXT)
    {
       m_latch_timing = swapchain_presentation_timing();
       m_num_present_stages++;
@@ -510,7 +514,7 @@ bool swapchain_presentation_entry::is_pending(VkPresentStageFlagBitsEXT stage)
 bool swapchain_presentation_entry::has_outstanding_stages()
 {
    return (is_pending(VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT) ||
-           is_pending(VK_PRESENT_STAGE_IMAGE_LATCHED_BIT_EXT) ||
+           is_pending(VK_PRESENT_STAGE_REQUEST_DEQUEUED_BIT_EXT) ||
            is_pending(VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_OUT_BIT_EXT) ||
            is_pending(VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_VISIBLE_BIT_EXT));
 }
@@ -544,7 +548,7 @@ std::optional<std::reference_wrapper<swapchain_presentation_timing>> swapchain_p
          return *m_queue_end_timing;
       }
       break;
-   case VK_PRESENT_STAGE_IMAGE_LATCHED_BIT_EXT:
+   case VK_PRESENT_STAGE_REQUEST_DEQUEUED_BIT_EXT:
       if (m_latch_timing.has_value())
       {
          return *m_latch_timing;
@@ -602,6 +606,7 @@ void swapchain_presentation_entry::populate(VkPastPresentationTimingEXT &timing)
    {
       timing.presentId = m_present_id;
       timing.reportComplete = !has_outstanding_stages();
+      timing.targetTime = m_target_time;
    }
 }
 

@@ -55,6 +55,7 @@
 #define VK_SWAPCHAIN_CREATE_PRESENT_TIMING_BIT_EXT ((VkSwapchainCreateFlagsKHR)0x00010000)
 
 typedef VkFlags VkPresentStageFlagsEXT;
+typedef VkFlags VkPresentTimingInfoFlagsEXT;
 
 typedef struct VkPhysicalDevicePresentTimingFeaturesEXT
 {
@@ -72,13 +73,12 @@ typedef struct VkPresentTimingSurfaceCapabilitiesEXT
    VkBool32 presentAtAbsoluteTimeSupported;
    VkBool32 presentAtRelativeTimeSupported;
    VkPresentStageFlagsEXT presentStageQueries;
-   VkPresentStageFlagsEXT presentStageTargets;
 } VkPresentTimingSurfaceCapabilitiesEXT;
 
 typedef enum VkPresentStageFlagBitsEXT
 {
    VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT = 0x00000001,
-   VK_PRESENT_STAGE_IMAGE_LATCHED_BIT_EXT = 0x00000002,
+   VK_PRESENT_STAGE_REQUEST_DEQUEUED_BIT_EXT = 0x00000002,
    VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_OUT_BIT_EXT = 0x00000004,
    VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_VISIBLE_BIT_EXT = 0x00000008,
 } VkPresentStageFlagBitsEXT;
@@ -88,7 +88,7 @@ typedef struct VkSwapchainTimingPropertiesEXT
    VkStructureType sType;
    const void *pNext;
    uint64_t refreshDuration;
-   uint64_t variableRefreshDelay;
+   uint64_t refreshInterval;
 } VkSwapchainTimingPropertiesEXT;
 
 typedef struct VkSwapchainTimeDomainPropertiesEXT
@@ -118,11 +118,12 @@ typedef struct VkPresentStageTimeEXT
 typedef struct VkPastPresentationTimingEXT
 {
    VkStructureType sType;
-   const void *pNext;
+   void *pNext;
    uint64_t presentId;
+   uint64_t targetTime;
    uint32_t presentStageCount;
    VkPresentStageTimeEXT *pPresentStages;
-   VkTimeDomainEXT timeDomain;
+   VkTimeDomainKHR timeDomain;
    uint64_t timeDomainId;
    VkBool32 reportComplete;
 } VkPastPresentationTimingEXT;
@@ -145,6 +146,12 @@ typedef enum VkPastPresentationTimingFlagBitsEXT
    VK_PAST_PRESENTATION_TIMING_ALLOW_OUT_OF_ORDER_RESULTS_BIT_EXT = 0x00000002,
 } VkPastPresentationTimingFlagBitsEXT;
 
+typedef enum VkPresentTimingInfoFlagBitsEXT
+{
+   VK_PRESENT_TIMING_INFO_PRESENT_AT_RELATIVE_TIME_BIT_EXT = 0x00000001,
+   VK_PRESENT_TIMING_INFO_PRESENT_AT_NEAREST_REFRESH_CYCLE_BIT_EXT = 0x00000002,
+} VkPresentTimingInfoFlagBitsEXT;
+
 typedef struct VkPastPresentationTimingInfoEXT
 {
    VkStructureType sType;
@@ -153,22 +160,14 @@ typedef struct VkPastPresentationTimingInfoEXT
    VkSwapchainKHR swapchain;
 } VkPastPresentationTimingInfoEXT;
 
-typedef union VkPresentTimeEXT
-{
-   uint64_t targetPresentTime;
-   uint64_t presentDuration;
-} VkPresentTimeEXT;
-
 typedef struct VkPresentTimingInfoEXT
 {
    VkStructureType sType;
    const void *pNext;
-   VkPresentTimeEXT time;
+   VkPresentTimingInfoFlagsEXT flags;
+   uint64_t targetTime;
    uint64_t timeDomainId;
    VkPresentStageFlagsEXT presentStageQueries;
-   VkPresentStageFlagsEXT targetPresentStage;
-   VkBool32 presentAtRelativeTime;
-   VkBool32 presentAtNearestRefreshCycle;
 } VkPresentTimingInfoEXT;
 
 typedef struct VkPresentTimingsInfoEXT
@@ -180,12 +179,12 @@ typedef struct VkPresentTimingsInfoEXT
 } VkPresentTimingsInfoEXT;
 
 typedef VkResult(VKAPI_PTR *PFN_vkGetSwapchainTimeDomainPropertiesEXT)(
-   VkDevice device, VkSwapchainKHR swapchain, uint64_t *pTimeDomainsCounter,
-   VkSwapchainTimeDomainPropertiesEXT *pSwapchainTimeDomainProperties);
+   VkDevice device, VkSwapchainKHR swapchain, VkSwapchainTimeDomainPropertiesEXT *pSwapchainTimeDomainProperties,
+   uint64_t *pTimeDomainsCounter);
 
 typedef VkResult(VKAPI_PTR *PFN_vkGetSwapchainTimingPropertiesEXT)(
-   VkDevice device, VkSwapchainKHR swapchain, uint64_t *pSwapchainTimingPropertiesCounter,
-   VkSwapchainTimingPropertiesEXT *pSwapchainTimingProperties);
+   VkDevice device, VkSwapchainKHR swapchain, VkSwapchainTimingPropertiesEXT *pSwapchainTimingProperties,
+   uint64_t *pSwapchainTimingPropertiesCounter);
 
 typedef VkResult(VKAPI_PTR *PFN_vkSetSwapchainPresentTimingQueueSizeEXT)(VkDevice device, VkSwapchainKHR swapchain,
                                                                          uint32_t size);
@@ -200,12 +199,12 @@ wsi_layer_vkSetSwapchainPresentTimingQueueSizeEXT(VkDevice device, VkSwapchainKH
 
 VWL_VKAPI_CALL(VkResult)
 wsi_layer_vkGetSwapchainTimingPropertiesEXT(VkDevice device, VkSwapchainKHR swapchain,
-                                            uint64_t *pSwapchainTimingPropertiesCounter,
-                                            VkSwapchainTimingPropertiesEXT *pSwapchainTimingProperties) VWL_API_POST;
+                                            VkSwapchainTimingPropertiesEXT *pSwapchainTimingProperties,
+                                            uint64_t *pSwapchainTimingPropertiesCounter) VWL_API_POST;
 VWL_VKAPI_CALL(VkResult)
-wsi_layer_vkGetSwapchainTimeDomainPropertiesEXT(
-   VkDevice device, VkSwapchainKHR swapchain, uint64_t *pTimeDomainsCounter,
-   VkSwapchainTimeDomainPropertiesEXT *pSwapchainTimeDomainProperties) VWL_API_POST;
+wsi_layer_vkGetSwapchainTimeDomainPropertiesEXT(VkDevice device, VkSwapchainKHR swapchain,
+                                                VkSwapchainTimeDomainPropertiesEXT *pSwapchainTimeDomainProperties,
+                                                uint64_t *pTimeDomainsCounter) VWL_API_POST;
 
 VWL_VKAPI_CALL(VkResult)
 wsi_layer_vkGetPastPresentationTimingEXT(

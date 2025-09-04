@@ -60,16 +60,16 @@ wsi_layer_vkSetSwapchainPresentTimingQueueSizeEXT(VkDevice device, VkSwapchainKH
  */
 VWL_VKAPI_CALL(VkResult)
 wsi_layer_vkGetSwapchainTimingPropertiesEXT(VkDevice device, VkSwapchainKHR swapchain,
-                                            uint64_t *pSwapchainTimingPropertiesCounter,
-                                            VkSwapchainTimingPropertiesEXT *pSwapchainTimingProperties) VWL_API_POST
+                                            VkSwapchainTimingPropertiesEXT *pSwapchainTimingProperties,
+                                            uint64_t *pSwapchainTimingPropertiesCounter) VWL_API_POST
 {
    assert(swapchain != VK_NULL_HANDLE);
 
    auto &device_data = layer::device_private_data::get(device);
    if (!device_data.layer_owns_swapchain(swapchain))
    {
-      return device_data.disp.GetSwapchainTimingPropertiesEXT(device, swapchain, pSwapchainTimingPropertiesCounter,
-                                                              pSwapchainTimingProperties);
+      return device_data.disp.GetSwapchainTimingPropertiesEXT(device, swapchain, pSwapchainTimingProperties,
+                                                              pSwapchainTimingPropertiesCounter);
    }
 
    auto *sc = reinterpret_cast<wsi::swapchain_base *>(swapchain);
@@ -82,16 +82,16 @@ wsi_layer_vkGetSwapchainTimingPropertiesEXT(VkDevice device, VkSwapchainKHR swap
  * @brief Implements vkGetSwapchainTimeDomainPropertiesEXT Vulkan entrypoint.
  */
 VWL_VKAPI_CALL(VkResult)
-wsi_layer_vkGetSwapchainTimeDomainPropertiesEXT(
-   VkDevice device, VkSwapchainKHR swapchain, uint64_t *pTimeDomainsCounter,
-   VkSwapchainTimeDomainPropertiesEXT *pSwapchainTimeDomainProperties) VWL_API_POST
+wsi_layer_vkGetSwapchainTimeDomainPropertiesEXT(VkDevice device, VkSwapchainKHR swapchain,
+                                                VkSwapchainTimeDomainPropertiesEXT *pSwapchainTimeDomainProperties,
+                                                uint64_t *pTimeDomainsCounter) VWL_API_POST
 {
    auto &device_data = layer::device_private_data::get(device);
 
    if (!device_data.layer_owns_swapchain(swapchain))
    {
-      return device_data.disp.GetSwapchainTimeDomainPropertiesEXT(device, swapchain, pTimeDomainsCounter,
-                                                                  pSwapchainTimeDomainProperties);
+      return device_data.disp.GetSwapchainTimeDomainPropertiesEXT(device, swapchain, pSwapchainTimeDomainProperties,
+                                                                  pTimeDomainsCounter);
    }
 
    auto *sc = reinterpret_cast<wsi::swapchain_base *>(swapchain);

@@ -92,7 +92,7 @@ VkResult wsi_ext_present_timing_wayland::get_swapchain_timing_properties(
 {
    timing_properties_counter = 0;
    timing_properties.refreshDuration = 0;
-   timing_properties.variableRefreshDelay = 0;
+   timing_properties.refreshInterval = 0;
 
    return VK_SUCCESS;
 }
