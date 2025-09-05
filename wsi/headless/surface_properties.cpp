@@ -28,7 +28,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <map>
-#include <mutex>
+#include <util/custom_mutex.hpp>
 
 #include <vulkan/vk_icd.h>
 #include <vulkan/vulkan.h>

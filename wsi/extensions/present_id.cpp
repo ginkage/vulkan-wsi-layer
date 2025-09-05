@@ -30,6 +30,8 @@
 
 #include "present_id.hpp"
 #include <system_error>
+#include <cassert>
+
 namespace wsi
 {
 
@@ -38,7 +40,12 @@ void wsi_ext_present_id::mark_delivered(uint64_t present_id)
    /* Stale reads are acceptable as we only care that the ID is increasing */
    if (present_id > m_last_delivered_id.load(std::memory_order_relaxed))
    {
-      std::unique_lock lock(m_mutex);
+      util::unique_lock lock(m_mutex);
+      if (!lock)
+      {
+         WSI_LOG_ERROR("Failed to acquire mutex lock in mark_delivered.\n");
+         abort();
+      }
       m_last_delivered_id.store(present_id, std::memory_order_relaxed);
    }
    m_present_state_changed.notify_all();
@@ -46,7 +53,12 @@ void wsi_ext_present_id::mark_delivered(uint64_t present_id)
 
 void wsi_ext_present_id::set_error_state(VkResult error_code)
 {
-   std::unique_lock lock(m_mutex);
+   util::unique_lock lock(m_mutex);
+   if (!lock)
+   {
+      WSI_LOG_ERROR("Failed to acquire mutex lock in set_error_state.\n");
+      abort();
+   }
    m_error_state.store(error_code);
    m_present_state_changed.notify_all();
 }
@@ -65,12 +77,26 @@ VkResult wsi_ext_present_id::wait_for_present_id(uint64_t present_id, uint64_t t
 
    try
    {
-      std::unique_lock lock(m_mutex);
+      util::unique_lock lock(m_mutex);
+      if (!lock)
+      {
+         return VK_ERROR_UNKNOWN;
+      }
+      /* Move ownership into a std::unique_lock so we can call the
+       * std::condition_variable APIs, which accept only
+       * std::unique_lock<std::mutex>.  The mutex is already held by
+       * util::unique_lock, which acquired it via try_lock() and converts any
+       * std::system_error into a simple ‘false’.  We then release the
+       * util::unique_lock to avoid double‑unlocking.
+       */
+      std::unique_lock<std::mutex> wait_lock(lock.native_mutex(), std::adopt_lock);
+      lock.release();
       if (timeout_in_ns == UINT64_MAX)
       {
          /* Infinite wait */
-         m_present_state_changed.wait(
-            lock, [&]() { return (m_last_delivered_id.load() >= present_id || m_error_state.load() != VK_SUCCESS); });
+         m_present_state_changed.wait(wait_lock, [&]() {
+            return (m_last_delivered_id.load() >= present_id || m_error_state.load() != VK_SUCCESS);
+         });
 
          /* The condition can either return when present_id condition has been reached or there has been an error */
          return m_error_state;
@@ -80,9 +106,10 @@ VkResult wsi_ext_present_id::wait_for_present_id(uint64_t present_id, uint64_t t
          /* Note: With very long timeouts it is possible that the clock in condition_variable will overflow.
           * This will result in wait_for immediately returning with a failed result. Considering the
           * duration needed to overflow the clock, we can probably ignore this. */
-         bool wait_success = m_present_state_changed.wait_for(lock, std::chrono::nanoseconds(timeout_in_ns), [&]() {
-            return (m_last_delivered_id.load() >= present_id || m_error_state.load() != VK_SUCCESS);
-         });
+         bool wait_success =
+            m_present_state_changed.wait_for(wait_lock, std::chrono::nanoseconds(timeout_in_ns), [&]() {
+               return (m_last_delivered_id.load() >= present_id || m_error_state.load() != VK_SUCCESS);
+            });
 
          if (!wait_success)
          {

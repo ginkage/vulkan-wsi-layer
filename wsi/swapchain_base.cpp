@@ -99,7 +99,12 @@ void swapchain_base::page_flip_thread()
 
          /* We want to present the oldest queued for present image from our present queue,
           * which we can find at the sc->pending_buffer_pool.head index. */
-         std::unique_lock<std::recursive_mutex> image_status_lock(m_image_status_mutex);
+         util::unique_lock<util::recursive_mutex> image_status_lock(m_image_status_mutex);
+         if (!image_status_lock)
+         {
+            WSI_LOG_ERROR("Failed to acquire image status lock in page flip thread.");
+            abort();
+         }
 
          auto pending_submission = m_pending_buffer_pool.pop_front();
          assert(pending_submission.has_value());
@@ -183,7 +188,12 @@ VkResult swapchain_base::init_page_flip_thread()
 
 void swapchain_base::unpresent_image(uint32_t presented_index)
 {
-   std::unique_lock<std::recursive_mutex> image_status_lock(m_image_status_mutex);
+   util::unique_lock<util::recursive_mutex> image_status_lock(m_image_status_mutex);
+   if (!image_status_lock)
+   {
+      WSI_LOG_ERROR("Failed to acquire image status lock in unpresent_image.");
+      abort();
+   }
 
    if (m_present_mode == VK_PRESENT_MODE_SHARED_DEMAND_REFRESH_KHR ||
        m_present_mode == VK_PRESENT_MODE_SHARED_CONTINUOUS_REFRESH_KHR)
@@ -418,7 +428,12 @@ void swapchain_base::teardown()
 VkResult swapchain_base::acquire_next_image(uint64_t timeout, VkSemaphore semaphore, VkFence fence,
                                             uint32_t *image_index)
 {
-   std::unique_lock<std::mutex> acquire_lock(m_image_acquire_lock);
+   util::unique_lock<util::mutex> acquire_lock(m_image_acquire_lock);
+   if (!acquire_lock)
+   {
+      WSI_LOG_ERROR("Failed to acquire image acquire lock.");
+      return VK_ERROR_OUT_OF_HOST_MEMORY;
+   }
 
    TRY(wait_and_get_free_buffer(timeout));
    if (error_has_occured())
@@ -426,7 +441,12 @@ VkResult swapchain_base::acquire_next_image(uint64_t timeout, VkSemaphore semaph
       return get_error_state();
    }
 
-   std::unique_lock<std::recursive_mutex> image_status_lock(m_image_status_mutex);
+   util::unique_lock<util::recursive_mutex> image_status_lock(m_image_status_mutex);
+   if (!image_status_lock)
+   {
+      WSI_LOG_ERROR("Failed to acquire image status lock in acquire_next_image.");
+      return VK_ERROR_OUT_OF_HOST_MEMORY;
+   }
 
    size_t i;
    for (i = 0; i < m_swapchain_images.size(); ++i)
@@ -553,7 +573,11 @@ VkResult swapchain_base::get_swapchain_status()
 
 VkResult swapchain_base::notify_presentation_engine(const pending_present_request &pending_present)
 {
-   const std::lock_guard<std::recursive_mutex> lock(m_image_status_mutex);
+   const util::unique_lock<util::recursive_mutex> lock(m_image_status_mutex);
+   if (!lock)
+   {
+      return VK_ERROR_UNKNOWN;
+   }
 
    /* If the descendant has started presenting, we should release the image
     * however we do not want to block inside the main thread so we mark it
@@ -698,8 +722,13 @@ void swapchain_base::deprecate(VkSwapchainKHR descendant)
 
 void swapchain_base::wait_for_pending_buffers()
 {
-   std::unique_lock<std::mutex> acquire_lock(m_image_acquire_lock);
-   std::unique_lock<std::recursive_mutex> image_status_lock(m_image_status_mutex);
+   util::unique_lock<util::mutex> acquire_lock(m_image_acquire_lock);
+   util::unique_lock<util::recursive_mutex> image_status_lock(m_image_status_mutex);
+   if (!acquire_lock || !image_status_lock)
+   {
+      WSI_LOG_ERROR("Failed to acquire mutex lock in wait_for_pending_buffers.\n");
+      abort();
+   }
 
    uint64_t non_pending_images = 0;
    for (auto &img : m_swapchain_images)

@@ -31,6 +31,7 @@
 #pragma once
 
 #include <util/custom_allocator.hpp>
+#include <util/custom_mutex.hpp>
 #include <util/macros.hpp>
 #include <util/log.hpp>
 #include <atomic>
@@ -112,7 +113,7 @@ private:
    /**
     * @brief Mutex for m_present_state_changed conditional variable.
     */
-   std::mutex m_mutex;
+   util::mutex m_mutex;
 };
 
 } /* namespace wsi */

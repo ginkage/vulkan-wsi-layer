@@ -37,6 +37,7 @@
 #include <array>
 
 #include <util/custom_allocator.hpp>
+#include <util/custom_mutex.hpp>
 #include <util/helpers.hpp>
 #include <util/ring_buffer.hpp>
 #include <util/timed_semaphore.hpp>
@@ -346,7 +347,7 @@ protected:
     * these functions to be called both with and without the mutex already locked in the
     * same thread.
     */
-   std::recursive_mutex m_image_status_mutex;
+   util::recursive_mutex m_image_status_mutex;
 
    /**
     * @brief Defines if the pthread_t and sem_t members of the class are defined.
@@ -641,7 +642,7 @@ protected:
    }
 
 private:
-   std::mutex m_image_acquire_lock;
+   util::mutex m_image_acquire_lock;
    /**
     * @brief In case we encounter threading or drm errors we need a way to
     * notify the user of the failure. While no error has occurred its value

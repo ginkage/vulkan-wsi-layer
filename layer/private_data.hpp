@@ -28,6 +28,7 @@
 
 #include <util/platform_set.hpp>
 #include <util/custom_allocator.hpp>
+#include <util/custom_mutex.hpp>
 #include <util/unordered_set.hpp>
 #include <util/unordered_map.hpp>
 #include <util/extension_list.hpp>
@@ -40,10 +41,8 @@
 #include <memory>
 #include <unordered_set>
 #include <cassert>
-#include <mutex>
 #include <limits>
 #include <cstring>
-using scoped_mutex = std::lock_guard<std::mutex>;
 
 /** Forward declare stored objects */
 namespace wsi
@@ -770,7 +769,7 @@ private:
    /**
     * @brief Lock for thread safe access to @ref surfaces
     */
-   std::mutex surfaces_lock;
+   util::mutex surfaces_lock;
 
    /**
     * @brief List with the names of the enabled instance extensions.
@@ -1026,7 +1025,7 @@ private:
 
    const util::allocator allocator;
    util::unordered_set<VkSwapchainKHR> swapchains;
-   mutable std::mutex swapchains_lock;
+   mutable util::mutex swapchains_lock;
 
    /**
     * @brief List with the names of the enabled device extensions.

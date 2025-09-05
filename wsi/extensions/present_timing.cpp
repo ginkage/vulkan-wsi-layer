@@ -212,7 +212,11 @@ VkResult wsi_ext_present_timing::write_pending_results()
 
 VkResult wsi_ext_present_timing::present_timing_queue_set_size(size_t queue_size)
 {
-   const std::lock_guard<std::mutex> lock(m_queue_mutex);
+   const util::unique_lock<util::mutex> lock(m_queue_mutex);
+   if (!lock)
+   {
+      return VK_ERROR_UNKNOWN;
+   }
    if (m_queue.size() > queue_size)
    {
       return VK_NOT_READY;
@@ -279,7 +283,11 @@ VkResult wsi_ext_present_timing::add_presentation_query_entry(VkQueue queue, uin
                                                               uint64_t target_time,
                                                               VkPresentStageFlagsEXT present_stage_queries)
 {
-   const std::lock_guard<std::mutex> lock(m_queue_mutex);
+   const util::unique_lock<util::mutex> lock(m_queue_mutex);
+   if (!lock)
+   {
+      return VK_ERROR_UNKNOWN;
+   }
    TRY_LOG_CALL(write_pending_results());
 
    /* Keep the internal queue to the limit defined by the application. */
@@ -366,8 +374,11 @@ uint32_t wsi_ext_present_timing::get_num_available_results(VkPastPresentationTim
 VkResult wsi_ext_present_timing::get_past_presentation_results(
    VkPastPresentationTimingPropertiesEXT *past_present_timing_properties, VkPastPresentationTimingFlagsEXT flags)
 {
-   const std::lock_guard<std::mutex> lock(m_queue_mutex);
-
+   const util::unique_lock<util::mutex> lock(m_queue_mutex);
+   if (!lock)
+   {
+      return VK_ERROR_UNKNOWN;
+   }
    assert(past_present_timing_properties != nullptr);
    /* Get any outstanding timings to the internal queue. */
    TRY_LOG_CALL(write_pending_results());
@@ -460,7 +471,12 @@ VkResult wsi_ext_present_timing::get_past_presentation_results(
 bool wsi_ext_present_timing::is_stage_pending_for_image_index(uint32_t image_index,
                                                               VkPresentStageFlagBitsEXT present_stage)
 {
-   const std::lock_guard<std::mutex> lock(m_queue_mutex);
+   const util::unique_lock<util::mutex> lock(m_queue_mutex);
+   if (!lock)
+   {
+      WSI_LOG_ERROR("Failed to acquire queue mutex in is_stage_pending_for_image_index.");
+      abort();
+   }
    return (get_pending_stage_timing(image_index, present_stage) != nullptr);
 }
 

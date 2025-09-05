@@ -311,6 +311,7 @@ add_library(${PROJECT_NAME} SHARED
    layer/present_wait_api.cpp
    util/timed_semaphore.cpp
    util/custom_allocator.cpp
+   util/custom_mutex.cpp
    util/extension_list.cpp
    util/log.cpp
    util/format_modifiers.cpp

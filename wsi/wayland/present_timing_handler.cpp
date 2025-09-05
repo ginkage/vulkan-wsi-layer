@@ -28,6 +28,7 @@
  * @brief Contains the functionality to implement features for present timing extension.
  */
 
+#include <util/custom_mutex.hpp>
 #include "present_timing_handler.hpp"
 #include "surface.hpp"
 
@@ -100,7 +101,12 @@ VkResult wsi_ext_present_timing_wayland::get_swapchain_timing_properties(
 presentation_feedback *wsi_ext_present_timing_wayland::insert_into_pending_present_feedback_list(
    uint32_t image_index, struct wp_presentation_feedback *feedback_obj)
 {
-   scoped_mutex lock(m_pending_presents_lock);
+   util::unique_lock<util::mutex> lock(m_pending_presents_lock);
+   if (!lock)
+   {
+      WSI_LOG_ERROR("Failed to acquire pending presents lock in insert_into_pending_present_feedback_list.\n");
+      abort();
+   }
    presentation_feedback fb(feedback_obj, this, image_index);
    size_t position = m_pending_presents.size();
    if (!m_pending_presents.try_push_back(std::move(fb)))
@@ -112,7 +118,12 @@ presentation_feedback *wsi_ext_present_timing_wayland::insert_into_pending_prese
 
 void wsi_ext_present_timing_wayland::remove_from_pending_present_feedback_list(uint32_t image_index)
 {
-   scoped_mutex lock(m_pending_presents_lock);
+   util::unique_lock<util::mutex> lock(m_pending_presents_lock);
+   if (!lock)
+   {
+      WSI_LOG_ERROR("Failed to acquire pending presents lock in remove_from_pending_present_feedback_list.\n");
+      abort();
+   }
    auto it = std::find_if(m_pending_presents.begin(), m_pending_presents.end(),
                           [image_index](const presentation_feedback &p) { return p.get_image_index() == image_index; });
 
