@@ -34,6 +34,7 @@
 #include <layer/wsi_layer_experimental.hpp>
 #include <layer/private_data.hpp>
 #include <util/custom_allocator.hpp>
+#include <util/custom_mutex.hpp>
 #include <util/macros.hpp>
 
 #include <atomic>
@@ -43,6 +44,7 @@
 #include <tuple>
 #include <optional>
 #include <functional>
+#include <cassert>
 
 #include "wsi_extension.hpp"
 
@@ -433,7 +435,12 @@ public:
     */
    void set_pending_stage_time(uint32_t image_index, VkPresentStageFlagBitsEXT stage, uint64_t time)
    {
-      const std::lock_guard<std::mutex> lock(m_queue_mutex);
+      const util::unique_lock<util::mutex> lock(m_queue_mutex);
+      if (!lock)
+      {
+         WSI_LOG_ERROR("Failed to acquire queue mutex in set_pending_stage_time.");
+         abort();
+      }
       if (auto timing = get_pending_stage_timing(image_index, stage))
       {
          timing->set_time(time);
@@ -536,7 +543,7 @@ private:
     * Private helpers assume **the caller already holds the lock**; that
     * pre-condition must be met before invoking them.
     */
-   std::mutex m_queue_mutex;
+   util::mutex m_queue_mutex;
 
    /**
     * @brief The presentation timing queue.

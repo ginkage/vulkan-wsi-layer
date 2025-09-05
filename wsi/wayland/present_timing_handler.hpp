@@ -36,6 +36,7 @@
 #include "surface_properties.hpp"
 #include "wp_presentation_feedback.hpp"
 #include "wl_helpers.hpp"
+#include <util/custom_mutex.hpp>
 
 namespace wsi
 {
@@ -112,7 +113,7 @@ private:
    /**
     * @brief Mutex for synchronising accesses to the pending present id list.
     */
-   std::mutex m_pending_presents_lock;
+   util::mutex m_pending_presents_lock;
 
    /**
     * @brief Stores the presentation feedbacks that have been queued.

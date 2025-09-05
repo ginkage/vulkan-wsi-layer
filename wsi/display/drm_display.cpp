@@ -33,7 +33,6 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <assert.h>
-#include <mutex>
 #include <drm_fourcc.h>
 namespace wsi
 {

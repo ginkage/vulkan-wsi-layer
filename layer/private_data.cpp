@@ -32,11 +32,12 @@
 #include "util/log.hpp"
 #include "util/helpers.hpp"
 #include "util/macros.hpp"
+#include "util/custom_mutex.hpp"
 
 namespace layer
 {
 
-static std::mutex g_data_lock;
+static util::mutex g_data_lock;
 
 /* The dictionaries below use plain pointers to store the instance/device private data objects.
  * This means that these objects are leaked if the application terminates without calling vkDestroyInstance
@@ -217,7 +218,12 @@ VkResult instance_private_data::associate(VkInstance instance, instance_dispatch
    }
 
    const auto key = get_key(instance);
-   scoped_mutex lock(g_data_lock);
+   util::unique_lock<util::mutex> lock(g_data_lock);
+   if (!lock)
+   {
+      WSI_LOG_ERROR("Failed to acquire instance data lock in associate.");
+      return VK_ERROR_INITIALIZATION_FAILED;
+   }
 
    auto it = g_instance_data.find(key);
    if (it != g_instance_data.end())
@@ -248,7 +254,13 @@ void instance_private_data::disassociate(VkInstance instance)
    assert(instance != VK_NULL_HANDLE);
    instance_private_data *instance_data = nullptr;
    {
-      scoped_mutex lock(g_data_lock);
+      util::unique_lock<util::mutex> lock(g_data_lock);
+      if (!lock)
+      {
+         WSI_LOG_ERROR("Failed to acquire instance data lock in disassociate.");
+         abort();
+      }
+
       auto it = g_instance_data.find(get_key(instance));
       if (it == g_instance_data.end())
       {
@@ -266,7 +278,12 @@ void instance_private_data::disassociate(VkInstance instance)
 template <typename dispatchable_type>
 static instance_private_data &get_instance_private_data(dispatchable_type dispatchable_object)
 {
-   scoped_mutex lock(g_data_lock);
+   util::unique_lock<util::mutex> lock(g_data_lock);
+   if (!lock)
+   {
+      WSI_LOG_ERROR("Failed to acquire instance data lock in get_instance_private_data.");
+      abort();
+   }
    return *g_instance_data.at(get_key(dispatchable_object));
 }
 
@@ -282,7 +299,12 @@ instance_private_data &instance_private_data::get(VkPhysicalDevice phys_dev)
 
 VkResult instance_private_data::add_surface(VkSurfaceKHR vk_surface, util::unique_ptr<wsi::surface> &wsi_surface)
 {
-   scoped_mutex lock(surfaces_lock);
+   util::unique_lock<util::mutex> lock(surfaces_lock);
+   if (!lock)
+   {
+      WSI_LOG_ERROR("Failed to acquire surfaces lock in add_surface.");
+      return VK_ERROR_INITIALIZATION_FAILED;
+   }
 
    auto it = surfaces.find(vk_surface);
    if (it != surfaces.end())
@@ -305,7 +327,13 @@ VkResult instance_private_data::add_surface(VkSurfaceKHR vk_surface, util::uniqu
 
 wsi::surface *instance_private_data::get_surface(VkSurfaceKHR vk_surface)
 {
-   scoped_mutex lock(surfaces_lock);
+   util::unique_lock<util::mutex> lock(surfaces_lock);
+   if (!lock)
+   {
+      WSI_LOG_ERROR("Failed to acquire surfaces lock in get_surface.");
+      abort();
+   }
+
    auto it = surfaces.find(vk_surface);
    if (it != surfaces.end())
    {
@@ -317,7 +345,13 @@ wsi::surface *instance_private_data::get_surface(VkSurfaceKHR vk_surface)
 
 void instance_private_data::remove_surface(VkSurfaceKHR vk_surface, const util::allocator &alloc)
 {
-   scoped_mutex lock(surfaces_lock);
+   util::unique_lock<util::mutex> lock(surfaces_lock);
+   if (!lock)
+   {
+      WSI_LOG_ERROR("Failed to acquire surfaces lock in remove_surface.");
+      abort();
+   }
+
    auto it = surfaces.find(vk_surface);
    if (it != surfaces.end())
    {
@@ -331,7 +365,13 @@ void instance_private_data::remove_surface(VkSurfaceKHR vk_surface, const util::
 
 bool instance_private_data::does_layer_support_surface(VkSurfaceKHR surface)
 {
-   scoped_mutex lock(surfaces_lock);
+   util::unique_lock<util::mutex> lock(surfaces_lock);
+   if (!lock)
+   {
+      WSI_LOG_ERROR("Failed to acquire surfaces lock in does_layer_support_surface.");
+      abort();
+   }
+
    auto it = surfaces.find(surface);
    return it != surfaces.end();
 }
@@ -456,7 +496,12 @@ VkResult device_private_data::associate(VkDevice dev, instance_private_data &ins
    }
 
    const auto key = get_key(dev);
-   scoped_mutex lock(g_data_lock);
+   util::unique_lock<util::mutex> lock(g_data_lock);
+   if (!lock)
+   {
+      WSI_LOG_ERROR("Failed to acquire device data lock in associate.");
+      return VK_ERROR_INITIALIZATION_FAILED;
+   }
 
    auto it = g_device_data.find(key);
    if (it != g_device_data.end())
@@ -486,7 +531,13 @@ void device_private_data::disassociate(VkDevice dev)
    assert(dev != VK_NULL_HANDLE);
    device_private_data *device_data = nullptr;
    {
-      scoped_mutex lock(g_data_lock);
+      util::unique_lock<util::mutex> lock(g_data_lock);
+      if (!lock)
+      {
+         WSI_LOG_ERROR("Failed to acquire device data lock in disassociate.");
+         abort();
+      }
+
       auto it = g_device_data.find(get_key(dev));
       if (it == g_device_data.end())
       {
@@ -504,7 +555,12 @@ void device_private_data::disassociate(VkDevice dev)
 template <typename dispatchable_type>
 static device_private_data &get_device_private_data(dispatchable_type dispatchable_object)
 {
-   scoped_mutex lock(g_data_lock);
+   util::unique_lock<util::mutex> lock(g_data_lock);
+   if (!lock)
+   {
+      WSI_LOG_ERROR("Failed to acquire device data lock in get_device_private_data.");
+      abort();
+   }
 
    return *g_device_data.at(get_key(dispatchable_object));
 }
@@ -521,14 +577,26 @@ device_private_data &device_private_data::get(VkQueue queue)
 
 VkResult device_private_data::add_layer_swapchain(VkSwapchainKHR swapchain)
 {
-   scoped_mutex lock(swapchains_lock);
+   util::unique_lock<util::mutex> lock(swapchains_lock);
+   if (!lock)
+   {
+      WSI_LOG_ERROR("Failed to acquire swapchains lock in add_layer_swapchain.");
+      return VK_ERROR_INITIALIZATION_FAILED;
+   }
+
    auto result = swapchains.try_insert(swapchain);
    return result.has_value() ? VK_SUCCESS : VK_ERROR_OUT_OF_HOST_MEMORY;
 }
 
 void device_private_data::remove_layer_swapchain(VkSwapchainKHR swapchain)
 {
-   scoped_mutex lock(swapchains_lock);
+   util::unique_lock<util::mutex> lock(swapchains_lock);
+   if (!lock)
+   {
+      WSI_LOG_ERROR("Failed to acquire swapchains lock in remove_layer_swapchain.");
+      abort();
+   }
+
    auto it = swapchains.find(swapchain);
    if (it != swapchains.end())
    {
@@ -538,7 +606,13 @@ void device_private_data::remove_layer_swapchain(VkSwapchainKHR swapchain)
 
 bool device_private_data::layer_owns_all_swapchains(const VkSwapchainKHR *swapchain, uint32_t swapchain_count) const
 {
-   scoped_mutex lock(swapchains_lock);
+   util::unique_lock<util::mutex> lock(swapchains_lock);
+   if (!lock)
+   {
+      WSI_LOG_ERROR("Failed to acquire swapchains lock in layer_owns_all_swapchains.");
+      abort();
+   }
+
    for (uint32_t i = 0; i < swapchain_count; i++)
    {
       if (swapchains.find(swapchain[i]) == swapchains.end())

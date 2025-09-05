@@ -405,7 +405,12 @@ VkResult swapchain::create_framebuffer(const VkImageCreateInfo &image_create_inf
 
 VkResult swapchain::allocate_and_bind_swapchain_image(VkImageCreateInfo image_create_info, swapchain_image &image)
 {
-   std::unique_lock<std::recursive_mutex> image_status_lock(m_image_status_mutex);
+   util::unique_lock<util::recursive_mutex> image_status_lock(m_image_status_mutex);
+   if (!image_status_lock)
+   {
+      WSI_LOG_ERROR("Failed to acquire image status lock in allocate_and_bind_swapchain_image.");
+      return VK_ERROR_INITIALIZATION_FAILED;
+   }
    image.status = swapchain_image::FREE;
    assert(image.data != nullptr);
    auto image_data = static_cast<display_image_data *>(image.data);
@@ -608,7 +613,12 @@ VkResult swapchain::image_wait_present(swapchain_image &image, uint64_t timeout)
 
 void swapchain::destroy_image(swapchain_image &image)
 {
-   std::unique_lock<std::recursive_mutex> image_status_lock(m_image_status_mutex);
+   util::unique_lock<util::recursive_mutex> image_status_lock(m_image_status_mutex);
+   if (!image_status_lock)
+   {
+      WSI_LOG_ERROR("Failed to acquire image status lock in destroy_image.");
+      abort();
+   }
 
    if (image.status != swapchain_image::INVALID)
    {

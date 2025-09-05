@@ -150,7 +150,11 @@ VkResult swapchain::allocate_and_bind_swapchain_image(VkImageCreateInfo image_cr
 {
    UNUSED(image_create);
    VkResult res = VK_SUCCESS;
-   const std::lock_guard<std::recursive_mutex> lock(m_image_status_mutex);
+   const util::unique_lock<util::recursive_mutex> lock(m_image_status_mutex);
+   if (!lock)
+   {
+      return VK_ERROR_INITIALIZATION_FAILED;
+   }
 
    VkMemoryRequirements memory_requirements = {};
    m_device_data.disp.GetImageMemoryRequirements(m_device, image.image, &memory_requirements);
@@ -282,7 +286,12 @@ void swapchain::present_image(const pending_present_request &pending_present)
 
 void swapchain::destroy_image(wsi::swapchain_image &image)
 {
-   std::unique_lock<std::recursive_mutex> image_status_lock(m_image_status_mutex);
+   util::unique_lock<util::recursive_mutex> image_status_lock(m_image_status_mutex);
+   if (!image_status_lock)
+   {
+      WSI_LOG_ERROR("Failed to acquire image status lock in destroy_image.");
+      abort();
+   }
    if (image.status != wsi::swapchain_image::INVALID)
    {
       if (image.image != VK_NULL_HANDLE)
