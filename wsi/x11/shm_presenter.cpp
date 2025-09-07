@@ -49,7 +49,6 @@
 #include <X11/Xlib.h>
 #include <X11/extensions/Xrandr.h>
 #include <xcb/sync.h>
-#include <xcb/randr.h>
 
 namespace wsi
 {
@@ -661,7 +660,6 @@ VkResult shm_presenter::init(xcb_connection_t *connection, xcb_window_t window, 
    }
 
    init_fence_sync();
-   init_xrandr_events();
 
    return VK_SUCCESS;
 }
@@ -741,93 +739,11 @@ VkResult shm_presenter::create_image_resources(x11_image_data *image_data, uint3
    return VK_SUCCESS;
 }
 
-bool shm_presenter::init_xrandr_events()
-{
-   const xcb_query_extension_reply_t *randr_ext = xcb_get_extension_data(m_connection, &xcb_randr_id);
-   if (!randr_ext || !randr_ext->present)
-   {
-      WSI_LOG_WARNING("XRandR extension not available, using initial refresh rate detection only");
-      return false;
-   }
 
-   m_xrandr_event_base = randr_ext->first_event;
 
-   xcb_screen_t *screen = xcb_setup_roots_iterator(xcb_get_setup(m_connection)).data;
-   xcb_window_t root = screen->root;
-
-   xcb_randr_select_input(m_connection, root, XCB_RANDR_NOTIFY_MASK_CRTC_CHANGE | XCB_RANDR_NOTIFY_MASK_OUTPUT_CHANGE);
-
-   int randr_flush_result = xcb_flush(m_connection);
-   if (randr_flush_result <= 0)
-   {
-      WSI_LOG_ERROR("SHM presenter xcb_flush failed: result=%d", randr_flush_result);
-   }
-
-   m_xrandr_events_available = true;
-   return true;
-}
-
-void shm_presenter::check_window_events()
-{
-   if (!m_xrandr_events_available)
-   {
-      return;
-   }
-
-   xcb_generic_event_t *event;
-   while ((event = xcb_poll_for_event(m_connection)) != nullptr)
-   {
-      uint8_t event_type = event->response_type & 0x7f;
-
-      if (event_type == XCB_CONFIGURE_NOTIFY)
-      {
-         xcb_configure_notify_event_t *config = (xcb_configure_notify_event_t *)event;
-         if (config->window == m_window)
-         {
-            m_refresh_rate_changed.store(true, std::memory_order_release);
-         }
-      }
-
-      xcb_window_t target_window = m_window;
-      if (event_type == XCB_CONFIGURE_NOTIFY)
-      {
-         xcb_configure_notify_event_t *config = (xcb_configure_notify_event_t *)event;
-         target_window = config->window;
-      }
-
-      xcb_send_event(m_connection, false, target_window, 0, (char *)event);
-      int send_event_flush_result = xcb_flush(m_connection);
-      if (send_event_flush_result <= 0)
-      {
-         WSI_LOG_ERROR("SHM presenter xcb_flush failed: result=%d", send_event_flush_result);
-      }
-      free(event);
-   }
-}
-
-void shm_presenter::handle_refresh_rate_change()
-{
-   if (!m_refresh_rate_changed.exchange(false, std::memory_order_acq_rel))
-   {
-      return;
-   }
-
-   double new_refresh_rate = get_window_refresh_rate();
-   double rate_diff = std::abs(new_refresh_rate - m_refresh_rate_hz);
-
-   if (rate_diff > 2.0)
-   {
-      WSI_LOG_INFO("Monitor change detected: %.2f Hz -> %.2f Hz", m_refresh_rate_hz, new_refresh_rate);
-      m_refresh_rate_hz = new_refresh_rate;
-      auto interval_us = static_cast<long>(1000000.0 / new_refresh_rate);
-      m_frame_interval = std::chrono::microseconds(interval_us);
-   }
-}
 
 VkResult shm_presenter::present_image(x11_image_data *image_data, uint32_t /*serial*/)
 {
-   check_window_events();
-   handle_refresh_rate_change();
 
    if (m_fence_available && !m_first_frame)
    {
