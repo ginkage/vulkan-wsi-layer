@@ -94,9 +94,6 @@ private:
    std::atomic<bool> m_thread_error_occurred{ false };
    std::mutex m_error_recovery_mutex;
 
-   bool m_xrandr_events_available = false;
-   int m_xrandr_event_base = 0;
-   std::atomic<bool> m_refresh_rate_changed{ false };
 
    VkResult create_graphics_context();
 
@@ -133,9 +130,6 @@ private:
    void detect_refresh_rate();
    double get_window_refresh_rate();
 
-   bool init_xrandr_events();
-   void check_window_events();
-   void handle_refresh_rate_change();
 };
 
 } /* namespace x11 */
