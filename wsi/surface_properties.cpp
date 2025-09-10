@@ -117,7 +117,7 @@ void get_surface_capabilities_common(VkPhysicalDevice physical_device, VkSurface
    surface_capabilities->currentTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
 
    /* Composite alpha */
-   surface_capabilities->supportedCompositeAlpha = static_cast<VkCompositeAlphaFlagBitsKHR>(
+   surface_capabilities->supportedCompositeAlpha = static_cast<VkCompositeAlphaFlagsKHR>(
       VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR | VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR |
       VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR | VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR);
 

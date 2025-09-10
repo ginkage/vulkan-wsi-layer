@@ -72,16 +72,16 @@ void swapchain_base::page_flip_thread()
       {
          /* In continuous mode the application will only make one presentation request,
           * therefore the page flip semaphore will only be signalled once. */
-         if (!m_first_present)
+         if (m_first_present)
          {
-            vk_res = VK_SUCCESS;
+            VkResult wait_res = m_page_flip_semaphore.wait(SEMAPHORE_TIMEOUT);
+            if (wait_res == VK_TIMEOUT)
+            {
+               /* Image is not ready yet. */
+               continue;
+            }
+            assert(wait_res == VK_SUCCESS);
          }
-         else if ((vk_res = m_page_flip_semaphore.wait(SEMAPHORE_TIMEOUT)) == VK_TIMEOUT)
-         {
-            /* Image is not ready yet. */
-            continue;
-         }
-         assert(vk_res == VK_SUCCESS);
 
          /* For continuous mode there will be only one image in the swapchain.
           * This image will always be used, and there is no pending state in this case. */
@@ -91,10 +91,13 @@ void swapchain_base::page_flip_thread()
       {
          /* Waiting for the page_flip_semaphore which will be signalled once there is an
           * image to display.*/
-         if ((vk_res = m_page_flip_semaphore.wait(SEMAPHORE_TIMEOUT)) == VK_TIMEOUT)
          {
-            /* Image is not ready yet. */
-            continue;
+            VkResult wait_res = m_page_flip_semaphore.wait(SEMAPHORE_TIMEOUT);
+            if (wait_res == VK_TIMEOUT)
+            {
+               /* Image is not ready yet. */
+               continue;
+            }
          }
 
          /* We want to present the oldest queued for present image from our present queue,

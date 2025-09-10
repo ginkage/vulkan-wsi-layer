@@ -72,7 +72,7 @@ surface_properties::surface_properties()
                          VK_PRESENT_MODE_SHARED_DEMAND_REFRESH_KHR, VK_PRESENT_MODE_SHARED_CONTINUOUS_REFRESH_KHR,
                          VK_PRESENT_MODE_FIFO_LATEST_READY_EXT })
 {
-   populate_present_mode_compatibilities();
+   this->surface_properties::populate_present_mode_compatibilities();
 }
 
 surface_properties &surface_properties::get_instance()

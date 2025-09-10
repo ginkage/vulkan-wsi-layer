@@ -71,7 +71,7 @@ surface_properties::surface_properties(surface *wsi_surface, const util::allocat
    , supported_formats(allocator)
    , m_supported_modes({ VK_PRESENT_MODE_FIFO_KHR, VK_PRESENT_MODE_MAILBOX_KHR, VK_PRESENT_MODE_FIFO_LATEST_READY_EXT })
 {
-   populate_present_mode_compatibilities();
+   this->surface_properties::populate_present_mode_compatibilities();
 }
 
 surface_properties::surface_properties()
@@ -94,7 +94,7 @@ VkResult surface_properties::get_surface_capabilities(VkPhysicalDevice physical_
    pSurfaceCapabilities->minImageCount = 2;
 
    /* Composite alpha */
-   pSurfaceCapabilities->supportedCompositeAlpha = static_cast<VkCompositeAlphaFlagBitsKHR>(
+   pSurfaceCapabilities->supportedCompositeAlpha = static_cast<VkCompositeAlphaFlagsKHR>(
       VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR | VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR);
    return VK_SUCCESS;
 }
