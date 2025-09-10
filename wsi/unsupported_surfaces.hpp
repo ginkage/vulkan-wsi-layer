@@ -33,9 +33,16 @@
 #define TOSTRING(x) STRINGIFY(x)
 
 #if VK_HEADER_VERSION > WSI_LAYER_VK_PATCH
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-W#pragma-messages"
+#endif
 #pragma message("The Vulkan header version is newer than the currently supported version.")
 #pragma message("Current Vulkan header version: " TOSTRING(VK_HEADER_VERSION))
 #pragma message("Supported Vulkan API version: " TOSTRING(WSI_LAYER_VK_PATCH))
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 #endif
 
 namespace wsi

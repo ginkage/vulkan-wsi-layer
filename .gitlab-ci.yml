@@ -26,40 +26,92 @@ workflow:
     - if: $CI_COMMIT_TAG
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 
+stages: [lint, build]
+
+# Shared setup: toolchain + Vulkan Loader/Headers
+.vulkan_loader_setup: &vulkan_loader_setup
+  - set -euo pipefail
+  - pwd
+  - uname -a
+  # Retry a few times on transient mirror/metadata issues
+  - |
+    max_tries=6
+    for i in $(seq 1 "$max_tries"); do
+      dnf -y --refresh --best --setopt=install_weak_deps=False install \
+        make cmake gcc gcc-c++ python3 git clang clang-tools-extra \
+        pkgconf-pkg-config \
+        'pkgconfig(x11)' 'pkgconfig(xrandr)' 'pkgconfig(xcb)' 'pkgconfig(x11-xcb)' \
+        'pkgconfig(xkbcommon)' 'pkgconfig(wayland-client)' && break || {
+          echo "DNF install attempt $i/$max_tries failed; retrying in 10s."; sleep 10;
+        }
+    done
+    if [ "$i" -eq "$max_tries" ]; then
+      echo "DNF failed after $max_tries attempts"; exit 1;
+    fi
+  - mkdir -p /build
+  - pushd /build
+  - git clone --depth=1 https://github.com/KhronosGroup/Vulkan-Loader.git
+  - cd Vulkan-Loader
+  - mkdir -p build && cd build
+  - ../scripts/update_deps.py --cmake_var VULKAN_HEADERS_ENABLE_MODULE=OFF
+  - cmake -C helper.cmake ..
+  - make -j"$(nproc)"
+  - make install
+  - popd
+
 pre-commit:
+  stage: lint
   image: python:3.10.6
   rules:
     - if: $CI_MERGE_REQUEST_DIFF_BASE_SHA
+  before_script:
+    - apt-get update
+    - DEBIAN_FRONTEND=noninteractive apt-get install -y git
   script:
     - pip install pre-commit
     - echo Using $CI_MERGE_REQUEST_DIFF_BASE_SHA as Pre-commit base
-    - pre-commit run --show-diff-on-failure --from-ref $CI_MERGE_REQUEST_DIFF_BASE_SHA --to-ref HEAD
+    - pre-commit run --show-diff-on-failure --from-ref "$CI_MERGE_REQUEST_DIFF_BASE_SHA" --to-ref HEAD
+
+clang_tidy:
+  stage: lint
+  image: "registry.fedoraproject.org/fedora"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  before_script:
+    - *vulkan_loader_setup
+  script:
+    # Generate compile_commands.json (no build needed)
+    - mkdir -p build
+    - >
+      cmake -S . -B build
+      -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+      -DVULKAN_CXX_INCLUDE=/build/Vulkan-Loader/build/Vulkan-Headers/build/install/include
+    - test -f build/compile_commands.json || { echo "compile_commands.json missing"; exit 2; }
+    # Run clang-tidy across all TUs in the DB; restrict diagnostics to this repo
+    - set +e
+    - run-clang-tidy -p build -j "$(nproc)" -quiet -header-filter="$(pwd)/.*" | tee clang-tidy.log
+    - set -e
+    # Fail if any warnings/errors were emitted for repo files
+    - |
+      if grep -E "^(.*):[0-9]+:[0-9]+: (warning|error):" clang-tidy.log >/dev/null; then
+        echo "clang-tidy found issues. See clang-tidy.log"; exit 1
+      fi
+  allow_failure: false
+  artifacts:
+    when: always
+    paths:
+      - clang-tidy.log
+      - build/compile_commands.json
 
 build_vulkan_wsi_layer:
-  # For now start from a standard Fedora image and install everything each time.
+  stage: build
   image: "registry.fedoraproject.org/fedora"
   before_script:
-    - pwd
-    - uname -a
-    # Install necessary packages.
-    # Oddly the exit status of the command below is nonzero even on success, just ignore it.
-    - yes | dnf install make cmake gcc g++ python git libxcb-devel libxkbcommon-devel wayland-devel libXrandr-devel || true
-    # Check out and set-up the Vulkan Loader.
-    - mkdir /build
-    - pushd /build
-    - git clone --depth=1 https://github.com/KhronosGroup/Vulkan-Loader.git
-    - cd Vulkan-Loader
-    - mkdir build
-    - cd build/
-    - ../scripts/update_deps.py --cmake_var VULKAN_HEADERS_ENABLE_MODULE=OFF
-    # Build the Vulkan loader.
-    - cmake -C helper.cmake ..
-    - make
-    - make install
-    - popd
+    - *vulkan_loader_setup
   script:
     - pwd
-    - mkdir build
+    - mkdir -p build
     - cd build
     - cmake .. -DVULKAN_CXX_INCLUDE=/build/Vulkan-Loader/build/Vulkan-Headers/build/install/include
-    - make
+    - make -j"$(nproc)"

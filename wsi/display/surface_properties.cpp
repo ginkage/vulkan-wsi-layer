@@ -48,7 +48,7 @@ surface_properties::surface_properties(surface *wsi_surface)
    : m_specific_surface(wsi_surface)
    , m_supported_modes({ VK_PRESENT_MODE_FIFO_KHR })
 {
-   populate_present_mode_compatibilities();
+   this->surface_properties::populate_present_mode_compatibilities();
 }
 
 surface_properties::surface_properties()
@@ -74,7 +74,7 @@ VkResult surface_properties::get_surface_capabilities(VkPhysicalDevice physical_
 
    /* Composite alpha */
    pSurfaceCapabilities->supportedCompositeAlpha =
-      static_cast<VkCompositeAlphaFlagBitsKHR>(VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR | VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR);
+      static_cast<VkCompositeAlphaFlagsKHR>(VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR | VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR);
 
    return VK_SUCCESS;
 }
