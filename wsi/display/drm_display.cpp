@@ -34,13 +34,13 @@
 #include <unistd.h>
 #include <assert.h>
 #include <drm_fourcc.h>
+#include <dirent.h>
+
 namespace wsi
 {
 
 namespace display
 {
-
-const std::string default_dri_device_name{ "/dev/dri/card0" };
 
 drm_display::drm_display(util::fd_owner drm_fd, int crtc_id, drm_connector_owner drm_connector,
                          util::unique_ptr<util::vector<util::drm::drm_format_pair>> supported_formats,
@@ -355,12 +355,42 @@ std::optional<drm_display> &drm_display::get_display()
 
    std::call_once(flag, []() {
       const char *dri_device = std::getenv("WSI_DISPLAY_DRI_DEV");
-      if (!dri_device)
+      if (dri_device)
       {
-         dri_device = default_dri_device_name.c_str();
+         display = drm_display::make_display(util::allocator::get_generic(), dri_device);
+         if (!display.has_value())
+         {
+            WSI_LOG_ERROR("Failed to open DRM device: %s", dri_device);
+         }
+         else
+         {
+            WSI_LOG_INFO("Using DRM device from WSI_DISPLAY_DRI_DEV: %s", dri_device);
+         }
       }
-
-      display = drm_display::make_display(util::allocator::get_generic(), dri_device);
+      else
+      {
+         const char *dri_dir = "/dev/dri";
+         DIR *dir = opendir(dri_dir);
+         if (!dir)
+         {
+            return;
+         }
+         struct dirent *entry;
+         while ((entry = readdir(dir)) != nullptr)
+         {
+            if (strncmp(entry->d_name, "card", 4) == 0)
+            {
+               std::string path = std::string(dri_dir) + "/" + entry->d_name;
+               display = drm_display::make_display(util::allocator::get_generic(), path.c_str());
+               if (display.has_value())
+               {
+                  WSI_LOG_INFO("Using DRM device: %s", path.c_str());
+                  break;
+               }
+            }
+         }
+         closedir(dir);
+      }
    });
    return display;
 }
