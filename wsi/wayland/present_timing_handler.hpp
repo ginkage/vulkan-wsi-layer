@@ -119,7 +119,6 @@ private:
     * @brief Stores the presentation feedbacks that have been queued.
     */
 
-   util::vector<presentation_feedback> m_pending_presents;
    wsi_ext_present_timing_wayland(const util::allocator &allocator, VkDevice device, uint32_t num_images,
                                   util::vector<std::optional<uint64_t>> &&timestamp_first_pixel_out_storage);
 
@@ -133,6 +132,12 @@ private:
 
    /* Allow util::allocator to access the private constructor */
    friend util::allocator;
+
+   /**
+    * @brief Stores the presentation feedbacks that have been queued.
+    */
+   std::array<std::optional<presentation_feedback>, wsi::surface_properties::MAX_SWAPCHAIN_IMAGE_COUNT>
+      m_pending_presents{};
 };
 
 } // namespace wayland

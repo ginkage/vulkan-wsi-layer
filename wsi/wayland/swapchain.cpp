@@ -602,7 +602,7 @@ void swapchain::present_image(const pending_present_request &pending_present)
    if (m_device_data.is_present_id_enabled())
    {
       auto *ext = get_swapchain_extension<wsi_ext_present_id_wayland>(true);
-      if (m_wsi_surface->get_presentation_time_interface() != nullptr)
+      if (m_wsi_surface->get_presentation_time_interface() != nullptr && pending_present.present_id)
       {
          wp_presentation *pres = m_wsi_surface->get_presentation_time_interface();
          struct wp_presentation_feedback *feedback = wp_presentation_feedback(pres, m_wsi_surface->get_wl_surface());

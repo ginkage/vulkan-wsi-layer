@@ -56,6 +56,7 @@ wsi_ext_present_timing::wsi_ext_present_timing(const util::allocator &allocator,
    , m_query_pool(VK_NULL_HANDLE)
    , m_command_pool(VK_NULL_HANDLE)
    , m_command_buffer(allocator)
+   , m_device_timestamp_cached(allocator)
    , m_queue_mutex()
    , m_queue(allocator)
    , m_scheduled_present_targets(allocator)
@@ -130,6 +131,11 @@ VkResult wsi_ext_present_timing::init_timing_resources()
    {
       return VK_ERROR_OUT_OF_HOST_MEMORY;
    }
+   /* Resize cached device timestamp records to the number of images. */
+   if (!m_device_timestamp_cached.try_resize(m_num_images, 0ULL))
+   {
+      return VK_ERROR_OUT_OF_HOST_MEMORY;
+   }
    for (auto &command_buffer : m_command_buffer)
    {
       command_buffer = VK_NULL_HANDLE;
@@ -196,10 +202,19 @@ VkResult wsi_ext_present_timing::write_pending_results()
    {
       if (slot.is_pending(VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT))
       {
-         uint64_t time;
-         TRY(m_device.disp.GetQueryPoolResults(m_device.device, m_query_pool, slot.m_image_index, 1, sizeof(time),
-                                               &time, 0, VK_QUERY_RESULT_64_BIT));
-         slot.set_stage_timing(VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT, ticks_to_ns(time, m_timestamp_period));
+         uint64_t timestamp;
+         VkResult res = m_device.disp.GetQueryPoolResults(m_device.device, m_query_pool, slot.m_image_index, 1,
+                                                          sizeof(timestamp), &timestamp, 0, VK_QUERY_RESULT_64_BIT);
+         if (res != VK_SUCCESS && res != VK_NOT_READY)
+         {
+            return res;
+         }
+         if (res == VK_SUCCESS && m_device_timestamp_cached[slot.m_image_index] != timestamp)
+         {
+            m_device_timestamp_cached[slot.m_image_index] = timestamp;
+            slot.set_stage_timing(VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT,
+                                  ticks_to_ns(timestamp, m_timestamp_period));
+         }
       }
       if (slot.is_pending(VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_OUT_BIT_EXT))
       {

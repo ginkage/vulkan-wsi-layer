@@ -537,6 +537,13 @@ private:
    util::vector<VkCommandBuffer> m_command_buffer;
 
    /**
+    * @brief Stores the device timestamp recorded from the previous
+    * VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT stage for each image
+    * index of the swapchain.
+    */
+   util::vector<uint64_t> m_device_timestamp_cached;
+
+   /**
     * @brief Mutex guarding the internal presentation-timing queue.
     *
     * Public methods lock this mutex before accessing the queue.
