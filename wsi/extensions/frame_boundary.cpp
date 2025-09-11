@@ -63,7 +63,7 @@ std::optional<VkFrameBoundaryEXT> wsi_ext_frame_boundary::handle_frame_boundary_
 std::optional<VkFrameBoundaryEXT> create_frame_boundary(const VkPresentInfoKHR &present_info)
 {
    auto *present_frame_boundary =
-      util::find_extension<VkFrameBoundaryEXT>(VK_STRUCTURE_TYPE_PRESENT_ID_KHR, present_info.pNext);
+      util::find_extension<VkFrameBoundaryEXT>(VK_STRUCTURE_TYPE_FRAME_BOUNDARY_EXT, present_info.pNext);
 
    /* Extract the VkFrameBoundaryEXT structure to avoid passing other, unrelated structures to vkQueueSubmit */
    if (present_frame_boundary != nullptr)
