@@ -316,6 +316,24 @@ public:
 
    bool add_swapchain_extension(util::unique_ptr<wsi_ext> extension);
 
+   /**
+    * @brief Enable mutable format swapchain support.
+    */
+   void enable_mutable_format()
+   {
+      m_mutable_format_enabled = true;
+   }
+
+   /**
+    * @brief Check if mutable format swapchain support is enabled.
+    *
+    * @return true if mutable format swapchain support is enabled, false otherwise.
+    */
+   bool is_mutable_format_enabled() const
+   {
+      return m_mutable_format_enabled;
+   }
+
 protected:
    layer::device_private_data &m_device_data;
 
@@ -676,6 +694,11 @@ private:
     * @brief Holds the VkImageCreateInfo and backend specific image create info extensions.
     */
    swapchain_image_creator m_image_creator;
+
+   /**
+    * @brief Flag indicating if mutable format swapchain support is enabled.
+    */
+   bool m_mutable_format_enabled{ false };
 
    /** @brief Signal semaphores for queue submit.
     */

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, 2024 Arm Limited.
+ * Copyright (c) 2021-2022, 2024-2025 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -77,26 +77,60 @@
 
 namespace util
 {
+/**
+ * @brief Search a Vulkan pNext chain (read-only) for a specific extension struct.
+ *
+ * Use for input pNext chains (application → driver), e.g. VkSwapchainCreateInfoKHR::pNext.
+ * Walks the chain via VkBaseInStructure and returns the first match.
+ *
+ * @tparam T     Vulkan struct type to find (e.g., VkImageFormatListCreateInfo)
+ * @param sType  VkStructureType corresponding to T
+ * @param pNext  Head of the pNext chain (may be nullptr)
+ * @return const T* to the first matching node; nullptr if not found
+ *
+ * @note Unknown sTypes are skipped per Vulkan forward-compat rules.
+ */
 template <typename T>
-const T *find_extension(VkStructureType sType, const void *pNext)
+inline const T *find_extension(VkStructureType sType, const void *pNext) noexcept
 {
-   auto entry = reinterpret_cast<const VkBaseOutStructure *>(pNext);
-   while (entry && entry->sType != sType)
+   auto p = reinterpret_cast<const VkBaseInStructure *>(pNext);
+   while (p)
    {
-      entry = entry->pNext;
+      if (p->sType == sType)
+      {
+         return reinterpret_cast<const T *>(p);
+      }
+      p = p->pNext;
    }
-   return reinterpret_cast<const T *>(entry);
+   return nullptr;
 }
 
+/**
+ * @brief Search a Vulkan pNext chain (writable) for a specific extension struct.
+ *
+ * Use for output pNext chains (driver → application), e.g. VkPhysicalDeviceFeatures2::pNext.
+ * Walks the chain via VkBaseOutStructure and returns the first match.
+ *
+ * @tparam T     Vulkan struct type to find (e.g., VkPhysicalDeviceVulkan11Features)
+ * @param sType  VkStructureType corresponding to T
+ * @param pNext  Head of the pNext chain (may be nullptr)
+ * @return T* to the first matching node; nullptr if not found
+ *
+ * @note Unknown sTypes are skipped per Vulkan forward-compat rules.
+ */
 template <typename T>
-T *find_extension(VkStructureType sType, void *pNext)
+inline T *find_extension(VkStructureType sType, void *pNext) noexcept
 {
-   auto entry = reinterpret_cast<VkBaseOutStructure *>(pNext);
-   while (entry && entry->sType != sType)
+   auto p = reinterpret_cast<VkBaseOutStructure *>(pNext);
+   while (p)
    {
-      entry = entry->pNext;
+      if (p->sType == sType)
+      {
+         return reinterpret_cast<T *>(p);
+      }
+      p = p->pNext;
    }
-   return reinterpret_cast<T *>(entry);
+   return nullptr;
 }
 
 template <typename T>

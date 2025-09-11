@@ -85,4 +85,4 @@ VkResult swapchain_image_create_compression_control::extend_image_create_info(Vk
    return VK_SUCCESS;
 }
 
-};
+} /* namespace wsi */

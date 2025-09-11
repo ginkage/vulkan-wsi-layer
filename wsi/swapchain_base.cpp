@@ -45,6 +45,7 @@
 #include "util/helpers.hpp"
 
 #include "swapchain_base.hpp"
+#include "swapchain_image_create_extensions/mutable_format_extension.hpp"
 #include "wsi_factory.hpp"
 
 #include "extensions/present_timing.hpp"
@@ -274,6 +275,14 @@ VkResult swapchain_base::init(VkDevice device, const VkSwapchainCreateInfoKHR *s
       return VK_ERROR_OUT_OF_HOST_MEMORY;
    }
 
+   const bool want_mutable_format = (swapchain_create_info->flags & VK_SWAPCHAIN_CREATE_MUTABLE_FORMAT_BIT_KHR) != 0;
+
+   /* Enable mutable-format early so backends can react in init_platform. */
+   if (want_mutable_format)
+   {
+      enable_mutable_format();
+   }
+
    /* We have allocated images, we can call the platform init function if something needs to be done. */
    bool use_presentation_thread = true;
    TRY_LOG_CALL(init_platform(device, swapchain_create_info, use_presentation_thread));
@@ -283,11 +292,11 @@ VkResult swapchain_base::init(VkDevice device, const VkSwapchainCreateInfoKHR *s
       TRY_LOG_CALL(init_page_flip_thread());
    }
 
+   /* Initialize the image creator, and attach any required extensions */
    TRY_LOG_CALL(image_creator_init(*swapchain_create_info));
    m_image_create_info = m_image_creator.get_image_create_info();
 
-   VkResult result = m_free_image_semaphore.init(m_swapchain_images.size());
-   if (result != VK_SUCCESS)
+   if (VkResult result = m_free_image_semaphore.init(m_swapchain_images.size()); result != VK_SUCCESS)
    {
       assert(result == VK_ERROR_OUT_OF_HOST_MEMORY);
       return result;
@@ -566,7 +575,11 @@ VkResult swapchain_base::get_swapchain_images(uint32_t *swapchain_image_count, V
 
 VkResult swapchain_base::create_aliased_image_handle(VkImage *image)
 {
-   return m_device_data.disp.CreateImage(m_device, &m_image_create_info, get_allocation_callbacks(), image);
+   /* Build an alias VkImageCreateInfo compatible with swapchain memory binding. */
+   VkImageCreateInfo alias_info = m_image_create_info;
+   alias_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+   return m_device_data.disp.CreateImage(m_device, &alias_info, get_allocation_callbacks(), image);
 }
 
 VkResult swapchain_base::get_swapchain_status()
@@ -832,8 +845,26 @@ VkResult swapchain_base::image_creator_init(const VkSwapchainCreateInfoKHR &swap
 {
    m_image_creator.init(swapchain_create_info);
 
-   util::vector<util::unique_ptr<swapchain_image_create_info_extension>> extensions(m_allocator);
+   util::vector<util::unique_ptr<swapchain_image_create_info_extension>> extensions(
+      util::allocator(m_allocator, VK_SYSTEM_ALLOCATION_SCOPE_OBJECT));
+
    TRY_LOG_CALL(get_required_image_creator_extensions(swapchain_create_info, &extensions));
+
+   if (is_mutable_format_enabled())
+   {
+      const auto *image_format_list = util::find_extension<VkImageFormatListCreateInfo>(
+         VK_STRUCTURE_TYPE_IMAGE_FORMAT_LIST_CREATE_INFO, swapchain_create_info.pNext);
+      auto mutable_format_uptr = swapchain_image_create_mutable_format::create_unique(image_format_list, m_allocator);
+      if (!mutable_format_uptr)
+      {
+         return VK_ERROR_OUT_OF_HOST_MEMORY;
+      }
+      if (!extensions.try_push_back(std::move(mutable_format_uptr)))
+      {
+         return VK_ERROR_OUT_OF_HOST_MEMORY;
+      }
+   }
+
    TRY_LOG_CALL(m_image_creator.add_extensions(extensions));
 
    return VK_SUCCESS;

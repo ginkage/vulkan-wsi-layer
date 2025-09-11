@@ -232,4 +232,5 @@ VkResult swapchain_image_create_external_memory::get_surface_compatible_formats(
 
    return VK_SUCCESS;
 }
-};
+
+} /* namespace wsi */
