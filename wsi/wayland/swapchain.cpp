@@ -285,8 +285,10 @@ VkResult swapchain::get_surface_compatible_formats(const VkImageCreateInfo &info
 
       VkResult result = VK_SUCCESS;
       {
+         /* Build pNext chain for the format query. */
          VkPhysicalDeviceExternalImageFormatInfoKHR external_info = {};
          external_info.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTERNAL_IMAGE_FORMAT_INFO_KHR;
+         external_info.pNext = nullptr;
          external_info.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT;
 
          VkPhysicalDeviceImageDrmFormatModifierInfoEXT drm_mod_info = {};
@@ -306,8 +308,20 @@ VkResult swapchain::get_surface_compatible_formats(const VkImageCreateInfo &info
          image_info.usage = info.usage;
          image_info.flags = info.flags;
 
-         VkImageCompressionControlEXT compression_control = {};
+         /* Attach view format list (if any) from the swapchain image creator
+          * to the image_info chain, as required by the spec.
+          */
+         const auto *image_format_list = util::find_extension<VkImageFormatListCreateInfo>(
+            VK_STRUCTURE_TYPE_IMAGE_FORMAT_LIST_CREATE_INFO, m_image_create_info.pNext);
+         VkImageFormatListCreateInfo image_format_list_copy = {};
+         if (image_format_list)
+         {
+            image_format_list_copy = util::shallow_copy_extension(image_format_list);
+            image_format_list_copy.pNext = image_info.pNext;
+            image_info.pNext = &image_format_list_copy;
+         }
 
+         VkImageCompressionControlEXT compression_control = {};
          if (m_device_data.is_swapchain_compression_control_enabled())
          {
             auto *ext = get_swapchain_extension<wsi_ext_image_compression_control>();
@@ -544,7 +558,7 @@ VkResult swapchain::create_swapchain_image(VkImageCreateInfo image_create_info, 
       m_image_creation_parameters.m_allocated_format = allocated_format;
    }
 
-   return m_device_data.disp.CreateImage(m_device, &m_image_create_info, get_allocation_callbacks(), &image.image);
+   return m_device_data.disp.CreateImage(m_device, &image_create_info, get_allocation_callbacks(), &image.image);
 }
 
 void swapchain::present_image(const pending_present_request &pending_present)

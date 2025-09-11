@@ -142,6 +142,12 @@ VkResult swapchain::init_platform(VkDevice device, const VkSwapchainCreateInfoKH
       return VK_ERROR_OUT_OF_HOST_MEMORY;
    }
 
+   if (is_mutable_format_enabled())
+   {
+      WSI_LOG_ERROR("Mutable format swapchain is not supported for display backend");
+      return VK_ERROR_INITIALIZATION_FAILED;
+   }
+
    return VK_SUCCESS;
 }
 

@@ -30,7 +30,8 @@ implements the following extensions:
   * VK_EXT_swapchain_maintenance1
   * VK_EXT_present_mode_fifo_latest_ready (For Headless and Wayland only)
   * VK_KHR_present_id2
-  
+  * VK_KHR_swapchain_mutable_format (For Headless and Wayland only)
+
 ## Building
 
 ### Dependencies
