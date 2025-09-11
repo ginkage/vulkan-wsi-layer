@@ -40,7 +40,6 @@ wsi_ext_present_timing_wayland::wsi_ext_present_timing_wayland(
    const util::allocator &allocator, VkDevice device, uint32_t num_images,
    util::vector<std::optional<uint64_t>> &&timestamp_first_pixel_out_storage)
    : wsi_ext_present_timing(allocator, device, num_images)
-   , m_pending_presents(allocator)
    , m_timestamp_first_pixel_out(allocator)
 {
    m_timestamp_first_pixel_out.swap(timestamp_first_pixel_out_storage);
@@ -101,19 +100,15 @@ VkResult wsi_ext_present_timing_wayland::get_swapchain_timing_properties(
 presentation_feedback *wsi_ext_present_timing_wayland::insert_into_pending_present_feedback_list(
    uint32_t image_index, struct wp_presentation_feedback *feedback_obj)
 {
+
    util::unique_lock<util::mutex> lock(m_pending_presents_lock);
    if (!lock)
    {
       WSI_LOG_ERROR("Failed to acquire pending presents lock in insert_into_pending_present_feedback_list.\n");
       abort();
    }
-   presentation_feedback fb(feedback_obj, this, image_index);
-   size_t position = m_pending_presents.size();
-   if (!m_pending_presents.try_push_back(std::move(fb)))
-   {
-      return nullptr;
-   }
-   return &m_pending_presents[position];
+   m_pending_presents[image_index] = presentation_feedback(feedback_obj, this, image_index);
+   return &m_pending_presents[image_index].value();
 }
 
 void wsi_ext_present_timing_wayland::remove_from_pending_present_feedback_list(uint32_t image_index)
@@ -124,13 +119,7 @@ void wsi_ext_present_timing_wayland::remove_from_pending_present_feedback_list(u
       WSI_LOG_ERROR("Failed to acquire pending presents lock in remove_from_pending_present_feedback_list.\n");
       abort();
    }
-   auto it = std::find_if(m_pending_presents.begin(), m_pending_presents.end(),
-                          [image_index](const presentation_feedback &p) { return p.get_image_index() == image_index; });
-
-   if (it != m_pending_presents.end())
-   {
-      m_pending_presents.erase(it);
-   }
+   m_pending_presents[image_index].reset();
 }
 
 void wsi_ext_present_timing_wayland::pixelout_callback(uint32_t image_index, uint64_t time)

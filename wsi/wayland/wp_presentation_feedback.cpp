@@ -55,7 +55,7 @@ wp_presentation_feedback_presented(void *data, struct wp_presentation_feedback *
       feedback_obj->ext_present_timing()->pixelout_callback(feedback_obj->get_image_index(), timestamp_ns);
       feedback_obj->ext_present_timing()->remove_from_pending_present_feedback_list(feedback_obj->get_image_index());
    }
-   if (feedback_obj->ext_present_id() != nullptr)
+   else if (feedback_obj->ext_present_id() != nullptr)
    {
       feedback_obj->ext_present_id()->mark_delivered(feedback_obj->get_present_id());
       feedback_obj->ext_present_id()->remove_from_pending_present_feedback_list(feedback_obj->get_present_id());
