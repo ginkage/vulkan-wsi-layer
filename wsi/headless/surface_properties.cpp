@@ -247,7 +247,7 @@ VkResult surface_properties::get_present_timing_surface_caps(
    VkPhysicalDevice physical_device, VkPresentTimingSurfaceCapabilitiesEXT *present_timing_surface_caps)
 {
    present_timing_surface_caps->presentTimingSupported = VK_TRUE;
-   present_timing_surface_caps->presentAtAbsoluteTimeSupported = VK_TRUE;
+   present_timing_surface_caps->presentAtAbsoluteTimeSupported = VK_FALSE;
    present_timing_surface_caps->presentAtRelativeTimeSupported = VK_FALSE;
 
    VkPresentStageFlagsEXT monotonic_present_stages_supported = 0;
@@ -264,6 +264,8 @@ VkResult surface_properties::get_present_timing_surface_caps(
       monotonic_present_stages_supported |= VK_PRESENT_STAGE_REQUEST_DEQUEUED_BIT_EXT |
                                             VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_OUT_BIT_EXT |
                                             VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_VISIBLE_BIT_EXT;
+      present_timing_surface_caps->presentAtAbsoluteTimeSupported = VK_TRUE;
+      present_timing_surface_caps->presentAtRelativeTimeSupported = VK_TRUE;
    }
 
    present_timing_surface_caps->presentStageQueries =

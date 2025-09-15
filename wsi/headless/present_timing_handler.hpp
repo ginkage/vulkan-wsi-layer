@@ -67,6 +67,19 @@ public:
     */
    std::optional<uint64_t> get_current_clock_time_ns() const;
 
+   /**
+    * @brief Get the first pixel visible timestamp for the last presented image.
+    *
+    * @return first pixel visible timestamp for the last presented image or std::nullopt in case of error.
+    */
+   std::optional<uint64_t> get_first_pixel_visible_timestamp_for_last_image() const;
+
+   /**
+    * @brief Caches the first pixel visible timestamp for the last presented image.
+    *
+    */
+   void set_first_pixel_visible_timestamp_for_last_image(uint64_t timestamp);
+
 private:
    wsi_ext_present_timing_headless(const util::allocator &allocator, VkDevice device, uint32_t num_images,
                                    std::optional<VkTimeDomainEXT> monotonic_domain);
@@ -76,6 +89,11 @@ private:
 
    /* Monotonic time domain supported by the driver */
    std::optional<VkTimeDomainEXT> m_monotonic_domain;
+
+   /**
+    * Timestamp for the last VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_VISIBLE_BIT_EXT stage.
+    */
+   std::optional<uint64_t> m_first_pixel_visible_timestamp_for_last_image;
 };
 
 #endif
