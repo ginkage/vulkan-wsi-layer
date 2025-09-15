@@ -53,6 +53,59 @@ wsi_layer_vkGetPhysicalDeviceSurfaceCapabilitiesKHR(VkPhysicalDevice physicalDev
 }
 
 /**
+ * @brief Implements vkGetPhysicalDeviceSurfaceCapabilities2EXT Vulkan entrypoint.
+ */
+VWL_VKAPI_CALL(VkResult)
+wsi_layer_vkGetPhysicalDeviceSurfaceCapabilities2EXT(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface,
+                                                     VkSurfaceCapabilities2EXT *pSurfaceCapabilities) VWL_API_POST
+{
+   /*
+    * To adapt vulkan driver like mesa:panvk which still expose vkGetPhysicalDeviceSurfaceCapabilities2EXT
+    * and VK_EXT_display_surface_counter. Vulkan WSI need to implement vkGetPhysicalDeviceSurfaceCapabilities2EXT
+    * to handle the compatibility between Vulkan WSI and ICD.
+    * Because mesa has different initialization strategy on min/maxImageCount with Vulkan WSI,
+    * so if we haven't do like this, app will obtain different value between
+    * vkGetPhysicalDeviceSurfaceCapabilities2EXT and vkGetPhysicalDeviceSurfaceCapabilities2KHR.
+    */
+   auto &instance = layer::instance_private_data::get(physicalDevice);
+   if (instance.should_layer_handle_surface(physicalDevice, surface))
+   {
+      wsi::surface_properties *props = wsi::get_surface_properties(instance, surface);
+      assert(props != nullptr);
+
+      /*
+       * Firstly, VkSurfaceCapabilities2EXT equal to { VkSurfaceCapabilitiesKHR, VkSurfaceCounterFlagsEXT }
+       * So we set the common variable by common function as same as VkSurfaceCapabilitiesKHR,
+       * then set supportedSurfaceCounters manually.
+       *
+       * Secondly, from the vulkan spec, VkSurfaceCapabilities2EXT->pNext must be NULL,
+       * so we needn't to deal with the pNext Structure like vkGetPhysicalDeviceSurfaceCapabilities2KHR.
+       */
+      VkSurfaceCapabilitiesKHR khr_caps = {};
+      VkResult res = props->get_surface_capabilities(physicalDevice, &khr_caps);
+      if (res != VK_SUCCESS)
+      {
+         return res;
+      }
+      pSurfaceCapabilities->minImageCount = khr_caps.minImageCount;
+      pSurfaceCapabilities->maxImageCount = khr_caps.maxImageCount;
+      pSurfaceCapabilities->currentExtent = khr_caps.currentExtent;
+      pSurfaceCapabilities->minImageExtent = khr_caps.minImageExtent;
+      pSurfaceCapabilities->maxImageExtent = khr_caps.maxImageExtent;
+      pSurfaceCapabilities->maxImageArrayLayers = khr_caps.maxImageArrayLayers;
+      pSurfaceCapabilities->supportedTransforms = khr_caps.supportedTransforms;
+      pSurfaceCapabilities->currentTransform = khr_caps.currentTransform;
+      pSurfaceCapabilities->supportedCompositeAlpha = khr_caps.supportedCompositeAlpha;
+      pSurfaceCapabilities->supportedUsageFlags = khr_caps.supportedUsageFlags;
+      pSurfaceCapabilities->supportedSurfaceCounters = 0;
+
+      return res;
+   }
+
+   return instance.disp.GetPhysicalDeviceSurfaceCapabilities2EXT(physicalDevice, surface, pSurfaceCapabilities);
+}
+
+/**
  * @brief Implements vkGetPhysicalDeviceSurfaceCapabilities2KHR Vulkan entrypoint.
  */
 VWL_VKAPI_CALL(VkResult)

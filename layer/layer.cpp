@@ -796,6 +796,11 @@ wsi_layer_vkGetInstanceProcAddr(VkInstance instance, const char *funcName) VWL_A
          GET_PROC_ADDR(vkGetPhysicalDeviceSurfaceCapabilities2KHR);
          GET_PROC_ADDR(vkGetPhysicalDeviceSurfaceFormats2KHR);
       }
+
+      if (instance_data.is_instance_extension_enabled(VK_EXT_DISPLAY_SURFACE_COUNTER_EXTENSION_NAME))
+      {
+         GET_PROC_ADDR(vkGetPhysicalDeviceSurfaceCapabilities2EXT);
+      }
    }
 
    return instance_data.disp.get_user_enabled_entrypoint(instance, funcName);

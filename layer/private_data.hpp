@@ -222,6 +222,7 @@ static constexpr uint32_t API_VERSION_MAX = UINT32_MAX;
    /* VK_KHR_surface */                                                                                                   \
    EP(DestroySurfaceKHR, VK_KHR_SURFACE_EXTENSION_NAME, API_VERSION_MAX, false, )                                         \
    EP(GetPhysicalDeviceSurfaceCapabilitiesKHR, VK_KHR_SURFACE_EXTENSION_NAME, API_VERSION_MAX, false, )                   \
+   EP(GetPhysicalDeviceSurfaceCapabilities2EXT, VK_KHR_SURFACE_EXTENSION_NAME, API_VERSION_MAX, false, )                  \
    EP(GetPhysicalDeviceSurfaceFormatsKHR, VK_KHR_SURFACE_EXTENSION_NAME, API_VERSION_MAX, false, )                        \
    EP(GetPhysicalDeviceSurfacePresentModesKHR, VK_KHR_SURFACE_EXTENSION_NAME, API_VERSION_MAX, false, )                   \
    EP(GetPhysicalDeviceSurfaceSupportKHR, VK_KHR_SURFACE_EXTENSION_NAME, API_VERSION_MAX, false, )                        \
