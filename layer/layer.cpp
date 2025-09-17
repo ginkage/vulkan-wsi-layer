@@ -512,6 +512,8 @@ wsi_layer_vkGetPhysicalDeviceFeatures2(VkPhysicalDevice physical_device,
       present_wait_features->presentWait = VK_FALSE;
    }
 
+   instance.disp.GetPhysicalDeviceFeatures2KHR(physical_device, pFeatures);
+
 #if VULKAN_WSI_LAYER_EXPERIMENTAL
    auto *present_wait2_features = util::find_extension<VkPhysicalDevicePresentWait2FeaturesKHR>(
       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_WAIT_2_FEATURES_KHR, pFeatures->pNext);
@@ -520,8 +522,6 @@ wsi_layer_vkGetPhysicalDeviceFeatures2(VkPhysicalDevice physical_device,
       present_wait2_features->presentWait2 = VK_TRUE;
    }
 #endif
-
-   instance.disp.GetPhysicalDeviceFeatures2KHR(physical_device, pFeatures);
 
    auto *image_compression_control_swapchain_features =
       util::find_extension<VkPhysicalDeviceImageCompressionControlSwapchainFeaturesEXT>(
