@@ -599,16 +599,16 @@ void swapchain::present_image(const pending_present_request &pending_present)
    }
 
 #if VULKAN_WSI_LAYER_EXPERIMENTAL
-   if (m_device_data.is_present_id_enabled())
+   auto *present_id_ext = get_swapchain_extension<wsi_ext_present_id_wayland>();
+   if (present_id_ext != nullptr)
    {
-      auto *ext = get_swapchain_extension<wsi_ext_present_id_wayland>(true);
       if (m_wsi_surface->get_presentation_time_interface() != nullptr && pending_present.present_id)
       {
          wp_presentation *pres = m_wsi_surface->get_presentation_time_interface();
          struct wp_presentation_feedback *feedback = wp_presentation_feedback(pres, m_wsi_surface->get_wl_surface());
          wl_proxy_set_queue(reinterpret_cast<wl_proxy *>(feedback), m_buffer_queue);
          presentation_feedback *feedback_obj =
-            ext->insert_into_pending_present_feedback_list(pending_present.present_id, feedback);
+            present_id_ext->insert_into_pending_present_feedback_list(pending_present.present_id, feedback);
          if (feedback_obj == nullptr)
          {
             WSI_LOG_ERROR("Error adding to pending present feedback list");
@@ -650,24 +650,21 @@ void swapchain::present_image(const pending_present_request &pending_present)
       set_error_state(VK_ERROR_SURFACE_LOST_KHR);
    }
 
-   if (m_device_data.is_present_id_enabled())
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+   auto *ext = get_swapchain_extension<wsi_ext_present_id_wayland>();
+   if (ext != nullptr)
    {
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
-      auto *ext = get_swapchain_extension<wsi_ext_present_id_wayland>();
-      if (ext != nullptr)
-      {
-         if (m_wsi_surface->get_presentation_time_interface() == nullptr)
+      if (m_wsi_surface->get_presentation_time_interface() == nullptr)
 #else
-      auto *ext = get_swapchain_extension<wsi_ext_present_id>();
-      if (ext != nullptr)
+   auto *ext = get_swapchain_extension<wsi_ext_present_id>();
+   if (ext != nullptr)
 #endif
-         {
-            ext->mark_delivered(pending_present.present_id);
-         }
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
+      {
+         ext->mark_delivered(pending_present.present_id);
       }
-#endif
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
    }
+#endif
 }
 
 void swapchain::destroy_image(swapchain_image &image)
