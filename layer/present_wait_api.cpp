@@ -56,7 +56,6 @@ wsi_layer_vkWaitForPresentKHR(VkDevice device, VkSwapchainKHR swapchain, uint64_
    return ext->wait_for_present_id(present_id, timeout);
 }
 
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
 /**
  * @brief Implements vkWaitForPresent2KHR Vulkan entrypoint.
  */
@@ -79,4 +78,3 @@ wsi_layer_vkWaitForPresent2KHR(VkDevice device, VkSwapchainKHR swapchain,
 
    return ext->wait_for_present_id(pPresentWait2Info->presentId, pPresentWait2Info->timeout);
 }
-#endif

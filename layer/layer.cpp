@@ -397,14 +397,12 @@ VKAPI_ATTR VkResult create_device(VkPhysicalDevice physicalDevice, const VkDevic
       device_data.set_present_wait_enabled(present_wait_features->presentWait);
    }
 
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
    auto *present_wait2_features = util::find_extension<VkPhysicalDevicePresentWait2FeaturesKHR>(
       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_WAIT_2_FEATURES_KHR, pCreateInfo->pNext);
    if (present_wait2_features != nullptr)
    {
       device_data.set_present_wait2_enabled(present_wait2_features->presentWait2);
    }
-#endif
 
    return VK_SUCCESS;
 }
@@ -514,14 +512,12 @@ wsi_layer_vkGetPhysicalDeviceFeatures2(VkPhysicalDevice physical_device,
 
    instance.disp.GetPhysicalDeviceFeatures2KHR(physical_device, pFeatures);
 
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
    auto *present_wait2_features = util::find_extension<VkPhysicalDevicePresentWait2FeaturesKHR>(
       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_WAIT_2_FEATURES_KHR, pFeatures->pNext);
    if (present_wait2_features != nullptr)
    {
       present_wait2_features->presentWait2 = VK_TRUE;
    }
-#endif
 
    auto *image_compression_control_swapchain_features =
       util::find_extension<VkPhysicalDeviceImageCompressionControlSwapchainFeaturesEXT>(
@@ -679,13 +675,12 @@ wsi_layer_vkGetDeviceProcAddr(VkDevice device, const char *funcName) VWL_API_POS
    {
       GET_PROC_ADDR(vkWaitForPresentKHR);
    }
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
+
    /* VK_KHR_present_wait2 */
    if (device_data.is_device_extension_enabled(VK_KHR_PRESENT_WAIT_2_EXTENSION_NAME))
    {
       GET_PROC_ADDR(vkWaitForPresent2KHR);
    }
-#endif
 
    return device_data.disp.get_user_enabled_entrypoint(device, funcName);
 }
