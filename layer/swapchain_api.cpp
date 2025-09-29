@@ -191,36 +191,26 @@ wsi_layer_vkQueuePresentKHR(VkQueue queue, const VkPresentInfoKHR *pPresentInfo)
 
    VkResult ret = VK_SUCCESS;
 
-   struct present_ids
+   const uint64_t *p_present_ids{ nullptr };
+
+   auto *present_id2_ext =
+      util::find_extension<VkPresentId2KHR>(VK_STRUCTURE_TYPE_PRESENT_ID_2_KHR, pPresentInfo->pNext);
+   if (present_id2_ext != nullptr)
    {
-      uint32_t ids_num{ 0 };
-      const uint64_t *p_present_ids{ nullptr };
-
-      bool has_ids()
-      {
-         return ids_num > 0;
-      }
-   };
-
-   present_ids present_ids{};
-
-   if (device_data.is_present_id2_enabled())
-   {
-      auto *ext2 = util::find_extension<VkPresentIdKHR>(VK_STRUCTURE_TYPE_PRESENT_ID_2_KHR, pPresentInfo->pNext);
-      if (ext2 != nullptr)
-      {
-         present_ids.ids_num = ext2->swapchainCount;
-         present_ids.p_present_ids = ext2->pPresentIds;
-      }
+      p_present_ids = present_id2_ext->pPresentIds;
    }
-
-   if (!present_ids.has_ids())
+   else
    {
       auto *ext = util::find_extension<VkPresentIdKHR>(VK_STRUCTURE_TYPE_PRESENT_ID_KHR, pPresentInfo->pNext);
       if (ext != nullptr)
       {
-         present_ids.ids_num = ext->swapchainCount;
-         present_ids.p_present_ids = ext->pPresentIds;
+         p_present_ids = ext->pPresentIds;
+         /* If a VkPresentIdKHR structure is included in the pNext chain, and the presentId feature is not enabled,
+          * each presentIds entry in that structure must be NULL */
+         if (p_present_ids != nullptr)
+         {
+            assert(device_data.is_present_id_enabled());
+         }
       }
    }
 
@@ -244,9 +234,16 @@ wsi_layer_vkQueuePresentKHR(VkQueue queue, const VkPresentInfoKHR *pPresentInfo)
 
       uint64_t present_id = 0; /* No present ID by default */
 
-      if (present_ids.p_present_ids && present_ids.ids_num == pPresentInfo->swapchainCount)
+      if (p_present_ids != nullptr)
       {
-         present_id = present_ids.p_present_ids[i];
+         present_id = p_present_ids[i];
+
+         /* If a VkPresentId2KHR structure is included in the pNext chain, and the presentId2 feature is not enabled,
+          * each presentIds entry in that structure must be zero. */
+         if (present_id2_ext && present_id != 0)
+         {
+            assert(device_data.is_present_id2_enabled());
+         }
       }
 
       wsi::swapchain_presentation_parameters present_params{};
