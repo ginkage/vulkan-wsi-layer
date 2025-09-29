@@ -64,12 +64,7 @@ wsi_ext_present_timing::wsi_ext_present_timing(const util::allocator &allocator,
    , m_present_semaphore(allocator)
    , m_timestamp_period(0.f)
 {
-   if (!m_device.is_present_id_enabled())
-   {
-      WSI_LOG_ERROR(VK_EXT_PRESENT_TIMING_EXTENSION_NAME
-                    " enabled but required extension " VK_KHR_PRESENT_ID_EXTENSION_NAME " is not enabled.");
-   }
-
+   assert(m_device.is_device_extension_enabled(VK_KHR_PRESENT_ID_2_EXTENSION_NAME));
    VkPhysicalDeviceProperties2KHR physical_device_properties{};
    physical_device_properties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2_KHR;
    auto &inst = layer::instance_private_data::get(m_device.physical_device);
