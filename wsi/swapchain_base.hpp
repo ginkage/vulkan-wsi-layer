@@ -135,6 +135,7 @@ enum signal_semaphores_type
 #endif
    SIGNAL_SEMAPHORE_MAX_NUM,
 };
+
 /**
  * @brief Base swapchain class
  *

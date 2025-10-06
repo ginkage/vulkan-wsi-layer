@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, 2024 Arm Limited.
+ * Copyright (c) 2021-2022, 2024-2025 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -47,6 +47,9 @@ class unordered_set : public std::unordered_set<Key, Hash, Comparator, Allocator
    using iterator = typename base::iterator;
 
 public:
+   /** Must be constructed with a custom_allocator. */
+   unordered_set() = delete;
+
    /**
     * Delete all member functions that can cause allocation failure by throwing std::bad_alloc.
     */

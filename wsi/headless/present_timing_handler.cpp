@@ -43,9 +43,8 @@ wsi_ext_present_timing_headless::wsi_ext_present_timing_headless(const util::all
 }
 
 util::unique_ptr<wsi_ext_present_timing_headless> wsi_ext_present_timing_headless::create(
-   const VkDevice &device, const util::allocator &allocator, uint32_t num_images)
+   const util::allocator &allocator, const VkDevice &device, uint32_t num_images)
 {
-
    auto &dev_data = layer::device_private_data::get(device);
 
    /*

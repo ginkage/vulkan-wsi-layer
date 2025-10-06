@@ -102,7 +102,7 @@ VkResult swapchain::add_required_extensions(VkDevice device, const VkSwapchainCr
    if (swapchain_support_enabled)
    {
       if (!add_swapchain_extension(
-             wsi_ext_present_timing_headless::create(device, m_allocator, swapchain_create_info->minImageCount)))
+             wsi_ext_present_timing_headless::create(m_allocator, device, swapchain_create_info->minImageCount)))
       {
          return VK_ERROR_OUT_OF_HOST_MEMORY;
       }

@@ -33,6 +33,7 @@
 
 #include <layer/wsi_layer_experimental.hpp>
 #include <layer/private_data.hpp>
+#include <wsi/swapchain_base.hpp>
 #include <util/custom_allocator.hpp>
 #include <util/custom_mutex.hpp>
 #include <util/macros.hpp>
@@ -127,6 +128,18 @@ struct swapchain_presentation_entry
    size_t m_num_present_stages;
 
    /**
+    * The queue family used to submit synchronization commands for this entry.
+    */
+   uint32_t m_queue_family{ 0 };
+
+   /**
+    * When serving a get past presentation timings request, this field
+    * keeps the status of whether the slot had already been copied to
+    * the results.
+    */
+   bool copied;
+
+   /**
     * The variables to keep timing stages.
     */
    std::optional<swapchain_presentation_timing> m_queue_end_timing;
@@ -135,7 +148,7 @@ struct swapchain_presentation_entry
    std::optional<swapchain_presentation_timing> m_first_pixel_visible_timing;
 
    swapchain_presentation_entry(uint64_t target_time, VkPresentStageFlagsEXT present_stage_queries, uint64_t present_id,
-                                uint32_t image_index);
+                                uint32_t image_index, uint32_t queue_family);
    swapchain_presentation_entry(swapchain_presentation_entry &&) noexcept = default;
    swapchain_presentation_entry &operator=(swapchain_presentation_entry &&) noexcept = default;
 
@@ -294,6 +307,97 @@ private:
 };
 
 /**
+ * @brief Resources specific to a particular queue family index.
+ */
+class queue_family_resources
+{
+public:
+   queue_family_resources(util::allocator allocator, layer::device_private_data &device)
+      : m_command_pool(VK_NULL_HANDLE)
+      , m_command_buffer(allocator)
+      , m_query_pool(VK_NULL_HANDLE)
+      , m_allocator(allocator)
+      , m_device(device)
+   {
+   }
+
+   ~queue_family_resources()
+   {
+      if (m_command_pool != VK_NULL_HANDLE)
+      {
+         m_device.disp.FreeCommandBuffers(m_device.device, m_command_pool, m_command_buffer.size(),
+                                          m_command_buffer.data());
+
+         m_device.disp.DestroyCommandPool(m_device.device, m_command_pool, m_allocator.get_original_callbacks());
+         m_command_pool = VK_NULL_HANDLE;
+      }
+      if (m_query_pool != VK_NULL_HANDLE)
+      {
+         m_device.disp.DestroyQueryPool(m_device.device, m_query_pool, m_allocator.get_original_callbacks());
+         m_query_pool = VK_NULL_HANDLE;
+      }
+   }
+
+   VkResult init(uint32_t queue_family_index, uint32_t num_images)
+   {
+      /* Resize the command buffer to the number of images. */
+      if (!m_command_buffer.try_resize(num_images))
+      {
+         return VK_ERROR_OUT_OF_HOST_MEMORY;
+      }
+      for (auto &command_buffer : m_command_buffer)
+      {
+         command_buffer = VK_NULL_HANDLE;
+      }
+      /* Allocate the command pool and query pool. */
+      VkQueryPoolCreateInfo query_pool_info = {
+         VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO, nullptr, 0, VK_QUERY_TYPE_TIMESTAMP, num_images, 0
+      };
+      TRY_LOG_CALL(m_device.disp.CreateQueryPool(m_device.device, &query_pool_info,
+                                                 m_allocator.get_original_callbacks(), &m_query_pool));
+      VkCommandPoolCreateInfo command_pool_info{ VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO, nullptr,
+                                                 VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT, queue_family_index };
+      TRY_LOG_CALL(m_device.disp.CreateCommandPool(m_device.device, &command_pool_info,
+                                                   m_allocator.get_original_callbacks(), &m_command_pool));
+      /* Allocate and write the command buffer. */
+      VkCommandBufferAllocateInfo command_buffer_info = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO, nullptr,
+                                                          m_command_pool, VK_COMMAND_BUFFER_LEVEL_PRIMARY, num_images };
+      TRY_LOG_CALL(
+         m_device.disp.AllocateCommandBuffers(m_device.device, &command_buffer_info, m_command_buffer.data()));
+      VkCommandBufferBeginInfo begin_info = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, nullptr, 0, nullptr };
+      for (size_t image_index = 0; image_index < num_images; image_index++)
+      {
+         TRY_LOG_CALL(m_device.disp.BeginCommandBuffer(m_command_buffer[image_index], &begin_info));
+         m_device.disp.CmdResetQueryPool(m_command_buffer[image_index], m_query_pool, image_index, 1);
+         m_device.disp.CmdWriteTimestamp(m_command_buffer[image_index], VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+                                         m_query_pool, image_index);
+         TRY_LOG_CALL(m_device.disp.EndCommandBuffer(m_command_buffer[image_index]));
+      }
+
+      return VK_SUCCESS;
+   }
+
+   /**
+    * @brief The command pool for allocating the buffers for the present stage timings.
+    */
+   VkCommandPool m_command_pool;
+
+   /**
+    * @brief The command buffer for the present stage timings.
+    */
+   util::vector<VkCommandBuffer> m_command_buffer;
+
+   /**
+    * @brief Query pool to allocate for present stage timing queries.
+    */
+   VkQueryPool m_query_pool;
+
+private:
+   util::allocator m_allocator;
+   layer::device_private_data &m_device;
+};
+
+/**
  * @brief Structure describing a scheduled present target.
  */
 struct scheduled_present_target
@@ -350,9 +454,9 @@ public:
    /**
     * @brief Constructor for the wsi_ext_present_timing class.
     *
-    * @param allocator  Reference to the custom allocator.
-    * @param device     The device to which the swapchain belongs.
-    * @param num_images Number of images in the swapchain.
+    * @param allocator             Reference to the custom allocator.
+    * @param device                The device to which the swapchain belongs.
+    * @param num_images            Number of images in the swapchain.
     *
     */
    wsi_ext_present_timing(const util::allocator &allocator, VkDevice device, uint32_t num_images);
@@ -504,6 +608,17 @@ public:
    virtual VkResult get_pixel_out_timing_to_queue(
       uint32_t image_index, std::optional<std::reference_wrapper<swapchain_presentation_timing>> stage_timing_optional);
 
+   /**
+    * @brief Determines if present_timing is supported by the physical device.
+    *
+    * @param physical_device The physical device to check.
+    * @param out Reference to a boolean that will be set to true if the physical device has a queue family that supports
+    *            presentation and timestamp queries, false otherwise.
+    *
+    * @return VK_SUCCESS iff out set.
+    */
+   static VkResult physical_device_has_supported_queue_family(VkPhysicalDevice physical_device, bool &out);
+
 protected:
    /**
     * @brief User provided memory allocation callbacks.
@@ -522,19 +637,9 @@ private:
    layer::device_private_data &m_device;
 
    /**
-    * @brief Query pool to allocate for present stage timing queries.
+    * @brief The presentation timing queue.
     */
-   VkQueryPool m_query_pool;
-
-   /**
-    * @brief The command pool for allocating the buffers for the present stage timings.
-    */
-   VkCommandPool m_command_pool;
-
-   /**
-    * @brief The command buffer for the present stage timings.
-    */
-   util::vector<VkCommandBuffer> m_command_buffer;
+   util::vector<swapchain_presentation_entry> m_queue;
 
    /**
     * @brief Stores the device timestamp recorded from the previous
@@ -551,11 +656,6 @@ private:
     * pre-condition must be met before invoking them.
     */
    util::mutex m_queue_mutex;
-
-   /**
-    * @brief The presentation timing queue.
-    */
-   util::vector<swapchain_presentation_entry> m_queue;
 
    /**
     * @brief The presentation target entries.
@@ -578,13 +678,18 @@ private:
    float m_timestamp_period;
 
    /**
+    * @brief Resources associated with the 'best' queue family.
+    */
+   queue_family_resources m_queue_family_resources;
+
+   /**
     * @brief Perform a queue submission for getting the queue end timing.
     *
     * @param device      The device private data.
     * @param queue       The Vulkan queue used to submit synchronization commands.
     * @param image_index The index of the image in the swapchain.
     *
-    * @return VK_SUCCESS when the submission is successfully and error otherwise.
+    * @return VK_SUCCESS when the submission is successful and error otherwise.
     */
    VkResult queue_submit_queue_end_timing(const layer::device_private_data &device, VkQueue queue,
                                           uint32_t image_index);
@@ -615,6 +720,22 @@ private:
     * @return Pointer to timing information for the stage, or nullptr if it is not found or it is not pending.
     */
    swapchain_presentation_timing *get_pending_stage_timing(uint32_t image_index, VkPresentStageFlagBitsEXT stage);
+
+   /**
+    * @pre Caller must hold m_queue_mutex for the call and lifetime of the returned pointer.
+    *
+    * @brief Search for a pending presentation entry.
+    *
+    * For an image index, there can only be one entry in the queue with pending stages.
+    * This does not take a present ID because zero is a valid, nonunique value and thus cannot uniquely identify an
+    * entry.
+    *
+    * @param image_index The index of the image in the present queue.
+    * @param stage The present stage to get the entry for.
+    *
+    * @return Pointer to the entry, or nullptr if it is not found or the stage is not pending.
+    */
+   swapchain_presentation_entry *get_pending_stage_entry(uint32_t image_index, VkPresentStageFlagBitsEXT stage);
 
    /**
     * @pre Caller must hold m_queue_mutex

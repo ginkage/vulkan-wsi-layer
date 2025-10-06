@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, 2024 Arm Limited.
+ * Copyright (c) 2020-2022, 2024-2025 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -302,6 +302,20 @@ public:
    using base = std::vector<T, custom_allocator<T>>;
    using base::base;
 
+   /** Must be constructed with a custom_allocator. */
+   vector() = delete;
+
+   /* Support moves despite noncopyable */
+   vector(vector &&other) noexcept
+      : base(std::move(other))
+   {
+   }
+   vector &operator=(vector &&other) noexcept
+   {
+      base::operator=(std::move(other));
+      return *this;
+   }
+
    /* Delete all methods that can cause allocation failure, i.e. can throw std::bad_alloc.
     *
     * Rationale: we want to force users to use our corresponding try_... method instead:
@@ -392,6 +406,22 @@ public:
       {
          return false;
       }
+   }
+
+   /**
+    * @brief noexcept version of std::vector::at.
+    *
+    * @param index The index to access.
+    *
+    * @return Pointer to the element at the given index. nullptr if the index is out of bounds.
+    */
+   T *try_at(size_t index) noexcept
+   {
+      if (index >= base::size())
+      {
+         return nullptr;
+      }
+      return &base::operator[](index);
    }
 };
 
