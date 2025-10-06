@@ -40,6 +40,7 @@
 #include "util/extension_list.hpp"
 #include "util/custom_allocator.hpp"
 #include "wsi/wsi_factory.hpp"
+#include "wsi/extensions/present_timing.hpp"
 #include "util/log.hpp"
 #include "util/macros.hpp"
 #include "util/helpers.hpp"
@@ -558,16 +559,15 @@ wsi_layer_vkGetPhysicalDeviceFeatures2(VkPhysicalDevice physical_device,
       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_TIMING_FEATURES_EXT, pFeatures->pNext);
    if (present_timing_features != nullptr)
    {
-      VkPhysicalDeviceProperties2KHR physical_device_properties{};
-      physical_device_properties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2_KHR;
-      instance.disp.GetPhysicalDeviceProperties2KHR(physical_device, &physical_device_properties);
-      /* The presentTimingSupported is set based on whether the device can support timestamp queries
-       * and the graphics, compute pipelines can support time stamps. Only the graphics and compute pipelines
-       * are checked here which means queue present if happens on a different queue family,
-       * the time stamps might not be supported. */
-      present_timing_features->presentTiming =
-         ((physical_device_properties.properties.limits.timestampPeriod != 0) &&
-          physical_device_properties.properties.limits.timestampComputeAndGraphics);
+      bool support;
+      if (wsi::wsi_ext_present_timing::physical_device_has_supported_queue_family(physical_device, support) !=
+          VK_SUCCESS)
+      {
+         WSI_LOG_ERROR("Failed to query physical device for present timing support");
+         support = false;
+      }
+
+      present_timing_features->presentTiming = support ? VK_TRUE : VK_FALSE;
       present_timing_features->presentAtAbsoluteTime = VK_TRUE;
       present_timing_features->presentAtRelativeTime = VK_TRUE;
    }

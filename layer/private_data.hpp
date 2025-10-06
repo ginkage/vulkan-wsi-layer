@@ -666,11 +666,36 @@ public:
     * @brief Check if a physical device supports controlling image compression.
     *
     * @param phys_dev The physical device to query.
+    *
     * @return Whether image compression control is supported by the ICD.
     */
    bool has_image_compression_support(VkPhysicalDevice phys_dev);
 
    bool has_frame_boundary_support(VkPhysicalDevice phys_dev);
+
+   /**
+    * @brief Queries the properties of all queue families of a physical device.
+    *
+    * @param phys_dev The physical device to query.
+    *
+    * @return A vector of VkQueueFamilyProperties2 chains. If it is empty, allocation failed.
+    */
+   util::vector<VkQueueFamilyProperties2> get_queue_family_properties(VkPhysicalDevice phys_dev);
+
+   /**
+    * @brief Gets the index of the 'best' queue family.
+    *
+    * Queries queue family properties and returns the index of the family that:
+    * - Supports graphics and compute; or
+    * - Supports graphics; or
+    * - Supports compute
+    * And, as a tiebreaker, has the largest timestampValidBits.
+    *
+    * @param phys_dev The physical device to query.
+    *
+    * @return The index of the best queue family.
+    */
+   uint32_t get_best_queue_family(VkPhysicalDevice phys_dev);
 
    /**
     * @brief Get the instance allocator
@@ -995,6 +1020,14 @@ public:
     */
    bool is_present_wait2_enabled();
 
+   /**
+    * @brief Gets the queue family index used for present timing on this device.
+    */
+   uint32_t get_best_queue_family_index() const
+   {
+      return best_queue_family_index;
+   }
+
 private:
    /* Allow util::allocator to access the private constructor */
    friend util::allocator;
@@ -1082,6 +1115,11 @@ private:
     *
     */
    bool present_mode_fifo_latest_ready_enabled{ false };
+
+   /**
+    * @brief Most suitable queue family for WSI operations.
+    */
+   uint32_t best_queue_family_index;
 };
 
 } /* namespace layer */

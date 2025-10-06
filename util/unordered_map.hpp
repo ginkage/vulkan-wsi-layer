@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, 2024 Arm Limited.
+ * Copyright (c) 2021-2022, 2024-2025 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -46,6 +46,9 @@ class unordered_map : public std::unordered_map<Key, Value, Hash, Comparator, Al
    using iterator = typename base::iterator;
 
 public:
+   /** Must be constructed with a custom_allocator. */
+   unordered_map() = delete;
+
    /**
     * Delete all member functions that can cause allocation failure by throwing std::bad_alloc.
     */
@@ -85,6 +88,27 @@ public:
       catch (std::bad_alloc &e)
       {
          return std::nullopt;
+      }
+   }
+
+   /**
+    * @brief Like std::unordered_map.try_emplace but doesn't throw on out of memory errors.
+    *
+    * @param args The arguments to be forwarded to the constructor of the value type.
+    * @return std::pair<iterator, bool> If successful, the pair will contain
+    *        the same return value as from std::unordered_map.emplace, otherwise
+    *        if out of memory, the function returns { base::end(), false }.
+    */
+   template <class... Args>
+   std::pair<iterator, bool> try_emplace(Args &&...args)
+   {
+      try
+      {
+         return base::try_emplace(std::forward<Args>(args)...);
+      }
+      catch (std::bad_alloc &e)
+      {
+         return { base::end(), false };
       }
    }
 

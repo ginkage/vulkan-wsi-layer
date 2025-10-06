@@ -53,16 +53,14 @@ wsi_ext_present_timing::wsi_ext_present_timing(const util::allocator &allocator,
    : m_allocator(allocator)
    , m_time_domains(allocator)
    , m_device(layer::device_private_data::get(device))
-   , m_query_pool(VK_NULL_HANDLE)
-   , m_command_pool(VK_NULL_HANDLE)
-   , m_command_buffer(allocator)
+   , m_queue(allocator)
    , m_device_timestamp_cached(allocator)
    , m_queue_mutex()
-   , m_queue(allocator)
    , m_scheduled_present_targets(allocator)
    , m_num_images(num_images)
    , m_present_semaphore(allocator)
    , m_timestamp_period(0.f)
+   , m_queue_family_resources(allocator, m_device)
 {
    assert(m_device.is_device_extension_enabled(VK_KHR_PRESENT_ID_2_EXTENSION_NAME));
    VkPhysicalDeviceProperties2KHR physical_device_properties{};
@@ -74,22 +72,6 @@ wsi_ext_present_timing::wsi_ext_present_timing(const util::allocator &allocator,
 
 wsi_ext_present_timing::~wsi_ext_present_timing()
 {
-   m_device.disp.FreeCommandBuffers(m_device.device, m_command_pool, m_command_buffer.size(), m_command_buffer.data());
-   for (auto &command_buffer : m_command_buffer)
-   {
-      command_buffer = VK_NULL_HANDLE;
-   }
-   if (m_command_pool != VK_NULL_HANDLE)
-   {
-      m_device.disp.DestroyCommandPool(m_device.device, m_command_pool, m_allocator.get_original_callbacks());
-      m_command_pool = VK_NULL_HANDLE;
-   }
-   if (m_query_pool != VK_NULL_HANDLE)
-   {
-      m_device.disp.DestroyQueryPool(m_device.device, m_query_pool, m_allocator.get_original_callbacks());
-      m_query_pool = VK_NULL_HANDLE;
-   }
-
    for (const auto &semaphore : m_present_semaphore)
    {
       if (semaphore != VK_NULL_HANDLE)
@@ -105,7 +87,6 @@ VkResult wsi_ext_present_timing::init_timing_resources()
    {
       return VK_ERROR_OUT_OF_HOST_MEMORY;
    }
-
    if (!m_present_semaphore.try_resize(m_num_images))
    {
       return VK_ERROR_OUT_OF_HOST_MEMORY;
@@ -121,43 +102,7 @@ VkResult wsi_ext_present_timing::init_timing_resources()
          return VK_ERROR_OUT_OF_HOST_MEMORY;
       }
    }
-   /* Resize the command buffer to the number of images. */
-   if (!m_command_buffer.try_resize(m_num_images))
-   {
-      return VK_ERROR_OUT_OF_HOST_MEMORY;
-   }
-   /* Resize cached device timestamp records to the number of images. */
-   if (!m_device_timestamp_cached.try_resize(m_num_images, 0ULL))
-   {
-      return VK_ERROR_OUT_OF_HOST_MEMORY;
-   }
-   for (auto &command_buffer : m_command_buffer)
-   {
-      command_buffer = VK_NULL_HANDLE;
-   }
-   /* Allocate the command pool and query pool. */
-   VkQueryPoolCreateInfo query_pool_info = {
-      VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO, nullptr, 0, VK_QUERY_TYPE_TIMESTAMP, m_num_images, 0
-   };
-   TRY_LOG_CALL(m_device.disp.CreateQueryPool(m_device.device, &query_pool_info, m_allocator.get_original_callbacks(),
-                                              &m_query_pool));
-   VkCommandPoolCreateInfo command_pool_info{ VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO, nullptr,
-                                              VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT, 0 };
-   TRY_LOG_CALL(m_device.disp.CreateCommandPool(m_device.device, &command_pool_info,
-                                                m_allocator.get_original_callbacks(), &m_command_pool));
-   /* Allocate and write the command buffer. */
-   VkCommandBufferAllocateInfo command_buffer_info = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO, nullptr,
-                                                       m_command_pool, VK_COMMAND_BUFFER_LEVEL_PRIMARY, m_num_images };
-   TRY_LOG_CALL(m_device.disp.AllocateCommandBuffers(m_device.device, &command_buffer_info, m_command_buffer.data()));
-   VkCommandBufferBeginInfo begin_info = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, nullptr, 0, nullptr };
-   for (size_t image_index = 0; image_index < m_num_images; image_index++)
-   {
-      TRY_LOG_CALL(m_device.disp.BeginCommandBuffer(m_command_buffer[image_index], &begin_info));
-      m_device.disp.CmdResetQueryPool(m_command_buffer[image_index], m_query_pool, image_index, 1);
-      m_device.disp.CmdWriteTimestamp(m_command_buffer[image_index], VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, m_query_pool,
-                                      image_index);
-      TRY_LOG_CALL(m_device.disp.EndCommandBuffer(m_command_buffer[image_index]));
-   }
+   TRY_LOG_CALL(m_queue_family_resources.init(m_device.get_best_queue_family_index(), m_num_images));
    return VK_SUCCESS;
 }
 
@@ -181,11 +126,21 @@ static inline uint64_t ticks_to_ns(uint64_t ticks, const float &timestamp_period
 swapchain_presentation_timing *wsi_ext_present_timing::get_pending_stage_timing(uint32_t image_index,
                                                                                 VkPresentStageFlagBitsEXT stage)
 {
+   if (auto *entry = get_pending_stage_entry(image_index, stage))
+   {
+      return &entry->get_stage_timing(stage)->get();
+   }
+   return nullptr;
+}
+
+swapchain_presentation_entry *wsi_ext_present_timing::get_pending_stage_entry(uint32_t image_index,
+                                                                              VkPresentStageFlagBitsEXT stage)
+{
    for (auto &entry : m_queue)
    {
       if (entry.m_image_index == image_index && entry.is_pending(stage))
       {
-         return &entry.get_stage_timing(stage)->get();
+         return &entry;
       }
    }
    return nullptr;
@@ -197,9 +152,16 @@ VkResult wsi_ext_present_timing::write_pending_results()
    {
       if (slot.is_pending(VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT))
       {
+         /* Resize cached device timestamp records to the number of images. */
+         if (!m_device_timestamp_cached.try_resize(m_num_images, 0ULL))
+         {
+            return VK_ERROR_OUT_OF_HOST_MEMORY;
+         }
+
          uint64_t timestamp;
-         VkResult res = m_device.disp.GetQueryPoolResults(m_device.device, m_query_pool, slot.m_image_index, 1,
-                                                          sizeof(timestamp), &timestamp, 0, VK_QUERY_RESULT_64_BIT);
+         VkResult res = m_device.disp.GetQueryPoolResults(m_device.device, m_queue_family_resources.m_query_pool,
+                                                          slot.m_image_index, 1, sizeof(timestamp), &timestamp, 0,
+                                                          VK_QUERY_RESULT_64_BIT);
          if (res != VK_SUCCESS && res != VK_NOT_READY)
          {
             return res;
@@ -276,8 +238,8 @@ size_t wsi_ext_present_timing::present_timing_get_num_outstanding_results()
 VkResult wsi_ext_present_timing::queue_submit_queue_end_timing(const layer::device_private_data &device, VkQueue queue,
                                                                uint32_t image_index)
 {
-   assert(image_index < m_command_buffer.size());
-   command_buffer_data command_buffer_data(&m_command_buffer[image_index], 1);
+   assert(image_index < m_queue_family_resources.m_command_buffer.size());
+   command_buffer_data command_buffer_data(&m_queue_family_resources.m_command_buffer[image_index], 1);
    VkSemaphore present_timing_semaphore = get_image_present_semaphore(image_index);
    queue_submit_semaphores present_timing_semaphores = {
       &present_timing_semaphore,
@@ -305,8 +267,8 @@ VkResult wsi_ext_present_timing::add_presentation_query_entry(VkQueue queue, uin
    {
       return VK_ERROR_PRESENT_TIMING_QUEUE_FULL_EXT;
    }
-
-   wsi::swapchain_presentation_entry presentation_entry(target_time, present_stage_queries, present_id, image_index);
+   wsi::swapchain_presentation_entry presentation_entry(target_time, present_stage_queries, present_id, image_index,
+                                                        m_device.get_best_queue_family_index());
    if (!m_queue.try_push_back(std::move(presentation_entry)))
    {
       return VK_ERROR_OUT_OF_HOST_MEMORY;
@@ -490,14 +452,33 @@ bool wsi_ext_present_timing::is_stage_pending_for_image_index(uint32_t image_ind
    return (get_pending_stage_timing(image_index, present_stage) != nullptr);
 }
 
+VkResult wsi_ext_present_timing::physical_device_has_supported_queue_family(VkPhysicalDevice physical_device, bool &out)
+{
+   auto &instance = layer::instance_private_data::get(physical_device);
+   const auto all_props = instance.get_queue_family_properties(physical_device);
+   if (all_props.empty())
+   {
+      out = false;
+      return VK_ERROR_OUT_OF_HOST_MEMORY;
+   }
+
+   out = std::any_of(all_props.begin(), all_props.end(), [](const VkQueueFamilyProperties2 &props) {
+      return (props.queueFamilyProperties.queueFlags & (VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT)) &&
+             (props.queueFamilyProperties.timestampValidBits > 0);
+   });
+   return VK_SUCCESS;
+}
+
 swapchain_presentation_entry::swapchain_presentation_entry(uint64_t target_time,
                                                            VkPresentStageFlagsEXT present_stage_queries,
-                                                           uint64_t present_id, uint32_t image_index)
+                                                           uint64_t present_id, uint32_t image_index,
+                                                           uint32_t queue_family)
    : m_target_time(target_time)
    , m_target_stages(0)
    , m_present_id(present_id)
    , m_image_index(image_index)
    , m_num_present_stages(0)
+   , m_queue_family(queue_family)
 {
    if (present_stage_queries & VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT)
    {

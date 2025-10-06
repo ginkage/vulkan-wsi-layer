@@ -25,6 +25,7 @@
 #include <vulkan/vulkan.h>
 
 #include "private_data.hpp"
+#include "vulkan/vulkan_core.h"
 #include "wsi/wsi_factory.hpp"
 #include "wsi/surface.hpp"
 #include "wsi/unsupported_surfaces.hpp"
@@ -477,8 +478,62 @@ device_private_data::device_private_data(instance_private_data &inst_data, VkPhy
    , present_wait2_enabled { false }
    , present_id2_enabled { false }
    , present_mode_fifo_latest_ready_enabled { false }
+   , best_queue_family_index(instance_data.get_best_queue_family(phys_dev))
 /* clang-format on */
 {
+}
+
+util::vector<VkQueueFamilyProperties2> instance_private_data::get_queue_family_properties(VkPhysicalDevice phys_dev)
+{
+   uint32_t count = 0;
+   disp.GetPhysicalDeviceQueueFamilyProperties2KHR(phys_dev, &count, nullptr);
+   assert(count > 0);
+
+   util::vector<VkQueueFamilyProperties2> properties(allocator);
+   if (!properties.try_resize(count))
+   {
+      WSI_LOG_ERROR("Failed to allocate VkQueueFamilyProperties2[%u]", count);
+      return properties;
+   }
+
+   for (size_t i = 0; i < count; ++i)
+   {
+      properties[i].sType = VK_STRUCTURE_TYPE_QUEUE_FAMILY_PROPERTIES_2;
+      properties[i].pNext = nullptr;
+   }
+
+   disp.GetPhysicalDeviceQueueFamilyProperties2KHR(phys_dev, &count, properties.data());
+   return properties;
+}
+
+uint32_t instance_private_data::get_best_queue_family(VkPhysicalDevice phys_dev)
+{
+   const auto families = get_queue_family_properties(phys_dev);
+   if (families.empty())
+   {
+      /* Allocation failed. 0 is a valid return value as there must be at least one queue family. */
+      return 0;
+   }
+
+   uint32_t best_score = 0;
+   uint32_t best_timestamp_bits = 0; /* Tiebreaker for same score */
+   uint32_t best_index = 0;
+   for (uint32_t i = 0; i < families.size(); ++i)
+   {
+      const auto &props = families[i].queueFamilyProperties;
+
+      /* Prefer graphics + compute, then graphics, then compute */
+      VkQueueFlags mask = props.queueFlags & (VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT);
+      uint32_t score = (mask & VK_QUEUE_GRAPHICS_BIT ? 2 : 0) + (mask & VK_QUEUE_COMPUTE_BIT ? 1 : 0);
+
+      if (score > best_score || (score == best_score && props.timestampValidBits > best_timestamp_bits))
+      {
+         best_score = score;
+         best_timestamp_bits = props.timestampValidBits;
+         best_index = i;
+      }
+   }
+   return best_index;
 }
 
 VkResult device_private_data::associate(VkDevice dev, instance_private_data &inst_data, VkPhysicalDevice phys_dev,

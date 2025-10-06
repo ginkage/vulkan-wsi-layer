@@ -156,13 +156,14 @@ wsi_layer_vkGetPhysicalDeviceSurfaceSupportKHR(VkPhysicalDevice physicalDevice, 
                                                VkSurfaceKHR surface, VkBool32 *pSupported) VWL_API_POST
 {
    auto &instance = layer::instance_private_data::get(physicalDevice);
-   if (instance.should_layer_handle_surface(physicalDevice, surface))
+   if (!instance.should_layer_handle_surface(physicalDevice, surface))
    {
-      *pSupported = VK_TRUE;
-      return VK_SUCCESS;
+      /* The surface must have been created by a layer below us. */
+      return instance.disp.GetPhysicalDeviceSurfaceSupportKHR(physicalDevice, queueFamilyIndex, surface, pSupported);
    }
 
-   return instance.disp.GetPhysicalDeviceSurfaceSupportKHR(physicalDevice, queueFamilyIndex, surface, pSupported);
+   *pSupported = queueFamilyIndex == instance.get_best_queue_family(physicalDevice);
+   return VK_SUCCESS;
 }
 
 VWL_VKAPI_CALL(void)

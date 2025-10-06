@@ -29,6 +29,7 @@
  */
 
 #include "custom_mutex.hpp"
+#include <cstring>
 
 namespace util
 {
@@ -42,6 +43,7 @@ bool mutex::lock() noexcept
    }
    catch (const std::system_error &)
    {
+      WSI_LOG_WARNING("Failed to lock mutex: error %d (%s)", errno, std::strerror(errno));
       return false;
    }
 }
@@ -77,6 +79,7 @@ bool recursive_mutex::lock() noexcept
    }
    catch (const std::system_error &)
    {
+      WSI_LOG_WARNING("Failed to lock recursive_mutex: error %d (%s)", errno, std::strerror(errno));
       return false;
    }
 }
