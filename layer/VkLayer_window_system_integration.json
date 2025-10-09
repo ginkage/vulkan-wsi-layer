@@ -5,7 +5,7 @@
         "name": "VK_LAYER_window_system_integration",
         "type": "GLOBAL",
         "library_path": "./libVkLayer_window_system_integration.so",
-        "api_version": "1.4.299",
+        "api_version": "1.4.325",
         "implementation_version": "1",
         "description": "Window system integration layer",
         "functions": {
