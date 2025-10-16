@@ -670,6 +670,15 @@ wsi_layer_vkGetDeviceProcAddr(VkDevice device, const char *funcName) VWL_API_POS
       GET_PROC_ADDR(vkReleaseSwapchainImagesEXT);
    }
 
+   /* VK_KHR_swapchain_maintenance1 */
+   if (device_data.is_device_extension_enabled(VK_KHR_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME))
+   {
+      if (!strcmp(funcName, "vkReleaseSwapchainImagesKHR"))
+      {
+         return (PFN_vkVoidFunction)&wsi_layer_vkReleaseSwapchainImagesEXT;
+      }
+   }
+
    /* VK_KHR_present_wait */
    if (device_data.is_device_extension_enabled(VK_KHR_PRESENT_WAIT_EXTENSION_NAME))
    {

@@ -33,6 +33,7 @@ implements the following extensions:
   * VK_KHR_present_id2
   * VK_KHR_swapchain_mutable_format (For Headless and Wayland only)
   * VK_KHR_present_wait2
+  * VK_KHR_swapchain_maintenance1
 
 ## Building
 
