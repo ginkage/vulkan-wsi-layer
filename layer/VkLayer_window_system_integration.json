@@ -48,6 +48,13 @@
                 ]
             },
             {
+                "name": "VK_KHR_swapchain_maintenance1",
+                "spec_version": "1",
+                "entrypoints": [
+                    "vkReleaseSwapchainImagesKHR"
+                ]
+            },
+            {
                 "name": "VK_EXT_present_timing",
                 "spec_version": "1",
                 "entrypoints": [

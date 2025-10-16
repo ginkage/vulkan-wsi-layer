@@ -469,8 +469,9 @@ private:
       GetBufferMemoryRequirements2)                                                                                         \
    EP(GetImageSparseMemoryRequirements2KHR, VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME, VK_API_VERSION_1_1,            \
       false, GetImageSparseMemoryRequirements2)                                                                             \
-   /* VK_EXT_swapchain_maintenance1 */                                                                                      \
-   EP(ReleaseSwapchainImagesEXT, VK_EXT_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME, VK_API_VERSION_1_1, false, )                \
+   /* VK_KHR_swapchain_maintenance1 */                                                                                      \
+   EP(ReleaseSwapchainImagesEXT, VK_EXT_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME, API_VERSION_MAX, false,                     \
+      ReleaseSwapchainImagesKHR)                                                                                            \
    /* VK_EXT_calibrated_timestamps */                                                                                       \
    EP(GetCalibratedTimestampsEXT, VK_EXT_CALIBRATED_TIMESTAMPS_EXTENSION_NAME, API_VERSION_MAX, false, )                    \
    /* VK_KHR_calibrated_timestamps */                                                                                       \
