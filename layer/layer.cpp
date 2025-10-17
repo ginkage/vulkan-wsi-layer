@@ -246,12 +246,48 @@ VKAPI_ATTR VkResult create_device(VkPhysicalDevice physicalDevice, const VkDevic
    util::vector<const char *> modified_enabled_extensions{ allocator };
    util::extension_list enabled_extensions{ allocator };
 
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+   VkPhysicalDeviceMaintenance9FeaturesKHR maintenance9_features = {};
+#endif /* VULKAN_WSI_LAYER_EXPERIMENTAL */
    const util::wsi_platform_set &enabled_platforms = inst_data.get_enabled_platforms();
    if (!enabled_platforms.empty())
    {
       TRY_LOG_CALL(enabled_extensions.add(pCreateInfo->ppEnabledExtensionNames, pCreateInfo->enabledExtensionCount));
       TRY_LOG_CALL(wsi::add_device_extensions_required_by_layer(physicalDevice, enabled_platforms, enabled_extensions,
                                                                 inst_data.api_version));
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+      auto present_timing_supported = wsi::present_timing_dependencies_supported(physicalDevice);
+      if (std::holds_alternative<VkResult>(present_timing_supported))
+      {
+         return std::get<VkResult>(present_timing_supported);
+      }
+      if (std::get<bool>(present_timing_supported))
+      {
+         TRY_LOG_CALL(enabled_extensions.add(VK_KHR_MAINTENANCE_9_EXTENSION_NAME));
+
+         const auto *device_maintenance9_features = util::find_extension<VkPhysicalDeviceMaintenance9FeaturesKHR>(
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_9_FEATURES_KHR, pCreateInfo->pNext);
+         if (device_maintenance9_features)
+         {
+            if (device_maintenance9_features->maintenance9 == VK_FALSE)
+            {
+               /* We are taking the same risk with the frame boundary features below. */
+               auto *maintenance9_features_non_const =
+                  const_cast<VkPhysicalDeviceMaintenance9FeaturesKHR *>(device_maintenance9_features);
+               maintenance9_features_non_const->maintenance9 = VK_TRUE;
+            }
+         }
+         else
+         {
+            maintenance9_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_9_FEATURES_KHR;
+            maintenance9_features.pNext = const_cast<void *>(modified_info.pNext);
+            maintenance9_features.maintenance9 = VK_TRUE;
+
+            modified_info.pNext = &maintenance9_features;
+         }
+      }
+#endif /* VULKAN_WSI_LAYER_EXPERIMENTAL */
+
       TRY_LOG_CALL(enabled_extensions.get_extension_strings(modified_enabled_extensions));
 
       modified_info.ppEnabledExtensionNames = modified_enabled_extensions.data();

@@ -24,6 +24,7 @@
 
 #include "surface_properties.hpp"
 #include "layer/private_data.hpp"
+#include "wsi/extensions/present_timing.hpp"
 
 namespace wsi
 {
@@ -126,5 +127,29 @@ void get_surface_capabilities_common(VkPhysicalDevice physical_device, VkSurface
       VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT |
       VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
 }
+
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+/**
+ * @brief Get the present timing surface capabilities for the specific VkSurface type.
+ */
+VkResult surface_properties::get_present_timing_surface_caps(
+   VkPhysicalDevice physical_device, VkPresentTimingSurfaceCapabilitiesEXT *present_timing_surface_caps)
+{
+   TRY_LOG_CALL(get_present_timing_surface_caps_internal(physical_device, present_timing_surface_caps));
+
+   auto present_timing_supported = wsi::present_timing_dependencies_supported(physical_device);
+   if (std::holds_alternative<VkResult>(present_timing_supported))
+   {
+      return std::get<VkResult>(present_timing_supported);
+   }
+
+   if (!std::get<bool>(present_timing_supported))
+   {
+      present_timing_surface_caps->presentTimingSupported = VK_FALSE;
+   }
+
+   return VK_SUCCESS;
+}
+#endif /* VULKAN_WSI_LAYER_EXPERIMENTAL */
 
 } /* namespace wsi */

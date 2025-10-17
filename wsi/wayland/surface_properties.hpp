@@ -75,10 +75,6 @@ public:
 
    bool is_compatible_present_modes(VkPresentModeKHR present_mode_a, VkPresentModeKHR present_mode_b) override;
 
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
-   VkResult get_present_timing_surface_caps(
-      VkPhysicalDevice physical_device, VkPresentTimingSurfaceCapabilitiesEXT *present_timing_surface_caps) override;
-#endif
 private:
    surface_properties();
 
@@ -98,6 +94,11 @@ private:
    void populate_present_mode_compatibilities() override;
 
    void get_surface_present_scaling_and_gravity(VkSurfacePresentScalingCapabilitiesEXT *scaling_capabilities) override;
+
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+   VkResult get_present_timing_surface_caps_internal(
+      VkPhysicalDevice physical_device, VkPresentTimingSurfaceCapabilitiesEXT *present_timing_surface_caps) override;
+#endif
 };
 
 } // namespace wayland

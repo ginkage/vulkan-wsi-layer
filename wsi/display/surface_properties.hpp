@@ -66,11 +66,6 @@ public:
 
    bool is_surface_extension_enabled(const layer::instance_private_data &instance_data) override;
 
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
-   VkResult get_present_timing_surface_caps(
-      VkPhysicalDevice physical_device, VkPresentTimingSurfaceCapabilitiesEXT *present_timing_surface_caps) override;
-#endif
-
    static surface_properties &get_instance();
 
    bool is_compatible_present_modes(VkPresentModeKHR present_mode_a, VkPresentModeKHR present_mode_b) override;
@@ -86,6 +81,11 @@ private:
 
    void get_surface_present_scaling_and_gravity(VkSurfacePresentScalingCapabilitiesEXT *scaling_capabilities) override;
    void populate_present_mode_compatibilities() override;
+
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+   VkResult get_present_timing_surface_caps_internal(
+      VkPhysicalDevice physical_device, VkPresentTimingSurfaceCapabilitiesEXT *present_timing_surface_caps) override;
+#endif
 };
 
 } /* namespace display */
