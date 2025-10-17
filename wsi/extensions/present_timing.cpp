@@ -698,6 +698,42 @@ VkResult check_time_domain_support(VkPhysicalDevice physical_device, std::tuple<
    return VK_SUCCESS;
 }
 
+std::variant<bool, VkResult> present_timing_dependencies_supported(VkPhysicalDevice physical_device)
+{
+   auto &instance_data = layer::instance_private_data::get(physical_device);
+   util::vector<VkExtensionProperties> properties{ util::allocator(instance_data.get_allocator(),
+                                                                   VK_SYSTEM_ALLOCATION_SCOPE_COMMAND) };
+   uint32_t count = 0;
+   TRY_LOG(instance_data.disp.EnumerateDeviceExtensionProperties(physical_device, nullptr, &count, nullptr),
+           "Failed to enumurate properties of available physical device extensions");
+
+   if (!properties.try_resize(count))
+   {
+      return VK_ERROR_OUT_OF_HOST_MEMORY;
+   }
+
+   TRY_LOG(instance_data.disp.EnumerateDeviceExtensionProperties(physical_device, nullptr, &count, properties.data()),
+           "Failed to enumurate properties of available physical device extensions");
+
+   const bool maintenance9_supported =
+      std::find_if(properties.begin(), properties.end(), [](const VkExtensionProperties &ext) {
+         return strcmp(ext.extensionName, VK_KHR_MAINTENANCE_9_EXTENSION_NAME) == 0;
+      }) != properties.end();
+
+   if (!maintenance9_supported)
+   {
+      return false;
+   }
+
+   VkPhysicalDeviceMaintenance9FeaturesKHR maintenance9 = {
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_9_FEATURES_KHR, nullptr, VK_FALSE
+   };
+   VkPhysicalDeviceFeatures2KHR features = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2_KHR, &maintenance9, {} };
+
+   instance_data.disp.GetPhysicalDeviceFeatures2KHR(physical_device, &features);
+
+   return maintenance9.maintenance9 != VK_FALSE;
+}
 } /* namespace wsi */
 
 #endif /* VULKAN_WSI_LAYER_EXPERIMENTAL */

@@ -46,6 +46,7 @@
 #include <optional>
 #include <functional>
 #include <cassert>
+#include <variant>
 
 #include "wsi_extension.hpp"
 
@@ -350,9 +351,12 @@ public:
          command_buffer = VK_NULL_HANDLE;
       }
       /* Allocate the command pool and query pool. */
-      VkQueryPoolCreateInfo query_pool_info = {
-         VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO, nullptr, 0, VK_QUERY_TYPE_TIMESTAMP, num_images, 0
-      };
+      VkQueryPoolCreateInfo query_pool_info = { VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
+                                                nullptr,
+                                                VK_QUERY_POOL_CREATE_RESET_BIT_KHR,
+                                                VK_QUERY_TYPE_TIMESTAMP,
+                                                num_images,
+                                                0 };
       TRY_LOG_CALL(m_device.disp.CreateQueryPool(m_device.device, &query_pool_info,
                                                  m_allocator.get_original_callbacks(), &m_query_pool));
       VkCommandPoolCreateInfo command_pool_info{ VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO, nullptr,
@@ -778,5 +782,6 @@ private:
 VkResult check_time_domain_support(VkPhysicalDevice physical_device, std::tuple<VkTimeDomainEXT, bool> *domains,
                                    size_t domain_size);
 
+std::variant<bool, VkResult> present_timing_dependencies_supported(VkPhysicalDevice physical_device);
 } /* namespace wsi */
 #endif

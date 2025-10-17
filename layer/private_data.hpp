@@ -672,6 +672,12 @@ public:
     */
    bool has_image_compression_support(VkPhysicalDevice phys_dev);
 
+   /**
+    * @brief Check if a physical device supports frame boundary.
+    *
+    * @param phys_dev The physical device to query.
+    * @return Whether frame boundary control is supported by the ICD.
+    */
    bool has_frame_boundary_support(VkPhysicalDevice phys_dev);
 
    /**

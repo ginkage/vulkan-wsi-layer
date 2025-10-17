@@ -119,9 +119,9 @@ public:
    /**
     * @brief Get the present timing surface capabilities for the specific VkSurface type.
     */
-   virtual VkResult get_present_timing_surface_caps(
-      VkPhysicalDevice physical_device, VkPresentTimingSurfaceCapabilitiesEXT *present_timing_surface_caps) = 0;
-#endif
+   VkResult get_present_timing_surface_caps(VkPhysicalDevice physical_device,
+                                            VkPresentTimingSurfaceCapabilitiesEXT *present_timing_surface_caps);
+#endif /* VULKAN_WSI_LAYER_EXPERIMENTAL */
 
    /**
     * @brief Virtual destructor.
@@ -133,6 +133,14 @@ private:
     * @brief Set which presentation modes are compatible with each other for a particular surface
     */
    virtual void populate_present_mode_compatibilities() = 0;
+
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+   /**
+    * @brief Get the present timing surface capabilities for the specific VkSurface type.
+    */
+   virtual VkResult get_present_timing_surface_caps_internal(
+      VkPhysicalDevice physical_device, VkPresentTimingSurfaceCapabilitiesEXT *present_timing_surface_caps) = 0;
+#endif /* VULKAN_WSI_LAYER_EXPERIMENTAL */
 };
 
 class surface_format_properties

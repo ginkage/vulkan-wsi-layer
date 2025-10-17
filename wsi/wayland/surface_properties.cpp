@@ -455,7 +455,7 @@ bool surface_properties::is_compatible_present_modes(VkPresentModeKHR present_mo
 }
 
 #if VULKAN_WSI_LAYER_EXPERIMENTAL
-VkResult surface_properties::get_present_timing_surface_caps(
+VkResult surface_properties::get_present_timing_surface_caps_internal(
    VkPhysicalDevice physical_device, VkPresentTimingSurfaceCapabilitiesEXT *present_timing_surface_caps)
 {
    present_timing_surface_caps->presentTimingSupported = VK_TRUE;
