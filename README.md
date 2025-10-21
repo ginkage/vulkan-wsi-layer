@@ -27,14 +27,15 @@ implements the following extensions:
   * VK_KHR_shared_presentable_image
   * VK_EXT_image_compression_control_swapchain
   * VK_KHR_present_id
-  * VK_KHR_present_wait
-  * VK_EXT_swapchain_maintenance1
-  * VK_EXT_present_mode_fifo_latest_ready (For Headless and Wayland only)
   * VK_KHR_present_id2
-  * VK_KHR_swapchain_mutable_format (For Headless and Wayland only)
+  * VK_KHR_present_wait
   * VK_KHR_present_wait2
+  * VK_EXT_swapchain_maintenance1
   * VK_KHR_swapchain_maintenance1
-
+  * VK_EXT_present_mode_fifo_latest_ready (For Headless and Wayland only)
+  * VK_KHR_present_mode_fifo_latest_ready (For Headless and Wayland only)
+  * VK_KHR_swapchain_mutable_format (For Headless and Wayland only)
+  
 ## Building
 
 ### Dependencies
