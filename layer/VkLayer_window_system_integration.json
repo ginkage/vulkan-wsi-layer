@@ -83,6 +83,10 @@
                 "spec_version": "1"
             },
             {
+                "name": "VK_KHR_present_mode_fifo_latest_ready",
+                "spec_version": "1"
+            },
+            {
                 "name": "VK_KHR_swapchain_mutable_format",
                 "spec_version": "1"
             }
