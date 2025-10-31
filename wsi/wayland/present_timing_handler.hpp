@@ -31,12 +31,15 @@
 
 #if VULKAN_WSI_LAYER_EXPERIMENTAL
 
-#include <wsi/extensions/present_timing.hpp>
 #include <optional>
+#include <array>
+
+#include <wsi/extensions/present_timing.hpp>
+#include <util/custom_mutex.hpp>
+
 #include "surface_properties.hpp"
 #include "wp_presentation_feedback.hpp"
 #include "wl_helpers.hpp"
-#include <util/custom_mutex.hpp>
 
 namespace wsi
 {
@@ -59,6 +62,24 @@ public:
                                             VkSwapchainTimingPropertiesEXT &timing_properties) override;
 
    /**
+    * @brief Marks the given present ID delivered (i.e. its image has been displayed).
+    *
+    * @param image_index The index of the image in the swapchain.
+    * @param time The time to set for the first pixel out stage.
+    *
+    * Note: Time value of 0 specifies that request was discarded.
+    * Note: Time value is in nanoseconds.
+    */
+   void mark_delivered(uint32_t image_index, uint64_t time);
+
+   /**
+    * @brief Marks the buffer as released for the given image index.
+    *
+    * @param image_index The index of the image in the swapchain.
+    */
+   void mark_buffer_release(uint32_t image_index);
+
+   /**
     * @brief Insert into pending present id list.
     *
     * @param image_index The index of the image to be inserted in the list.
@@ -69,24 +90,6 @@ public:
     */
    presentation_feedback *insert_into_pending_present_feedback_list(uint32_t image_index,
                                                                     struct wp_presentation_feedback *feedback_obj);
-   /**
-    * @brief Remove a present id from the pending present id list.
-    *
-    * @param image_index The index of the image to be inserted in the list.
-    *
-    */
-   void remove_from_pending_present_feedback_list(uint32_t image_index);
-
-   /**
-    * @brief Updates the first pixel out timing in the internal array.
-    *
-    * @param image_index The index of the image in the swapchain.
-    *
-    * @param time The time to set for the first pixel out stage.
-    *
-    */
-   void pixelout_callback(uint32_t image_index, uint64_t time);
-
    /*
     * @brief Copies the pixel out timestamp from the internal array to the present timing queue.
     *
@@ -121,6 +124,25 @@ private:
 
    wsi_ext_present_timing_wayland(const util::allocator &allocator, VkDevice device, uint32_t num_images,
                                   util::vector<std::optional<uint64_t>> &&timestamp_first_pixel_out_storage);
+
+   /**
+    * @brief Updates the first pixel out timing in the internal array.
+    *
+    * @param image_index The index of the image in the swapchain.
+    *
+    * @param time The time to set for the first pixel out stage.
+    *
+    */
+   void pixelout_callback(uint32_t image_index, uint64_t time);
+
+   /**
+    * @brief Remove a present id from the pending present id list.
+    *
+    * @param image_index The index of the image to be inserted in the list.
+    *
+    * @return true if entry was removed, false if it was not found.
+    */
+   bool remove_from_pending_present_feedback_list(uint32_t image_index);
 
    wl_display *m_display{};
    struct wl_event_queue *m_queue{};

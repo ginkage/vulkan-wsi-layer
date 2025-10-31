@@ -235,6 +235,22 @@ void swapchain::release_buffer(struct wl_buffer *wayl_buffer)
       auto data = reinterpret_cast<wayland_image_data *>(m_swapchain_images[i].data);
       if (data && data->buffer == wayl_buffer)
       {
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+         /* Some compositors might not deliver wp_presentation_feedback events if the images are pushed to compositor quick enough
+          * in presentation modes that allow it (mailbox). If that happens, double check if these images were submitted for feedback
+          * and handle it as a 'image discarded' event. */
+         auto *present_timing_ext = get_swapchain_extension<wsi_ext_present_timing_wayland>();
+         if (present_timing_ext != nullptr)
+         {
+            present_timing_ext->mark_buffer_release(i);
+         }
+         auto *present_id_ext = get_swapchain_extension<wsi_ext_present_id_wayland>();
+         if (present_id_ext != nullptr)
+         {
+            present_id_ext->mark_buffer_release(i);
+         }
+#endif
+
          unpresent_image(i);
          break;
       }
@@ -603,8 +619,8 @@ void swapchain::present_image(const pending_present_request &pending_present)
          wp_presentation *pres = m_wsi_surface->get_presentation_time_interface();
          struct wp_presentation_feedback *feedback = wp_presentation_feedback(pres, m_wsi_surface->get_wl_surface());
          wl_proxy_set_queue(reinterpret_cast<wl_proxy *>(feedback), m_buffer_queue);
-         presentation_feedback *feedback_obj =
-            present_id_ext->insert_into_pending_present_feedback_list(pending_present.present_id, feedback);
+         presentation_feedback *feedback_obj = present_id_ext->insert_into_pending_present_feedback_list(
+            pending_present.present_id, pending_present.image_index, feedback);
          if (feedback_obj == nullptr)
          {
             WSI_LOG_ERROR("Error adding to pending present feedback list");

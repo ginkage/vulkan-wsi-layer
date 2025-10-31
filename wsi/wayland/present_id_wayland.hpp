@@ -53,15 +53,37 @@ public:
    /**
     * @brief Insert into pending present id list.
     */
-   presentation_feedback *insert_into_pending_present_feedback_list(uint64_t present_id,
+   presentation_feedback *insert_into_pending_present_feedback_list(uint64_t present_id, uint32_t image_index,
                                                                     struct wp_presentation_feedback *feedback_obj);
 
+   /**
+    * @brief Marks the given present ID delivered (i.e. its image has been displayed).
+    *
+    * @param present_id Present ID to mark as delivered.
+    */
+   virtual void mark_delivered(uint64_t present_id) override;
+
+   /**
+    * @brief Marks the buffer as released for the given image index.
+    *
+    * @param image_index The index of the image in the swapchain.
+    */
+   void mark_buffer_release(uint32_t image_index);
+
+private:
    /**
     * @brief Remove a present id from the pending present id list.
     */
    void remove_from_pending_present_feedback_list(uint64_t present_id);
 
-private:
+   /**
+    * @brief Get the present id from image index object
+    *
+    * @param image_index Image index to check for.
+    * @return Present ID associated with the image index or 0 otherwise.
+    */
+   uint64_t get_present_id_from_image_index(uint32_t image_index);
+
    /**
     * @brief Mutex for synchronising accesses to the pending present id list.
     */

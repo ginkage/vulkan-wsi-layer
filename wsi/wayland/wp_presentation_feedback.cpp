@@ -52,13 +52,11 @@ wp_presentation_feedback_presented(void *data, struct wp_presentation_feedback *
          timestamp_seconds = static_cast<uint64_t>(std::floor(timestamp_limit));
       }
       uint64_t timestamp_ns = static_cast<uint64_t>(timestamp_seconds * 1e9) + tv_nsec;
-      feedback_obj->ext_present_timing()->pixelout_callback(feedback_obj->get_image_index(), timestamp_ns);
-      feedback_obj->ext_present_timing()->remove_from_pending_present_feedback_list(feedback_obj->get_image_index());
+      feedback_obj->ext_present_timing()->mark_delivered(feedback_obj->get_image_index(), timestamp_ns);
    }
    else if (feedback_obj->ext_present_id() != nullptr)
    {
       feedback_obj->ext_present_id()->mark_delivered(feedback_obj->get_present_id());
-      feedback_obj->ext_present_id()->remove_from_pending_present_feedback_list(feedback_obj->get_present_id());
    }
 }
 
@@ -72,12 +70,10 @@ wp_presentation_feedback_discarded(void *data, struct wp_presentation_feedback *
    if (feedback_obj->ext_present_id() != nullptr)
    {
       feedback_obj->ext_present_id()->mark_delivered(feedback_obj->get_present_id());
-      feedback_obj->ext_present_id()->remove_from_pending_present_feedback_list(feedback_obj->get_present_id());
    }
    if (feedback_obj->ext_present_timing() != nullptr)
    {
-      feedback_obj->ext_present_timing()->pixelout_callback(feedback_obj->get_image_index(), 0);
-      feedback_obj->ext_present_timing()->remove_from_pending_present_feedback_list(feedback_obj->get_image_index());
+      feedback_obj->ext_present_timing()->mark_delivered(feedback_obj->get_image_index(), 0);
    }
 }
 

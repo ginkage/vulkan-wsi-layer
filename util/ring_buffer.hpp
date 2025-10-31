@@ -25,6 +25,7 @@
 #include <array>
 #include <memory>
 #include <optional>
+#include <functional>
 
 #pragma once
 
@@ -83,6 +84,25 @@ public:
    T *back()
    {
       return get((m_begin + m_size + N - 1) % N);
+   }
+
+   /**
+    * @brief Find element in the ring buffer
+    *
+    * @param predicate Predicate which returns a true value when element is matching.
+    * @return Pointer to the element, nullptr otherwise.
+    */
+   T *find(std::function<bool(const T &el)> predicate)
+   {
+      for (size_t i = 0; i < size(); i++)
+      {
+         if (predicate(*m_data[(m_begin + i) % N]))
+         {
+            return get((m_begin + i) % N);
+         }
+      }
+
+      return nullptr;
    }
 
    /**
