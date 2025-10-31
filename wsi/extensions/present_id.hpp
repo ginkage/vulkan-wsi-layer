@@ -59,7 +59,7 @@ public:
    /**
     * @brief Marks the given present ID delivered (i.e. its image has been displayed).
     */
-   void mark_delivered(uint64_t present_id);
+   virtual void mark_delivered(uint64_t present_id);
 
    /**
     * @brief Sets the error state for all pending and future image requests.

@@ -66,12 +66,12 @@ public:
    {
    }
    presentation_feedback(struct wp_presentation_feedback *feedback, wsi_ext_present_id_wayland *ext_present_id,
-                         uint64_t present_id)
+                         uint64_t present_id, uint32_t image_index)
       : m_feedback(feedback)
       , m_ext_present_id(ext_present_id)
       , m_present_id(present_id)
       , m_ext_present_timing(nullptr)
-      , m_image_index(0)
+      , m_image_index(image_index)
    {
    }
 
@@ -94,10 +94,6 @@ public:
    {
       if (this != &feedback_obj)
       {
-         if (m_feedback != nullptr)
-         {
-            wp_presentation_feedback_destroy(m_feedback.get());
-         }
          m_present_id = feedback_obj.m_present_id;
          m_feedback = std::move(feedback_obj.m_feedback);
          m_ext_present_id = feedback_obj.m_ext_present_id;

@@ -97,6 +97,21 @@ VkResult wsi_ext_present_timing_wayland::get_swapchain_timing_properties(
    return VK_SUCCESS;
 }
 
+void wsi_ext_present_timing_wayland::mark_delivered(uint32_t image_index, uint64_t time)
+{
+   pixelout_callback(image_index, time);
+   remove_from_pending_present_feedback_list(image_index);
+}
+
+void wsi_ext_present_timing_wayland::mark_buffer_release(uint32_t image_index)
+{
+   auto was_removed = remove_from_pending_present_feedback_list(image_index);
+   if (was_removed)
+   {
+      pixelout_callback(image_index, 0);
+   }
+}
+
 presentation_feedback *wsi_ext_present_timing_wayland::insert_into_pending_present_feedback_list(
    uint32_t image_index, struct wp_presentation_feedback *feedback_obj)
 {
@@ -107,11 +122,16 @@ presentation_feedback *wsi_ext_present_timing_wayland::insert_into_pending_prese
       WSI_LOG_ERROR("Failed to acquire pending presents lock in insert_into_pending_present_feedback_list.\n");
       abort();
    }
+
+   /* We should not be replacing pending entries. This most likely has happened due to events not being triggered
+    * that would discard or mark the pending present request as completed which could be an inidcation of a bug somewhere. */
+   assert(!m_pending_presents[image_index].has_value());
+
    m_pending_presents[image_index] = presentation_feedback(feedback_obj, this, image_index);
    return &m_pending_presents[image_index].value();
 }
 
-void wsi_ext_present_timing_wayland::remove_from_pending_present_feedback_list(uint32_t image_index)
+bool wsi_ext_present_timing_wayland::remove_from_pending_present_feedback_list(uint32_t image_index)
 {
    util::unique_lock<util::mutex> lock(m_pending_presents_lock);
    if (!lock)
@@ -119,7 +139,10 @@ void wsi_ext_present_timing_wayland::remove_from_pending_present_feedback_list(u
       WSI_LOG_ERROR("Failed to acquire pending presents lock in remove_from_pending_present_feedback_list.\n");
       abort();
    }
+
+   const bool has_entry = m_pending_presents[image_index].has_value();
    m_pending_presents[image_index].reset();
+   return has_entry;
 }
 
 void wsi_ext_present_timing_wayland::pixelout_callback(uint32_t image_index, uint64_t time)
