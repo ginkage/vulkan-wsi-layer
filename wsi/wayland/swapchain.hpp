@@ -183,6 +183,8 @@ protected:
    VkResult bind_swapchain_image(VkDevice &device, const VkBindImageMemoryInfo *bind_image_mem_info,
                                  const VkBindImageMemorySwapchainInfoKHR *bind_sc_info) override;
 
+   uint64_t get_modifier() override;
+
    /**
     * @brief Get backend specific image create info extensions.
     *

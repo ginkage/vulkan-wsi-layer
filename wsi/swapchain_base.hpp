@@ -253,6 +253,15 @@ public:
                                          const VkBindImageMemorySwapchainInfoKHR *bind_sc_info) = 0;
 
    /**
+    * @brief Get the DRM modifier of all swapchain images.
+    *
+    * Retrieves the DRM modifier used to create swapchain images.
+    *
+    * @return The DRM modifier used for the images.
+    */
+   virtual uint64_t get_modifier() = 0;
+
+   /**
     * @brief Get image's present semaphore
     *
     * @param image_index Image's index

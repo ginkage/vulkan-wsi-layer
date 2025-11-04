@@ -142,6 +142,11 @@ VkResult swapchain::init_platform(VkDevice device, const VkSwapchainCreateInfoKH
    return VK_SUCCESS;
 }
 
+uint64_t swapchain::get_modifier()
+{
+   return 0;
+}
+
 VkResult swapchain::allocate_and_bind_swapchain_image(VkImageCreateInfo image_create, swapchain_image &image)
 {
    UNUSED(image_create);

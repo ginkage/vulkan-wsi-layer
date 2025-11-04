@@ -169,6 +169,16 @@ for applications that do not make use of this extension.
 In order to enable this feature `-DENABLE_INSTRUMENTATION=1` option can
 be passed at build time.
 
+### Debug builds
+
+The layer can be built with different values of the CMAKE_BUILD_TYPE variable.
+When CMAKE_BUILD_TYPE is set to Debug, additional debugging functionality is enabled.
+For example, internal values stored inside the layer's different objects can be retrieved.
+These functions can be linked at runtime using dynamic loading mechanisms, such as dlsym(),
+with the provided layer shared library.
+The debug interface provides functions including:
+ * vk_wsi_layer_debug_get_sc_image_drm_mod
+
 ## Installation
 
 Copy the shared library `libVkLayer_window_system_integration.so` and JSON

@@ -464,6 +464,11 @@ VkResult swapchain::allocate_image(wayland_image_data *image_data)
    return VK_SUCCESS;
 }
 
+uint64_t swapchain::get_modifier()
+{
+   return m_image_creation_parameters.m_allocated_format.modifier;
+}
+
 VkResult swapchain::create_wl_buffer(const VkImageCreateInfo &image_create_info, swapchain_image &image,
                                      wayland_image_data *image_data)
 {

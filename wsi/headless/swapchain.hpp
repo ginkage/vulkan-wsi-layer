@@ -112,6 +112,8 @@ protected:
 
    VkResult image_wait_present(swapchain_image &image, uint64_t timeout) override;
 
+   uint64_t get_modifier() override;
+
    /**
     * @brief Bind image to a swapchain
     *
