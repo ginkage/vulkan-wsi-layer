@@ -125,6 +125,8 @@ protected:
       const VkSwapchainCreateInfoKHR &swapchain_create_info,
       util::vector<util::unique_ptr<swapchain_image_create_info_extension>> *extensions) override;
 
+   uint64_t get_modifier() override;
+
 private:
    VkResult allocate_image(display_image_data *image_data);
 

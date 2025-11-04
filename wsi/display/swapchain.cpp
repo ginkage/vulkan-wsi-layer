@@ -74,6 +74,11 @@ static void page_flip_event(int fd, unsigned int sequence, unsigned int tv_sec, 
    *done = true;
 }
 
+uint64_t swapchain::get_modifier()
+{
+   return m_image_creation_parameters.m_allocated_format.modifier;
+}
+
 VkResult swapchain::add_required_extensions(VkDevice device, const VkSwapchainCreateInfoKHR *swapchain_create_info)
 {
    auto compression_control = wsi_ext_image_compression_control::create(device, swapchain_create_info);
