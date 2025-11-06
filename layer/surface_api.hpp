@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019, 2021-2022 Arm Limited.
+ * Copyright (c) 2018-2019, 2021-2022, 2025 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -38,6 +38,13 @@
 VWL_VKAPI_CALL(VkResult)
 wsi_layer_vkGetPhysicalDeviceSurfaceCapabilitiesKHR(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface,
                                                     VkSurfaceCapabilitiesKHR *pSurfaceCapabilities) VWL_API_POST;
+
+/**
+ * @brief Implements vkGetPhysicalDeviceSurfaceCapabilities2EXT Vulkan entrypoint.
+ */
+VWL_VKAPI_CALL(VkResult)
+wsi_layer_vkGetPhysicalDeviceSurfaceCapabilities2EXT(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface,
+                                                     VkSurfaceCapabilities2EXT *pSurfaceCapabilities) VWL_API_POST;
 
 /**
  * @brief Implements vkGetPhysicalDeviceSurfaceCapabilities2KHR Vulkan entrypoint.
