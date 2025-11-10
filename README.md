@@ -105,7 +105,7 @@ make -C build
 
 In order to build with Wayland support the `BUILD_WSI_WAYLAND` build option
 must be used, the `SELECT_EXTERNAL_ALLOCATOR` option has to be set to
-a graphics memory allocator (currently only ion and dma_buf_heaps are supported) and
+a graphics memory allocator (currently only dma_buf_heaps is supported) and
 the `KERNEL_HEADER_DIR` option must be defined as the directory that includes the kernel headers.
 source.
 
@@ -113,7 +113,7 @@ source.
 cmake . -DVULKAN_CXX_INCLUDE="path/to/vulkan-header" \
         -DBUILD_WSI_HEADLESS=0 \
         -DBUILD_WSI_WAYLAND=1 \
-        -DSELECT_EXTERNAL_ALLOCATOR=ion \
+        -DSELECT_EXTERNAL_ALLOCATOR=dma_buf_heaps \
         -DKERNEL_HEADER_DIR="path/to/linux-kernel-headers"
 ```
 
@@ -138,9 +138,9 @@ also responsible for selecting a suitable format that can be
 efficiently shared between the different devices in the system, e.g. GPU,
 display. It is therefore an important point of integration. It is expected
 that each system will need a tailored implementation, although the layer
-provides a generic ion and dma_buf_heaps implementations that may work in
+provides a generic dma_buf_heaps implementation that may work in
 systems that support linear formats. This is selected by
-the `-DSELECT_EXTERNAL_ALLOCATOR=ion` option, as shown above.
+the `-DSELECT_EXTERNAL_ALLOCATOR=dma_buf_heaps` option, as shown above.
 
 ### Wayland support with FIFO presentation mode
 
