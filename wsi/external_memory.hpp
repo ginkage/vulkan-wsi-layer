@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024 Arm Limited.
+ * Copyright (c) 2022-2025 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -47,7 +47,7 @@ using util::MAX_PLANES;
 class external_memory
 {
 public:
-   external_memory(const VkDevice &device, const util::allocator &allocator);
+   external_memory(const VkDevice &device, util::allocator allocator);
    ~external_memory();
 
    /**
@@ -228,7 +228,7 @@ private:
    uint32_t m_num_memories{ 0 };
    VkExternalMemoryHandleTypeFlagBits m_handle_type{ VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT };
    const VkDevice &m_device;
-   const util::allocator &m_allocator;
+   util::allocator m_allocator;
 };
 
 } // namespace wsi

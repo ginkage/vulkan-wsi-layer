@@ -23,49 +23,54 @@
  */
 
 /**
- * @file swapchain_image_creator.hpp
+ * @file vulkan_image_handle_creator.hpp
  */
 
 #pragma once
 
 #include <vulkan/vulkan.h>
 #include <util/custom_allocator.hpp>
-#include <wsi/swapchain_image_create_extensions/swapchain_image_create_info_extension.hpp>
+#include <wsi/extensions/image_create_info_extension.hpp>
+
+#include "swapchain_image.hpp"
 
 namespace wsi
 {
 
 /**
  * @brief This class is responsible for owning and extending a swapchain's image
- * creation info.
+ * creation info and creating Vulkan image handles.
  */
-class swapchain_image_creator
+class vulkan_image_handle_creator
 {
 public:
-   swapchain_image_creator(const util::allocator &allocator)
-      : m_image_create_info()
-      , m_extensions(allocator)
-   {
-      m_image_create_info.format = VK_FORMAT_UNDEFINED;
-   };
+   /**
+    * @brief Construct a new vulkan image handle creator
+    *
+    * @param allocator Allocator
+    * @param swapchain_create_info Swapchain create info passed by application.
+    */
+   vulkan_image_handle_creator(util::allocator allocator, const VkSwapchainCreateInfoKHR &swapchain_create_info);
 
    /**
-    * @brief Create image create info.
+    * @brief Create Vulkan swapchain image handle
     *
-    * @param swapchain_create_info Swapchain create info.
+    * @param device_data Device data
+    * @param allocator Allocator
+    * @param out_image_handle If successful, Vulkan image handle
+    * @return Vulkan result code.
     */
-   void init(const VkSwapchainCreateInfoKHR &swapchain_create_info);
+   VkResult create_image(layer::device_private_data &device_data, const util::allocator &allocator,
+                         VkImage &out_image_handle);
 
    /**
     * @brief Extend create info with extension data.
     *
-    * @param extensions Swapchain image create info extensions.
+    * @param extension Swapchain image create info extension.
     *
     * @return VK_SUCCESS on success, an appropriate error code on failure.
-    *
-    * @note The extensions will be moved out of the vector and will become nullptr.
     */
-   VkResult add_extensions(util::vector<util::unique_ptr<swapchain_image_create_info_extension>> &extensions);
+   VkResult add_extension(util::unique_ptr<image_create_info_extension> extension);
 
    VkImageCreateInfo get_image_create_info() const
    {
@@ -81,7 +86,7 @@ private:
    /**
     * @brief Swapchain image extensions needed for extending image create info.
     */
-   util::vector<util::unique_ptr<swapchain_image_create_info_extension>> m_extensions;
+   util::vector<util::unique_ptr<image_create_info_extension>> m_extensions;
 };
 
 } /* namespace wsi */

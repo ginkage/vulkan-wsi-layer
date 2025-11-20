@@ -36,7 +36,7 @@
 
 namespace wsi
 {
-wsi_ext_image_compression_control::wsi_ext_image_compression_control(const VkImageCompressionControlEXT &extension)
+image_create_compression_control::image_create_compression_control(const VkImageCompressionControlEXT &extension)
    : m_compression_control{ VK_STRUCTURE_TYPE_IMAGE_COMPRESSION_CONTROL_EXT, nullptr, extension.flags,
                             extension.compressionControlPlaneCount, m_array_fixed_rate_flags }
 {
@@ -46,22 +46,22 @@ wsi_ext_image_compression_control::wsi_ext_image_compression_control(const VkIma
    }
 }
 
-wsi_ext_image_compression_control::wsi_ext_image_compression_control(const wsi_ext_image_compression_control &extension)
-   : wsi_ext_image_compression_control(extension.m_compression_control)
+image_create_compression_control::image_create_compression_control(const image_create_compression_control &extension)
+   : image_create_compression_control(extension.m_compression_control)
 {
 }
 
-VkImageCompressionControlEXT wsi_ext_image_compression_control::get_compression_control_properties()
+VkImageCompressionControlEXT image_create_compression_control::get_compression_control_properties()
 {
    return m_compression_control;
 }
 
-VkImageCompressionFlagsEXT wsi_ext_image_compression_control::get_bitmask_for_image_compression_flags()
+VkImageCompressionFlagsEXT image_create_compression_control::get_bitmask_for_image_compression_flags()
 {
    return m_compression_control.flags;
 }
 
-std::optional<wsi_ext_image_compression_control> wsi_ext_image_compression_control::create(
+std::optional<image_create_compression_control> image_create_compression_control::create(
    VkDevice device, const VkSwapchainCreateInfoKHR *swapchain_create_info)
 {
    const auto *image_compression_control = util::find_extension<VkImageCompressionControlEXT>(
@@ -70,10 +70,20 @@ std::optional<wsi_ext_image_compression_control> wsi_ext_image_compression_contr
    layer::device_private_data &device_data = layer::device_private_data::get(device);
    if (device_data.is_swapchain_compression_control_enabled() && image_compression_control != nullptr)
    {
-      return wsi_ext_image_compression_control{ *image_compression_control };
+      return image_create_compression_control{ *image_compression_control };
    }
 
    return std::nullopt;
+}
+
+VkResult image_create_compression_control::extend_image_create_info(VkImageCreateInfo *image_create_info)
+{
+   assert(image_create_info != nullptr);
+
+   m_compression_control.pNext = image_create_info->pNext;
+   image_create_info->pNext = &m_compression_control;
+
+   return VK_SUCCESS;
 }
 
 };

@@ -35,6 +35,7 @@
 #include <vulkan/vulkan.h>
 #include <thread>
 #include <array>
+#include <variant>
 
 #include <util/custom_allocator.hpp>
 #include <util/custom_mutex.hpp>
@@ -43,41 +44,21 @@
 #include <util/timed_semaphore.hpp>
 #include <util/log.hpp>
 #include <util/macros.hpp>
+#include <util/wsi_extension.hpp>
 
 #include <layer/private_data.hpp>
 
 #include "surface_properties.hpp"
 #include "synchronization.hpp"
-#include "swapchain_image_creator.hpp"
+#include "vulkan_image_handle_creator.hpp"
+#include "swapchain_image.hpp"
+#include "swapchain_image_factory.hpp"
 
 #include "extensions/frame_boundary.hpp"
-#include "extensions/wsi_extension.hpp"
 #include "extensions/present_id.hpp"
 
 namespace wsi
 {
-
-using util::MAX_PLANES;
-struct swapchain_image
-{
-   enum status
-   {
-      INVALID,
-      ACQUIRED,
-      PENDING,
-      PRESENTED,
-      FREE,
-      UNALLOCATED,
-   };
-
-   /* Implementation specific data */
-   void *data{ nullptr };
-
-   VkImage image{ VK_NULL_HANDLE };
-   status status{ swapchain_image::INVALID };
-   VkSemaphore present_semaphore{ VK_NULL_HANDLE };
-   VkSemaphore present_fence_wait{ VK_NULL_HANDLE };
-};
 
 struct pending_present_request
 {
@@ -242,24 +223,14 @@ public:
     * VkBindImageMemorySwapchainInfoKHR struct has been provided in the vkBindImageMemory2
     * function.
     *
-    * @param device              is the logical device that owns the images and memory.
     * @param bind_image_mem_info details the image we want to bind.
     * @param bind_sc_info        describes the swapchain memory to bind to.
     *
     * @return VK_SUCCESS on success, otherwise on failure VK_ERROR_OUT_OF_HOST_MEMORY or VK_ERROR_OUT_OF_DEVICE_MEMORY
     * can be returned.
     */
-   virtual VkResult bind_swapchain_image(VkDevice &device, const VkBindImageMemoryInfo *bind_image_mem_info,
-                                         const VkBindImageMemorySwapchainInfoKHR *bind_sc_info) = 0;
-
-   /**
-    * @brief Get the DRM modifier of all swapchain images.
-    *
-    * Retrieves the DRM modifier used to create swapchain images.
-    *
-    * @return The DRM modifier used for the images.
-    */
-   virtual uint64_t get_modifier() = 0;
+   VkResult bind_swapchain_image(const VkBindImageMemoryInfo *bind_image_mem_info,
+                                 const VkBindImageMemorySwapchainInfoKHR *bind_sc_info);
 
    /**
     * @brief Get image's present semaphore
@@ -270,7 +241,7 @@ public:
     */
    VkSemaphore get_image_present_semaphore(uint32_t image_index)
    {
-      return m_swapchain_images[image_index].present_semaphore;
+      return m_swapchain_images[image_index].get_present_semaphore();
    }
 
    /**
@@ -324,7 +295,7 @@ public:
     * @return Returns true on success and false otherwise.
     */
 
-   bool add_swapchain_extension(util::unique_ptr<wsi_ext> extension);
+   bool add_swapchain_extension(util::unique_ptr<util::wsi_ext> extension);
 
    /**
     * @brief Enable mutable format swapchain support.
@@ -342,6 +313,16 @@ public:
    bool is_mutable_format_enabled() const
    {
       return m_mutable_format_enabled;
+   }
+
+   /**
+    * @brief Get the modifier used for the images in the swapchain
+    *
+    * @return uint64_t DRM format modifier
+    */
+   uint64_t get_modifier() const
+   {
+      return m_swapchain_images.empty() ? 0 : m_swapchain_images[0].get_modifier();
    }
 
 protected:
@@ -451,11 +432,6 @@ protected:
    VkQueue m_queue;
 
    /**
-    * @brief Image creation info used for all swapchain images.
-    */
-   VkImageCreateInfo m_image_create_info;
-
-   /**
     * @brief Return the VkAllocationCallbacks passed in this object constructor.
     */
    const VkAllocationCallbacks *get_allocation_callbacks()
@@ -520,14 +496,11 @@ protected:
    }
 
    /**
-    * @brief Get backend specific image create info extensions.
+    * @brief Get the image factory used for creating swapchain images.
     *
-    * @param         swapchain_create_info Swapchain create info.
-    * @param[in,out] extensions            Swapchain image create info extensions filled by the backend.
+    * @return Swapchain image factory.
     */
-   virtual VkResult get_required_image_creator_extensions(
-      const VkSwapchainCreateInfoKHR &swapchain_create_info,
-      util::vector<util::unique_ptr<swapchain_image_create_info_extension>> *extensions) = 0;
+   virtual swapchain_image_factory &get_image_factory() = 0;
 
    /**
     * @brief Base swapchain teardown.
@@ -544,24 +517,11 @@ protected:
    /**
     * @brief Allocates and binds a new swapchain image.
     *
-    * @param image_create_info Data to be used to create the image.
-    * @param image             Handle to the image.
+    * @param swapchain_image Swapchain image.
     *
     * @return Returns VK_SUCCESS on success, otherwise an appropriate error code.
     */
-   virtual VkResult allocate_and_bind_swapchain_image(VkImageCreateInfo image_create_info, swapchain_image &image) = 0;
-
-   /**
-    * @brief Creates a new swapchain image.
-    *
-    * @param image_create_info Data to be used to create the image.
-    * @param image             Handle to the image.
-    *
-    * @return If image creation is successful returns VK_SUCCESS, otherwise
-    * will return VK_ERROR_OUT_OF_DEVICE_MEMORY or VK_ERROR_INITIALIZATION_FAILED
-    * depending on the error that occurred.
-    */
-   virtual VkResult create_swapchain_image(VkImageCreateInfo image_create_info, swapchain_image &image) = 0;
+   virtual VkResult allocate_and_bind_swapchain_image(swapchain_image &swapchain_image) = 0;
 
    /**
     * @brief Method to present and image
@@ -582,15 +542,6 @@ protected:
    void unpresent_image(uint32_t presented_index);
 
    /**
-    * @brief Method to release a swapchain image
-    *
-    * Releases resources stored in the data member of a swapchain_image.
-    *
-    * @param image Handle to the image about to be released.
-    */
-   virtual void destroy_image([[maybe_unused]] swapchain_image &image){};
-
-   /**
     * @brief Hook for any actions to free up a buffer for acquire
     *
     * If specific actions are required by the windowing system to query whether a buffer
@@ -608,34 +559,6 @@ protected:
       UNUSED(timeout);
       return VK_SUCCESS;
    }
-
-   /**
-    * @brief Sets the present payload for a swapchain image.
-    *
-    * @param[in] image            The swapchain image for which to set a present payload.
-    * @param     queue            A Vulkan queue that can be used for any Vulkan commands needed.
-    * @param[in] semaphores       The wait and signal semaphores and their number of elements.
-    * @param[in] submission_pnext Chain of pointers to attach to the payload submission.
-    *
-    * @return VK_SUCCESS on success or an error code otherwise.
-    */
-   virtual VkResult image_set_present_payload(swapchain_image &image, VkQueue queue,
-                                              const queue_submit_semaphores &semaphores,
-                                              const void *submission_pnext = nullptr) = 0;
-
-   /**
-    * @brief Waits for the present payload of an image if necessary.
-    *
-    * If the page flip thread needs to wait for the image present synchronization payload the WSI implemention can block
-    * and wait in this call. Otherwise the function should return successfully without blocking.
-    *
-    * @param[in] image   The swapchain image for which the function may need to wait until the presentat payload has
-    *                    finished.
-    * @param     timeout Timeout for any wait in nanoseconds.
-    *
-    * @return VK_SUCCESS if waiting was successful or unnecessary. An error code otherwise.
-    */
-   virtual VkResult image_wait_present(swapchain_image &image, uint64_t timeout) = 0;
 
    /**
     * @brief Returns true if an error has occurred.
@@ -698,12 +621,7 @@ private:
    /**
     * @brief Holds the swapchain extensions and related functionalities.
     */
-   wsi_ext_maintainer m_extensions;
-
-   /**
-    * @brief Holds the VkImageCreateInfo and backend specific image create info extensions.
-    */
-   swapchain_image_creator m_image_creator;
+   util::wsi_ext_maintainer m_extensions;
 
    /**
     * @brief Flag indicating if mutable format swapchain support is enabled.
@@ -781,13 +699,6 @@ private:
     * @return VK_SUCCESS on success or an error code otherwise.
     */
    VkResult notify_presentation_engine(const pending_present_request &submit_info);
-
-   /**
-    * @brief Initialize m_image_creator.
-    *
-    * @param swapchain_create_info Swapchain create info.
-    */
-   VkResult image_creator_init(const VkSwapchainCreateInfoKHR &swapchain_create_info);
 };
 
 } /* namespace wsi */

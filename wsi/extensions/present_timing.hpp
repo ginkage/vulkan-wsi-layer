@@ -31,13 +31,6 @@
 
 #pragma once
 
-#include <layer/wsi_layer_experimental.hpp>
-#include <layer/private_data.hpp>
-#include <wsi/swapchain_base.hpp>
-#include <util/custom_allocator.hpp>
-#include <util/custom_mutex.hpp>
-#include <util/macros.hpp>
-
 #include <atomic>
 #include <iterator>
 #include <type_traits>
@@ -48,7 +41,13 @@
 #include <cassert>
 #include <variant>
 
-#include "wsi_extension.hpp"
+#include <layer/wsi_layer_experimental.hpp>
+#include <layer/private_data.hpp>
+#include <util/custom_allocator.hpp>
+#include <util/custom_mutex.hpp>
+#include <util/macros.hpp>
+#include <util/wsi_extension.hpp>
+#include <wsi/swapchain_base.hpp>
 
 #if VULKAN_WSI_LAYER_EXPERIMENTAL
 namespace wsi
@@ -424,7 +423,7 @@ struct scheduled_present_target
  * This class implements or act as a base class for the present timing extension
  * features.
  */
-class wsi_ext_present_timing : public wsi_ext
+class wsi_ext_present_timing : public util::wsi_ext
 {
 public:
    /**

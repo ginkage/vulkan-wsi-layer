@@ -151,7 +151,8 @@ if(BUILD_WSI_WAYLAND)
       wsi/wayland/wl_helpers.cpp
       wsi/wayland/swapchain.cpp
       wsi/wayland/present_wait_wayland.cpp
-      wsi/swapchain_image_create_extensions/external_memory_extension.cpp)
+      wsi/extensions/external_memory_extension.cpp
+      wsi/image_backing_memory_external.cpp)
 
    if(VULKAN_WSI_LAYER_EXPERIMENTAL)
       target_sources(wayland_wsi PRIVATE wsi/wayland/present_id_wayland.cpp)
@@ -239,7 +240,8 @@ if(BUILD_WSI_HEADLESS)
       wsi/headless/surface_properties.cpp
       wsi/headless/surface.cpp
       wsi/headless/swapchain.cpp
-      wsi/headless/present_wait_headless.cpp)
+      wsi/headless/present_wait_headless.cpp
+      wsi/image_backing_memory_device.cpp)
 
    if(VULKAN_WSI_LAYER_EXPERIMENTAL)
       target_sources(wsi_headless PRIVATE wsi/headless/present_timing_handler.cpp)
@@ -264,8 +266,9 @@ if (BUILD_WSI_DISPLAY)
       wsi/display/surface_properties.cpp
       wsi/display/swapchain.cpp
       wsi/display/surface.cpp
-      wsi/swapchain_image_create_extensions/external_memory_extension.cpp
-      wsi/display/present_wait_display.cpp)
+      wsi/extensions/external_memory_extension.cpp
+      wsi/display/present_wait_display.cpp
+      wsi/image_backing_memory_external.cpp)
 
    pkg_check_modules(LIBDRM REQUIRED libdrm)
    message(STATUS "Using libdrm include directories: ${LIBDRM_INCLUDE_DIRS}")
@@ -313,15 +316,16 @@ add_library(${PROJECT_NAME} SHARED
    wsi/extensions/present_id.cpp
    wsi/extensions/present_wait.cpp
    wsi/extensions/frame_boundary.cpp
-   wsi/extensions/wsi_extension.cpp
+   wsi/extensions/mutable_format_extension.cpp
+   util/wsi_extension.cpp
    wsi/extensions/swapchain_maintenance.cpp
    wsi/surface_properties.cpp
    wsi/swapchain_base.cpp
    wsi/synchronization.cpp
    wsi/wsi_factory.cpp
-   wsi/swapchain_image_creator.cpp
-   wsi/swapchain_image_create_extensions/image_compression_control.cpp
-   wsi/swapchain_image_create_extensions/mutable_format_extension.cpp)
+   wsi/vulkan_image_handle_creator.cpp
+   wsi/swapchain_image_factory.cpp
+   wsi/swapchain_image.cpp)
 if (VULKAN_WSI_LAYER_EXPERIMENTAL)
    target_sources(${PROJECT_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/layer/present_timing_api.cpp)
    target_sources(${PROJECT_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/wsi/extensions/present_timing.cpp)

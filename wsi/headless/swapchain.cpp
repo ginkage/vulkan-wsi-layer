@@ -35,15 +35,16 @@
 
 #include <util/custom_allocator.hpp>
 #include <util/timed_semaphore.hpp>
+#include <util/macros.hpp>
 
 #include <wsi/extensions/present_id.hpp>
 #include <wsi/extensions/swapchain_maintenance.hpp>
-#include "util/macros.hpp"
+#include <wsi/extensions/image_compression_control.hpp>
+#include <wsi/extensions/mutable_format_extension.hpp>
+#include <wsi/image_backing_memory_device.hpp>
 
 #include "present_timing_handler.hpp"
 #include "present_wait_headless.hpp"
-
-#include <wsi/swapchain_image_create_extensions/image_compression_control.hpp>
 
 namespace wsi
 {
@@ -59,6 +60,7 @@ struct image_data
 
 swapchain::swapchain(layer::device_private_data &dev_data, const VkAllocationCallbacks *pAllocator)
    : wsi::swapchain_base(dev_data, pAllocator)
+   , m_image_factory(m_allocator, m_device_data)
 {
 }
 
@@ -139,86 +141,36 @@ VkResult swapchain::init_platform(VkDevice device, const VkSwapchainCreateInfoKH
       use_presentation_thread = true;
    }
 
+   return init_image_factory(*swapchain_create_info);
+}
+
+VkResult swapchain::init_image_factory(const VkSwapchainCreateInfoKHR &swapchain_create_info)
+{
+   std::variant<VkResult, util::unique_ptr<vulkan_image_handle_creator>> image_handle_creator_result =
+      create_image_creator(swapchain_create_info);
+   if (auto error = std::get_if<VkResult>(&image_handle_creator_result))
+   {
+      return *error;
+   }
+
+   auto image_handle_creator =
+      std::get<util::unique_ptr<vulkan_image_handle_creator>>(std::move(image_handle_creator_result));
+   auto backing_memory_creator = m_allocator.make_unique<device_backing_memory_creator>(m_device_data);
+
+   m_image_factory.init(std::move(image_handle_creator), std::move(backing_memory_creator), false, true);
    return VK_SUCCESS;
 }
 
-uint64_t swapchain::get_modifier()
+VkResult swapchain::allocate_and_bind_swapchain_image(swapchain_image &image)
 {
-   return 0;
-}
-
-VkResult swapchain::allocate_and_bind_swapchain_image(VkImageCreateInfo image_create, swapchain_image &image)
-{
-   UNUSED(image_create);
-   VkResult res = VK_SUCCESS;
    const util::unique_lock<util::recursive_mutex> lock(m_image_status_mutex);
    if (!lock)
    {
       return VK_ERROR_INITIALIZATION_FAILED;
    }
 
-   VkMemoryRequirements memory_requirements = {};
-   m_device_data.disp.GetImageMemoryRequirements(m_device, image.image, &memory_requirements);
-
-   /* Find a memory type */
-   size_t mem_type_idx = 0;
-   for (; mem_type_idx < 8 * sizeof(memory_requirements.memoryTypeBits); ++mem_type_idx)
-   {
-      if (memory_requirements.memoryTypeBits & (1u << mem_type_idx))
-      {
-         break;
-      }
-   }
-
-   assert(mem_type_idx <= 8 * sizeof(memory_requirements.memoryTypeBits) - 1);
-
-   VkMemoryAllocateInfo mem_info = {};
-   mem_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-   mem_info.allocationSize = memory_requirements.size;
-   mem_info.memoryTypeIndex = mem_type_idx;
-   image_data *data = nullptr;
-
-   /* Create image_data */
-   data = m_allocator.create<image_data>(1);
-   if (data == nullptr)
-   {
-      m_device_data.disp.DestroyImage(m_device, image.image, get_allocation_callbacks());
-      return VK_ERROR_OUT_OF_HOST_MEMORY;
-   }
-   image.data = reinterpret_cast<void *>(data);
-   image.status = wsi::swapchain_image::FREE;
-
-   res = m_device_data.disp.AllocateMemory(m_device, &mem_info, get_allocation_callbacks(), &data->memory);
-   assert(VK_SUCCESS == res);
-   if (res != VK_SUCCESS)
-   {
-      destroy_image(image);
-      return res;
-   }
-
-   res = m_device_data.disp.BindImageMemory(m_device, image.image, data->memory, 0);
-   assert(VK_SUCCESS == res);
-   if (res != VK_SUCCESS)
-   {
-      destroy_image(image);
-      return res;
-   }
-
-   /* Initialize presentation fence. */
-   auto present_fence = fence_sync::create(m_device_data);
-   if (!present_fence.has_value())
-   {
-      destroy_image(image);
-      return VK_ERROR_OUT_OF_HOST_MEMORY;
-   }
-   data->present_fence = std::move(present_fence.value());
-
-   return res;
-}
-
-VkResult swapchain::create_swapchain_image(VkImageCreateInfo image_create_info, swapchain_image &image)
-{
-   return m_device_data.disp.CreateImage(m_device, &image_create_info, get_allocation_callbacks(), &image.image);
+   auto &backing_memory = swapchain_image_factory::get_backing_memory_from_image<image_backing_memory_device>(image);
+   return backing_memory.allocate_and_bind(image.get_image());
 }
 
 void swapchain::present_image(const pending_present_request &pending_present)
@@ -296,82 +248,45 @@ void swapchain::present_image(const pending_present_request &pending_present)
    unpresent_image(pending_present.image_index);
 }
 
-void swapchain::destroy_image(wsi::swapchain_image &image)
+std::variant<VkResult, util::unique_ptr<vulkan_image_handle_creator>> swapchain::create_image_creator(
+   const VkSwapchainCreateInfoKHR &swapchain_create_info)
 {
-   util::unique_lock<util::recursive_mutex> image_status_lock(m_image_status_mutex);
-   if (!image_status_lock)
+   auto image_handle_creator = m_allocator.make_unique<vulkan_image_handle_creator>(m_allocator, swapchain_create_info);
+   if (image_handle_creator == nullptr)
    {
-      WSI_LOG_ERROR("Failed to acquire image status lock in destroy_image.");
-      abort();
-   }
-   if (image.status != wsi::swapchain_image::INVALID)
-   {
-      if (image.image != VK_NULL_HANDLE)
-      {
-         m_device_data.disp.DestroyImage(m_device, image.image, get_allocation_callbacks());
-         image.image = VK_NULL_HANDLE;
-      }
-
-      image.status = wsi::swapchain_image::INVALID;
+      return VK_ERROR_OUT_OF_HOST_MEMORY;
    }
 
-   image_status_lock.unlock();
-
-   if (image.data != nullptr)
+   auto compression_control = image_create_compression_control::create(m_device, &swapchain_create_info);
+   if (compression_control.has_value())
    {
-      auto *data = reinterpret_cast<image_data *>(image.data);
-      if (data->memory != VK_NULL_HANDLE)
-      {
-         m_device_data.disp.FreeMemory(m_device, data->memory, get_allocation_callbacks());
-         data->memory = VK_NULL_HANDLE;
-      }
-      m_allocator.destroy(1, data);
-      image.data = nullptr;
-   }
-}
-
-VkResult swapchain::image_set_present_payload(swapchain_image &image, VkQueue queue,
-                                              const queue_submit_semaphores &semaphores, const void *submission_pnext)
-{
-   auto data = reinterpret_cast<image_data *>(image.data);
-   return data->present_fence.set_payload(queue, semaphores, submission_pnext);
-}
-
-VkResult swapchain::image_wait_present(swapchain_image &image, uint64_t timeout)
-{
-   auto data = reinterpret_cast<image_data *>(image.data);
-   return data->present_fence.wait_payload(timeout);
-}
-
-VkResult swapchain::bind_swapchain_image(VkDevice &device, const VkBindImageMemoryInfo *bind_image_mem_info,
-                                         const VkBindImageMemorySwapchainInfoKHR *bind_sc_info)
-{
-   auto &device_data = layer::device_private_data::get(device);
-
-   const wsi::swapchain_image &swapchain_image = m_swapchain_images[bind_sc_info->imageIndex];
-   VkDeviceMemory memory = reinterpret_cast<image_data *>(swapchain_image.data)->memory;
-
-   return device_data.disp.BindImageMemory(device, bind_image_mem_info->image, memory, 0);
-}
-
-VkResult swapchain::get_required_image_creator_extensions(
-   const VkSwapchainCreateInfoKHR &swapchain_create_info,
-   util::vector<util::unique_ptr<swapchain_image_create_info_extension>> *extensions)
-{
-   assert(extensions != nullptr);
-
-   auto compression_control = swapchain_image_create_compression_control::create(
-      m_device_data.is_swapchain_compression_control_enabled(), swapchain_create_info);
-   if (compression_control)
-   {
-      if (!extensions->try_push_back(
-             m_allocator.make_unique<swapchain_image_create_compression_control>(*compression_control)))
+      auto sc_compresson_control =
+         m_allocator.make_unique<image_create_compression_control>(compression_control.value());
+      if (sc_compresson_control == nullptr)
       {
          return VK_ERROR_OUT_OF_HOST_MEMORY;
       }
+      TRY_LOG_CALL(image_handle_creator->add_extension(std::move(sc_compresson_control)));
    }
 
-   return VK_SUCCESS;
+   if (is_mutable_format_enabled())
+   {
+      const auto *image_format_list = util::find_extension<VkImageFormatListCreateInfo>(
+         VK_STRUCTURE_TYPE_IMAGE_FORMAT_LIST_CREATE_INFO, swapchain_create_info.pNext);
+      auto mutable_format_uptr = swapchain_image_create_mutable_format::create_unique(image_format_list, m_allocator);
+      if (!mutable_format_uptr)
+      {
+         return VK_ERROR_OUT_OF_HOST_MEMORY;
+      }
+      TRY_LOG_CALL(image_handle_creator->add_extension(std::move(mutable_format_uptr)));
+   }
+
+   return image_handle_creator;
+}
+
+swapchain_image_factory &swapchain::get_image_factory()
+{
+   return m_image_factory;
 }
 
 } /* namespace headless */

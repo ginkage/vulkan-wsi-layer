@@ -31,8 +31,7 @@
 
 #include <layer/private_data.hpp>
 #include <util/custom_allocator.hpp>
-
-#include "wsi_extension.hpp"
+#include <util/wsi_extension.hpp>
 
 namespace wsi
 {
@@ -43,7 +42,7 @@ namespace wsi
  * This class defines the VK_EXT_swapchain_maintenance1 extension
  * features.
  */
-class wsi_ext_swapchain_maintenance1 : public wsi_ext
+class wsi_ext_swapchain_maintenance1 : public util::wsi_ext
 {
 public:
    /**

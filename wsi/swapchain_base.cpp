@@ -37,6 +37,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <system_error>
+#include <algorithm>
 
 #include <unistd.h>
 #include <vulkan/vulkan.h>
@@ -45,7 +46,6 @@
 #include "util/helpers.hpp"
 
 #include "swapchain_base.hpp"
-#include "swapchain_image_create_extensions/mutable_format_extension.hpp"
 #include "wsi_factory.hpp"
 
 #include "extensions/present_timing.hpp"
@@ -116,7 +116,7 @@ void swapchain_base::page_flip_thread()
       }
 
       /* We may need to wait for the payload of the present sync of the oldest pending image to be finished. */
-      while ((vk_res = image_wait_present(sc_images[submit_info.image_index], timeout)) == VK_TIMEOUT)
+      while ((vk_res = sc_images[submit_info.image_index].wait_present(timeout)) == VK_TIMEOUT)
       {
          WSI_LOG_WARNING("Timeout waiting for image's present fences, retrying..");
       }
@@ -202,11 +202,11 @@ void swapchain_base::unpresent_image(uint32_t presented_index)
    if (m_present_mode == VK_PRESENT_MODE_SHARED_DEMAND_REFRESH_KHR ||
        m_present_mode == VK_PRESENT_MODE_SHARED_CONTINUOUS_REFRESH_KHR)
    {
-      m_swapchain_images[presented_index].status = swapchain_image::ACQUIRED;
+      m_swapchain_images[presented_index].set_status(swapchain_image::ACQUIRED);
    }
    else
    {
-      m_swapchain_images[presented_index].status = swapchain_image::FREE;
+      m_swapchain_images[presented_index].set_status(swapchain_image::FREE);
    }
 
    image_status_lock.unlock();
@@ -234,12 +234,10 @@ swapchain_base::swapchain_base(layer::device_private_data &dev_data, const VkAll
    , m_ancestor(VK_NULL_HANDLE)
    , m_device(VK_NULL_HANDLE)
    , m_queue(VK_NULL_HANDLE)
-   , m_image_create_info()
    , m_image_acquire_lock()
    , m_error_state(VK_NOT_READY)
    , m_started_presenting(false)
    , m_extensions(m_allocator)
-   , m_image_creator(m_allocator)
 {
 }
 
@@ -269,12 +267,6 @@ VkResult swapchain_base::init(VkDevice device, const VkSwapchainCreateInfoKHR *s
       TRY_LOG_CALL(ext->handle_scaling_create_info(device, swapchain_create_info, m_surface));
    }
 
-   /* Init image to invalid values. */
-   if (!m_swapchain_images.try_resize(swapchain_create_info->minImageCount))
-   {
-      return VK_ERROR_OUT_OF_HOST_MEMORY;
-   }
-
    const bool want_mutable_format = (swapchain_create_info->flags & VK_SWAPCHAIN_CREATE_MUTABLE_FORMAT_BIT_KHR) != 0;
 
    /* Enable mutable-format early so backends can react in init_platform. */
@@ -283,7 +275,6 @@ VkResult swapchain_base::init(VkDevice device, const VkSwapchainCreateInfoKHR *s
       enable_mutable_format();
    }
 
-   /* We have allocated images, we can call the platform init function if something needs to be done. */
    bool use_presentation_thread = true;
    TRY_LOG_CALL(init_platform(device, swapchain_create_info, use_presentation_thread));
 
@@ -292,38 +283,34 @@ VkResult swapchain_base::init(VkDevice device, const VkSwapchainCreateInfoKHR *s
       TRY_LOG_CALL(init_page_flip_thread());
    }
 
-   /* Initialize the image creator, and attach any required extensions */
-   TRY_LOG_CALL(image_creator_init(*swapchain_create_info));
-   m_image_create_info = m_image_creator.get_image_create_info();
+   const bool image_deferred_allocation =
+      swapchain_create_info->flags & VK_SWAPCHAIN_CREATE_DEFERRED_MEMORY_ALLOCATION_BIT_EXT;
+   for (size_t i = 0; i < swapchain_create_info->minImageCount; i++)
+   {
+      std::variant<VkResult, swapchain_image> swapchain_image_result = get_image_factory().create_swapchain_image();
+      if (auto error = std::get_if<VkResult>(&swapchain_image_result))
+      {
+         return *error;
+      }
+
+      swapchain_image image = std::move(std::get<swapchain_image>(swapchain_image_result));
+      if (!image_deferred_allocation)
+      {
+         TRY_LOG_CALL(allocate_and_bind_swapchain_image(image));
+         image.set_status(swapchain_image::FREE);
+      }
+
+      bool success = m_swapchain_images.try_push_back(std::move(image));
+      if (!success)
+      {
+         return VK_ERROR_OUT_OF_HOST_MEMORY;
+      }
+   }
 
    if (VkResult result = m_free_image_semaphore.init(m_swapchain_images.size()); result != VK_SUCCESS)
    {
       assert(result == VK_ERROR_OUT_OF_HOST_MEMORY);
       return result;
-   }
-
-   const bool image_deferred_allocation =
-      swapchain_create_info->flags & VK_SWAPCHAIN_CREATE_DEFERRED_MEMORY_ALLOCATION_BIT_EXT;
-   for (auto &img : m_swapchain_images)
-   {
-      TRY(create_swapchain_image(m_image_create_info, img));
-
-      if (image_deferred_allocation)
-      {
-         img.status = swapchain_image::UNALLOCATED;
-      }
-      else
-      {
-         TRY_LOG_CALL(allocate_and_bind_swapchain_image(m_image_create_info, img));
-      }
-
-      VkSemaphoreCreateInfo semaphore_info = {};
-      semaphore_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-
-      TRY_LOG_CALL(m_device_data.disp.CreateSemaphore(m_device, &semaphore_info, get_allocation_callbacks(),
-                                                      &img.present_semaphore));
-      TRY_LOG_CALL(m_device_data.disp.CreateSemaphore(m_device, &semaphore_info, get_allocation_callbacks(),
-                                                      &img.present_fence_wait));
    }
 
    if (!external_sync_supported(m_device_data))
@@ -426,15 +413,6 @@ void swapchain_base::teardown()
       auto *sc = reinterpret_cast<swapchain_base *>(m_ancestor);
       sc->clear_descendant();
    }
-   /* Release the images array. */
-   for (auto &img : m_swapchain_images)
-   {
-      /* Call implementation specific release */
-      destroy_image(img);
-
-      m_device_data.disp.DestroySemaphore(m_device, img.present_semaphore, get_allocation_callbacks());
-      m_device_data.disp.DestroySemaphore(m_device, img.present_fence_wait, get_allocation_callbacks());
-   }
 }
 
 VkResult swapchain_base::acquire_next_image(uint64_t timeout, VkSemaphore semaphore, VkFence fence,
@@ -463,19 +441,15 @@ VkResult swapchain_base::acquire_next_image(uint64_t timeout, VkSemaphore semaph
    size_t i;
    for (i = 0; i < m_swapchain_images.size(); ++i)
    {
-      if (m_swapchain_images[i].status == swapchain_image::UNALLOCATED)
+      if (m_swapchain_images[i].get_status() == swapchain_image::UNALLOCATED)
       {
-         auto res = allocate_and_bind_swapchain_image(m_image_create_info, m_swapchain_images[i]);
-         if (res != VK_SUCCESS)
-         {
-            WSI_LOG_ERROR("Failed to allocate swapchain image.");
-            return res != VK_ERROR_INITIALIZATION_FAILED ? res : VK_ERROR_OUT_OF_HOST_MEMORY;
-         }
+         TRY_LOG_CALL(allocate_and_bind_swapchain_image(m_swapchain_images[i]));
+         m_swapchain_images[i].set_status(swapchain_image::FREE);
       }
 
-      if (m_swapchain_images[i].status == swapchain_image::FREE)
+      if (m_swapchain_images[i].get_status() == swapchain_image::FREE)
       {
-         m_swapchain_images[i].status = swapchain_image::ACQUIRED;
+         m_swapchain_images[i].set_status(swapchain_image::ACQUIRED);
          *image_index = i;
          break;
       }
@@ -552,7 +526,7 @@ VkResult swapchain_base::get_swapchain_images(uint32_t *swapchain_image_count, V
 
       do
       {
-         swapchain_images[current_image] = m_swapchain_images[current_image].image;
+         swapchain_images[current_image] = m_swapchain_images[current_image].get_image();
 
          current_image++;
 
@@ -575,10 +549,10 @@ VkResult swapchain_base::get_swapchain_images(uint32_t *swapchain_image_count, V
 
 VkResult swapchain_base::create_aliased_image_handle(VkImage *image)
 {
-   /* Build an alias VkImageCreateInfo compatible with swapchain memory binding. */
-   VkImageCreateInfo alias_info = m_image_create_info;
-   alias_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+   auto image_create_info = get_image_factory().get_image_handle_creator().get_image_create_info();
 
+   VkImageCreateInfo alias_info = image_create_info;
+   alias_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
    return m_device_data.disp.CreateImage(m_device, &alias_info, get_allocation_callbacks(), image);
 }
 
@@ -601,12 +575,12 @@ VkResult swapchain_base::notify_presentation_engine(const pending_present_reques
    const bool descendant_started_presenting = has_descendant_started_presenting();
    if (descendant_started_presenting)
    {
-      m_swapchain_images[pending_present.image_index].status = swapchain_image::FREE;
+      m_swapchain_images[pending_present.image_index].set_status(swapchain_image::FREE);
       m_free_image_semaphore.post();
       return VK_ERROR_OUT_OF_DATE_KHR;
    }
 
-   m_swapchain_images[pending_present.image_index].status = swapchain_image::PENDING;
+   m_swapchain_images[pending_present.image_index].set_status(swapchain_image::PENDING);
    m_started_presenting = true;
 
    if (m_page_flip_thread_run)
@@ -637,7 +611,8 @@ VkResult swapchain_base::queue_present(VkQueue queue, const VkPresentInfoKHR *pr
       }
    }
 
-   const VkSemaphore *wait_semaphores = &m_swapchain_images[submit_info.pending_present.image_index].present_semaphore;
+   VkSemaphore present_semaphore = m_swapchain_images[submit_info.pending_present.image_index].get_present_semaphore();
+   const VkSemaphore *wait_semaphores = &present_semaphore;
    uint32_t sem_count = 1;
    if (!submit_info.use_image_present_semaphore)
    {
@@ -649,8 +624,7 @@ VkResult swapchain_base::queue_present(VkQueue queue, const VkPresentInfoKHR *pr
    {
       /* If the page flip thread is not running, we need to wait for any present payload here, before setting a new present payload. */
       constexpr uint64_t WAIT_PRESENT_TIMEOUT = 1000000000; /* 1 second */
-      TRY_LOG_CALL(
-         image_wait_present(m_swapchain_images[submit_info.pending_present.image_index], WAIT_PRESENT_TIMEOUT));
+      TRY_LOG_CALL(m_swapchain_images[submit_info.pending_present.image_index].wait_present(WAIT_PRESENT_TIMEOUT));
    }
 
    void *submission_pnext = nullptr;
@@ -660,8 +634,9 @@ VkResult swapchain_base::queue_present(VkQueue queue, const VkPresentInfoKHR *pr
    if (submit_info.handle_present_frame_boundary_event)
    {
       auto *ext = get_swapchain_extension<wsi::wsi_ext_frame_boundary>();
-      frame_boundary = handle_frame_boundary_event(
-         present_info, &m_swapchain_images[submit_info.pending_present.image_index].image, ext);
+
+      VkImage image = m_swapchain_images[submit_info.pending_present.image_index].get_image();
+      frame_boundary = handle_frame_boundary_event(present_info, &image, ext);
 
       if (frame_boundary)
       {
@@ -671,7 +646,7 @@ VkResult swapchain_base::queue_present(VkQueue queue, const VkPresentInfoKHR *pr
    if (submit_info.present_fence != VK_NULL_HANDLE)
    {
       signal_semaphores[count_signal_semaphores++] =
-         m_swapchain_images[submit_info.pending_present.image_index].present_fence_wait;
+         m_swapchain_images[submit_info.pending_present.image_index].get_present_fence_wait_semaphore();
    }
 #if VULKAN_WSI_LAYER_EXPERIMENTAL
    const VkPresentTimingInfoEXT *present_timing_info = nullptr;
@@ -695,14 +670,15 @@ VkResult swapchain_base::queue_present(VkQueue queue, const VkPresentInfoKHR *pr
       count_signal_semaphores > 0 ? signal_semaphores.data() : nullptr,
       count_signal_semaphores,
    };
-   TRY_LOG_CALL(image_set_present_payload(m_swapchain_images[submit_info.pending_present.image_index], queue,
-                                          semaphores, submission_pnext));
+
+   TRY_LOG_CALL(m_swapchain_images[submit_info.pending_present.image_index].set_present_payload(queue, semaphores,
+                                                                                                submission_pnext));
 
    if (submit_info.present_fence != VK_NULL_HANDLE)
    {
-      const queue_submit_semaphores wait_semaphores = {
-         &m_swapchain_images[submit_info.pending_present.image_index].present_fence_wait, 1, nullptr, 0
-      };
+      VkSemaphore present_fence_wait_sem =
+         m_swapchain_images[submit_info.pending_present.image_index].get_present_fence_wait_semaphore();
+      const queue_submit_semaphores wait_semaphores = { &present_fence_wait_sem, 1, nullptr, 0 };
       /*
        * Here we chain wait_semaphores with present_fence through present_fence_wait.
        */
@@ -724,13 +700,10 @@ VkResult swapchain_base::queue_present(VkQueue queue, const VkPresentInfoKHR *pr
 
 void swapchain_base::deprecate(VkSwapchainKHR descendant)
 {
-   for (auto &img : m_swapchain_images)
-   {
-      if (img.status == swapchain_image::FREE)
-      {
-         destroy_image(img);
-      }
-   }
+   /* Remove any images that have not been acquried or presented */
+   m_swapchain_images.erase(std::remove_if(m_swapchain_images.begin(), m_swapchain_images.end(),
+                                           [](auto &image) { return image.get_status() == swapchain_image::FREE; }),
+                            m_swapchain_images.end());
 
    /* Set its descendant. */
    m_descendant = descendant;
@@ -755,8 +728,7 @@ void swapchain_base::wait_for_pending_buffers()
        * and then subsequent calls might block if the semaphore value
        * has reached to zero.
        */
-      if ((img.status == swapchain_image::ACQUIRED) || (img.status == swapchain_image::FREE) ||
-          (img.status == swapchain_image::INVALID))
+      if ((img.get_status() == swapchain_image::ACQUIRED) || (img.get_status() == swapchain_image::FREE))
       {
          /* If the image is acquired or free, it is not pending. */
          non_pending_images++;
@@ -825,49 +797,30 @@ void swapchain_base::release_images(uint32_t image_count, const uint32_t *indice
       uint32_t index = indices[i];
       assert(index < m_swapchain_images.size());
       /* Applications can only pass acquired images that the device doesn't own */
-      assert(m_swapchain_images[index].status == swapchain_image::ACQUIRED);
+      assert(m_swapchain_images[index].get_status() == swapchain_image::ACQUIRED);
       unpresent_image(index);
    }
 }
 
 VkResult swapchain_base::is_bind_allowed(uint32_t image_index) const
 {
-   return m_swapchain_images[image_index].status != swapchain_image::UNALLOCATED ? VK_SUCCESS :
-                                                                                   VK_ERROR_OUT_OF_HOST_MEMORY;
+   return m_swapchain_images[image_index].get_status() != swapchain_image::UNALLOCATED ? VK_SUCCESS :
+                                                                                         VK_ERROR_OUT_OF_HOST_MEMORY;
 }
 
-bool swapchain_base::add_swapchain_extension(util::unique_ptr<wsi_ext> extension)
+bool swapchain_base::add_swapchain_extension(util::unique_ptr<util::wsi_ext> extension)
 {
    return m_extensions.add_extension(std::move(extension));
 }
 
-VkResult swapchain_base::image_creator_init(const VkSwapchainCreateInfoKHR &swapchain_create_info)
+VkResult swapchain_base::bind_swapchain_image(const VkBindImageMemoryInfo *bind_image_mem_info,
+                                              const VkBindImageMemorySwapchainInfoKHR *bind_sc_info)
 {
-   m_image_creator.init(swapchain_create_info);
+   TRY_LOG(is_bind_allowed(bind_sc_info->imageIndex),
+           "Bind is not allowed on images that haven't been acquired first.");
 
-   util::vector<util::unique_ptr<swapchain_image_create_info_extension>> extensions(
-      util::allocator(m_allocator, VK_SYSTEM_ALLOCATION_SCOPE_OBJECT));
-
-   TRY_LOG_CALL(get_required_image_creator_extensions(swapchain_create_info, &extensions));
-
-   if (is_mutable_format_enabled())
-   {
-      const auto *image_format_list = util::find_extension<VkImageFormatListCreateInfo>(
-         VK_STRUCTURE_TYPE_IMAGE_FORMAT_LIST_CREATE_INFO, swapchain_create_info.pNext);
-      auto mutable_format_uptr = swapchain_image_create_mutable_format::create_unique(image_format_list, m_allocator);
-      if (!mutable_format_uptr)
-      {
-         return VK_ERROR_OUT_OF_HOST_MEMORY;
-      }
-      if (!extensions.try_push_back(std::move(mutable_format_uptr)))
-      {
-         return VK_ERROR_OUT_OF_HOST_MEMORY;
-      }
-   }
-
-   TRY_LOG_CALL(m_image_creator.add_extensions(extensions));
-
-   return VK_SUCCESS;
+   wsi::swapchain_image &swapchain_image = m_swapchain_images[bind_sc_info->imageIndex];
+   return swapchain_image.bind(bind_image_mem_info);
 }
 
 } /* namespace wsi */

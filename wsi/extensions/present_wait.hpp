@@ -30,9 +30,7 @@
 
 #pragma once
 
-#include "wsi_extension.hpp"
 #include "present_id.hpp"
-
 #include <vulkan/vulkan.h>
 
 namespace wsi
@@ -44,7 +42,7 @@ namespace wsi
  * This class defines the present wait extension
  * implementation.
  */
-class wsi_ext_present_wait : public wsi_ext
+class wsi_ext_present_wait : public util::wsi_ext
 {
 public:
    /**
