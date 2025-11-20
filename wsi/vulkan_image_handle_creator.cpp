@@ -23,17 +23,20 @@
  */
 
 /**
- * @file swapchain_image_creator.cpp
+ * @file vulkan_image_handle_creator.cpp
  */
 
-#include "swapchain_image_creator.hpp"
-#include "swapchain_image_create_extensions/swapchain_image_create_info_extension.hpp"
+#include "vulkan_image_handle_creator.hpp"
+#include "extensions/image_create_info_extension.hpp"
 #include "util/helpers.hpp"
 
 namespace wsi
 {
 
-void swapchain_image_creator::init(const VkSwapchainCreateInfoKHR &swapchain_create_info)
+vulkan_image_handle_creator::vulkan_image_handle_creator(util::allocator allocator,
+                                                         const VkSwapchainCreateInfoKHR &swapchain_create_info)
+   : m_image_create_info()
+   , m_extensions(allocator)
 {
    m_image_create_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
    m_image_create_info.pNext = nullptr;
@@ -53,20 +56,17 @@ void swapchain_image_creator::init(const VkSwapchainCreateInfoKHR &swapchain_cre
    m_image_create_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 }
 
-VkResult swapchain_image_creator::add_extensions(
-   util::vector<util::unique_ptr<swapchain_image_create_info_extension>> &extensions)
+VkResult vulkan_image_handle_creator::create_image(layer::device_private_data &device_data,
+                                                   const util::allocator &allocator, VkImage &out_image_handle)
 {
-   for (auto &extension : extensions)
-   {
-      TRY(extension->extend_image_create_info(&m_image_create_info));
+   return device_data.disp.CreateImage(device_data.device, &m_image_create_info, allocator.get_original_callbacks(),
+                                       &out_image_handle);
+}
 
-      if (!m_extensions.try_push_back(std::move(extension)))
-      {
-         return VK_ERROR_OUT_OF_HOST_MEMORY;
-      }
-   }
-
-   return VK_SUCCESS;
+VkResult vulkan_image_handle_creator::add_extension(util::unique_ptr<image_create_info_extension> extension)
+{
+   TRY(extension->extend_image_create_info(&m_image_create_info));
+   return m_extensions.try_push_back(std::move(extension)) ? VK_SUCCESS : VK_ERROR_OUT_OF_HOST_MEMORY;
 }
 
 } /* namespace wsi */

@@ -79,6 +79,11 @@ static inline void wayland_object_destroy(struct wp_presentation_feedback *obj)
    wp_presentation_feedback_destroy(obj);
 }
 
+static inline void wayland_object_destroy(wl_buffer *obj)
+{
+   wl_buffer_destroy(obj);
+}
+
 template <typename T>
 struct wayland_deleter
 {

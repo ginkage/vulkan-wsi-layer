@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024 Arm Limited.
+ * Copyright (c) 2022-2025 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -36,7 +36,7 @@
 namespace wsi
 {
 
-external_memory::external_memory(const VkDevice &device, const util::allocator &allocator)
+external_memory::external_memory(const VkDevice &device, util::allocator allocator)
    : m_device(device)
    , m_allocator(allocator)
 {

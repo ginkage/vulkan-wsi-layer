@@ -23,43 +23,37 @@
  */
 
 /**
- * @file wsi_extension.hpp
+ * @file image_create_info_extension.hpp
  *
- * @brief Contains the base class definition for wsi extension.
+ * @brief Base class for swapchain image create info extensions.
  */
 
-#include "wsi_extension.hpp"
+#pragma once
 
-#include <util/log.hpp>
+#include <vulkan/vulkan.h>
+#include <util/wsi_extension.hpp>
 
 namespace wsi
 {
 
-wsi_ext_maintainer::wsi_ext_maintainer(const util::allocator &allocator)
-   : m_enabled_extensions(allocator)
+/**
+ * @brief This class should be used with the vulkan_image_handle_creator class
+ * to expand the image create properties that are passed to the ICD.
+ */
+class image_create_info_extension
 {
-}
+public:
+   /**
+    * @brief Extend image_create_info pNext with extension specific data.
+    *
+    * A swapchain image create info extension will use this function to add its
+    * extension specific data to pNext of image_create_info.
+    *
+    * @param[in, out] image_create_info VkImageCreateInfo for creating swapchain images
+    */
+   virtual VkResult extend_image_create_info(VkImageCreateInfo *image_create_info) = 0;
 
-bool wsi_ext_maintainer::add_extension(util::unique_ptr<wsi_ext> extension)
-{
-   if (extension)
-   {
-      auto it = std::find_if(m_enabled_extensions.begin(), m_enabled_extensions.end(),
-                             [&extension](util::unique_ptr<wsi_ext> &ext) { return ext->is_same_type(*extension); });
-
-      if (it != m_enabled_extensions.end())
-      {
-         WSI_LOG_WARNING("Adding a duplicate extension (%s) to the extension list.", extension->get_name());
-         assert(false && "Adding a duplicate extension to the extension list.");
-
-         /* Replace the extension. Preferably this should never happen at runtime. */
-         *it = std::move(extension);
-         return true;
-      }
-
-      return m_enabled_extensions.try_push_back(std::move(extension));
-   }
-   return false;
-}
+   virtual ~image_create_info_extension() = default;
+};
 
 } /* namespace wsi */

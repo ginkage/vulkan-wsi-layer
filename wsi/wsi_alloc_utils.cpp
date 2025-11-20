@@ -60,9 +60,8 @@ VkResult swapchain_wsialloc_allocator::allocate(const allocation_params &input, 
       allocation_flags |= WSIALLOC_ALLOCATE_HIGHEST_FIXED_RATE_COMPRESSION;
    }
 
-   wsialloc_allocate_info alloc_info = { input.importable_formats.data(),
-                                         static_cast<unsigned>(input.importable_formats.size()), input.extent.width,
-                                         input.extent.height, allocation_flags };
+   wsialloc_allocate_info alloc_info = { input.importable_formats, static_cast<unsigned>(input.importable_formats_size),
+                                         input.extent.width, input.extent.height, allocation_flags };
 
    /* Clear buffer_fds and average_row_strides for error purposes */
    for (int i = 0; i < WSIALLOC_MAX_PLANES; ++i)

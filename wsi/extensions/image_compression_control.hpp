@@ -36,8 +36,9 @@
 
 #include <util/custom_allocator.hpp>
 #include <util/macros.hpp>
+#include <util/wsi_extension.hpp>
 
-#include "wsi_extension.hpp"
+#include "image_create_info_extension.hpp"
 
 namespace wsi
 {
@@ -50,31 +51,26 @@ using util::MAX_PLANES;
  * Backends needing additional features will create its own local
  * copy and inherit this class.
  */
-class wsi_ext_image_compression_control : public wsi_ext
+class image_create_compression_control : public image_create_info_extension
 {
 public:
    /**
-    * @brief The name of the extension.
-    */
-   WSI_DEFINE_EXTENSION(VK_EXT_IMAGE_COMPRESSION_CONTROL_EXTENSION_NAME);
-
-   /**
-    * @brief Constructor for the wsi_ext_image_compression_control class.
+    * @brief Constructor for the image_create_compression_control class.
     *
     * @param extension Reference to VkImageCompressionControlEXT structure.
     */
-   wsi_ext_image_compression_control(const VkImageCompressionControlEXT &extension);
+   image_create_compression_control(const VkImageCompressionControlEXT &extension);
 
-   wsi_ext_image_compression_control(const wsi_ext_image_compression_control &extension);
+   image_create_compression_control(const image_create_compression_control &extension);
 
-   wsi_ext_image_compression_control &operator=(const wsi_ext_image_compression_control &extension)
+   image_create_compression_control &operator=(const image_create_compression_control &extension)
    {
       if (this == &extension)
       {
          return *this;
       }
 
-      auto compression_control = wsi_ext_image_compression_control(extension);
+      auto compression_control = image_create_compression_control(extension);
       std::swap(m_compression_control, compression_control.m_compression_control);
       for (uint32_t i = 0; i < compression_control.m_compression_control.compressionControlPlaneCount; i++)
       {
@@ -85,15 +81,15 @@ public:
    }
 
    /**
-    * @brief Create wsi_ext_image_compression_control class if deemed necessary.
+    * @brief Create image_create_compression_control class if deemed necessary.
     *
     * @param device The Vulkan device
     * @param swapchain_create_info Swapchain create info
-    * @return Valid wsi_ext_image_compression_control if requested by application,
+    * @return Valid image_create_compression_control if requested by application,
     * otherwise - an empty optional.
     */
-   static std::optional<wsi_ext_image_compression_control> create(
-      VkDevice device, const VkSwapchainCreateInfoKHR *swapchain_create_info);
+   static std::optional<image_create_compression_control> create(VkDevice device,
+                                                                 const VkSwapchainCreateInfoKHR *swapchain_create_info);
 
    /**
     * @brief This API is used to get the compression control properties of an image.
@@ -108,6 +104,8 @@ public:
     * @return The bitmask for image compression flags.
     */
    VkImageCompressionFlagsEXT get_bitmask_for_image_compression_flags();
+
+   VkResult extend_image_create_info(VkImageCreateInfo *image_create_info) override;
 
 private:
    /**

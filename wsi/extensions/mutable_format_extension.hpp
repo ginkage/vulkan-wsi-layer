@@ -32,12 +32,12 @@
 
 #include <vulkan/vulkan.h>
 #include <util/custom_allocator.hpp>
-#include "swapchain_image_create_info_extension.hpp"
+#include "image_create_info_extension.hpp"
 
 namespace wsi
 {
 
-class swapchain_image_create_mutable_format : public swapchain_image_create_info_extension
+class swapchain_image_create_mutable_format : public image_create_info_extension
 {
 public:
    swapchain_image_create_mutable_format() = delete;

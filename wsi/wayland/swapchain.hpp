@@ -43,43 +43,13 @@ extern "C" {
 
 #include <wsi/wsi_alloc_utils.hpp>
 
+#include <wsi/image_backing_memory_external.hpp>
 #include <wsi/external_memory.hpp>
 
 namespace wsi
 {
 namespace wayland
 {
-
-struct wayland_image_data
-{
-   wayland_image_data(const VkDevice &device, const util::allocator &allocator)
-      : external_mem(device, allocator)
-      , buffer(nullptr)
-   {
-   }
-
-   external_memory external_mem;
-   wl_buffer *buffer;
-   sync_fd_fence_sync present_fence;
-};
-
-struct image_creation_parameters
-{
-   wsialloc_format m_allocated_format;
-   util::vector<VkSubresourceLayout> m_image_layout;
-   VkExternalMemoryImageCreateInfoKHR m_external_info;
-   VkImageDrmFormatModifierExplicitCreateInfoEXT m_drm_mod_info;
-
-   image_creation_parameters(wsialloc_format allocated_format, util::allocator allocator,
-                             VkExternalMemoryImageCreateInfoKHR external_info,
-                             VkImageDrmFormatModifierExplicitCreateInfoEXT drm_mod_info)
-      : m_allocated_format(allocated_format)
-      , m_image_layout(allocator)
-      , m_external_info(external_info)
-      , m_drm_mod_info(drm_mod_info)
-   {
-   }
-};
 
 class swapchain : public wsi::swapchain_base
 {
@@ -94,32 +64,35 @@ public:
 
 protected:
    /**
-    * @brief Initialize platform specifics.
+    * @brief Platform specific initialization
+    *
+    * @param      device                  VkDevice object.
+    * @param      swapchain_create_info   Pointer to the swapchain create info struct.
+    * @param[out] use_presentation_thread Flag indicating if image presentation
+    *                                     must happen in a separate thread.
+    *
+    * @return VK_SUCCESS on success or an error code otherwise.
     */
    VkResult init_platform(VkDevice device, const VkSwapchainCreateInfoKHR *swapchain_create_info,
                           bool &use_presentation_thread) override;
 
    /**
+    * @brief Initalize backend specific image factory.
+    *
+    * @param swapchain_create_info Swapchain create info.
+    * @param image_factory Image factory to initalize.
+    * @return Vulkan result code.
+    */
+   VkResult init_image_factory(const VkSwapchainCreateInfoKHR &swapchain_create_info);
+
+   /**
     * @brief Allocates and binds a new swapchain image.
     *
-    * @param image_create_info Data to be used to create the image.
-    * @param image             Handle to the image.
+    * @param swapchain_image Swapchain image.
     *
     * @return Returns VK_SUCCESS on success, otherwise an appropriate error code.
     */
-   VkResult allocate_and_bind_swapchain_image(VkImageCreateInfo image_create_info, swapchain_image &image) override;
-
-   /**
-    * @brief Creates a new swapchain image.
-    *
-    * @param image_create_info Data to be used to create the image.
-    * @param image             Handle to the image.
-    *
-    * @return If image creation is successful returns VK_SUCCESS, otherwise
-    * will return VK_ERROR_OUT_OF_DEVICE_MEMORY or VK_ERROR_INITIALIZATION_FAILED
-    * depending on the error that occurred.
-    */
-   VkResult create_swapchain_image(VkImageCreateInfo image_create_info, swapchain_image &image) override;
+   VkResult allocate_and_bind_swapchain_image(swapchain_image &image) override;
 
    /**
     * @brief Method to present and image
@@ -129,13 +102,6 @@ protected:
     * @param pending_present Information on the pending present request.
     */
    void present_image(const pending_present_request &pending_present) override;
-
-   /**
-    * @brief Method to release a swapchain image
-    *
-    * @param image Handle to the image about to be released.
-    */
-   void destroy_image(swapchain_image &image) override;
 
    /**
     * @brief Method to check if there are any free images
@@ -156,52 +122,20 @@ protected:
    VkResult get_free_buffer(uint64_t *timeout) override;
 
    /**
-    * @brief Sets the present payload for a swapchain image.
+    * @brief Get the image factory used for creating swapchain images.
     *
-    * @param[in] image       The swapchain image for which to set a present payload.
-    * @param     queue       A Vulkan queue that can be used for any Vulkan commands needed.
-    * @param[in] sem_payload Array of Vulkan semaphores that constitute the payload.
-    * @param[in] submission_pnext Chain of pointers to attach to the payload submission.
-    *
-    * @return VK_SUCCESS on success or an error code otherwise.
+    * @return Swapchain image factory.
     */
-   VkResult image_set_present_payload(swapchain_image &image, VkQueue queue, const queue_submit_semaphores &semaphores,
-                                      const void *submission_pnext) override;
-
-   VkResult image_wait_present(swapchain_image &image, uint64_t timeout) override;
-
-   /**
-    * @brief Bind image to a swapchain
-    *
-    * @param device              is the logical device that owns the images and memory.
-    * @param bind_image_mem_info details the image we want to bind.
-    * @param bind_sc_info        describes the swapchain memory to bind to.
-    *
-    * @return VK_SUCCESS on success, otherwise on failure VK_ERROR_OUT_OF_HOST_MEMORY or VK_ERROR_OUT_OF_DEVICE_MEMORY
-    * can be returned.
-    */
-   VkResult bind_swapchain_image(VkDevice &device, const VkBindImageMemoryInfo *bind_image_mem_info,
-                                 const VkBindImageMemorySwapchainInfoKHR *bind_sc_info) override;
-
-   uint64_t get_modifier() override;
-
-   /**
-    * @brief Get backend specific image create info extensions.
-    *
-    * @param      swapchain_create_info Swapchain create info.
-    * @param[out] extensions            Backend specific swapchain image create info extensions.
-    */
-   VkResult get_required_image_creator_extensions(
-      const VkSwapchainCreateInfoKHR &swapchain_create_info,
-      util::vector<util::unique_ptr<swapchain_image_create_info_extension>> *extensions) override;
+   swapchain_image_factory &get_image_factory() override;
 
 private:
-   VkResult create_wl_buffer(const VkImageCreateInfo &image_create_info, swapchain_image &image,
-                             wayland_image_data *image_data);
-   VkResult allocate_image(wayland_image_data *image_data);
-   VkResult allocate_wsialloc(VkImageCreateInfo &image_create_info, wayland_image_data *image_data,
-                              util::vector<wsialloc_format> &importable_formats, wsialloc_format *allocated_format,
-                              bool avoid_allocation);
+   /**
+    * @brief Create a Wayland buffer image for the specified @p image
+    *
+    * @param image_external_memory Image external memory
+    * @return Wayland buffer object or nullptr if there was a failure.
+    */
+   wayland_owner<wl_buffer> create_wl_buffer(image_backing_memory_external &image_external_memory);
 
    /**
     * @brief Adds required extensions to the extension list of the swapchain
@@ -211,6 +145,15 @@ private:
     * @return VK_SUCCESS on success, other result codes on failure
     */
    VkResult add_required_extensions(VkDevice device, const VkSwapchainCreateInfoKHR *swapchain_create_info) override;
+
+   /**
+    * @brief Create the image creator with required extensions.
+    *
+    * @param swapchain_create_info VkSwapchainCreateInfoKHR passed by the application.
+    * @return If error occurred, returns VkResult, vulkan_image_handle_creator handle otherwise.
+    */
+   std::variant<VkResult, util::unique_ptr<vulkan_image_handle_creator>> create_image_creator(
+      const VkSwapchainCreateInfoKHR &swapchain_create_info);
 
    struct wl_display *m_display;
    struct wl_surface *m_surface;
@@ -222,28 +165,14 @@ private:
    struct wl_event_queue *m_buffer_queue;
 
    /**
-    * @brief Handle to the WSI allocator.
+    * @brief WSIAllocator instance.
     */
    util::unique_ptr<swapchain_wsialloc_allocator> m_wsi_allocator;
 
    /**
-    * @brief Image creation parameters used for all swapchain images.
+    * @brief Image factory that is used to create swapchain images.
     */
-   struct image_creation_parameters m_image_creation_parameters;
-
-   /**
-    * @brief Finds what formats are compatible with the requested swapchain image Vulkan Device and Wayland surface.
-    *
-    * @param      info               The Swapchain image creation info.
-    * @param[out] importable_formats A list of formats that can be imported to the Vulkan Device.
-    * @param[out] exportable_formats A list of formats that can be exported from the Vulkan Device.
-    *
-    * @return VK_SUCCESS or VK_ERROR_OUT_OF_HOST_MEMORY
-    */
-   VkResult get_surface_compatible_formats(const VkImageCreateInfo &info,
-                                           util::vector<wsialloc_format> &importable_formats,
-                                           util::vector<uint64_t> &exportable_modifers,
-                                           util::vector<VkDrmFormatModifierPropertiesEXT> &drm_format_props);
+   swapchain_image_factory m_image_factory;
 };
 
 } // namespace wayland

@@ -35,10 +35,9 @@
 
 #include <util/custom_allocator.hpp>
 #include <util/macros.hpp>
+#include <util/wsi_extension.hpp>
 
 #include <optional>
-
-#include "wsi_extension.hpp"
 
 namespace wsi
 {
@@ -49,7 +48,7 @@ namespace wsi
  * This class defines the frame boundary extension
  * features.
  */
-class wsi_ext_frame_boundary : public wsi_ext
+class wsi_ext_frame_boundary : public util::wsi_ext
 {
 public:
    /**

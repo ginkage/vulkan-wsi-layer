@@ -43,7 +43,8 @@ struct allocation_params
 {
    bool is_protected_memory;
    VkExtent3D extent;
-   util::vector<wsialloc_format> &importable_formats;
+   wsialloc_format *importable_formats;
+   size_t importable_formats_size;
    bool enable_fixed_rate;
    bool avoid_allocation;
 };

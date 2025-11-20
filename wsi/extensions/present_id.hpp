@@ -30,14 +30,14 @@
 
 #pragma once
 
+#include <atomic>
+#include <condition_variable>
+
 #include <util/custom_allocator.hpp>
 #include <util/custom_mutex.hpp>
 #include <util/macros.hpp>
 #include <util/log.hpp>
-#include <atomic>
-#include <condition_variable>
-
-#include "wsi_extension.hpp"
+#include <util/wsi_extension.hpp>
 
 namespace wsi
 {
@@ -48,7 +48,7 @@ namespace wsi
  * This class defines the present ID extension
  * features.
  */
-class wsi_ext_present_id : public wsi_ext
+class wsi_ext_present_id : public util::wsi_ext
 {
 public:
    /**

@@ -34,7 +34,7 @@
 
 #include "util/custom_allocator.hpp"
 
-namespace wsi
+namespace util
 {
 
 #define WSI_DEFINE_EXTENSION(x)           \
@@ -144,4 +144,4 @@ public:
     */
    bool add_extension(util::unique_ptr<wsi_ext> extension);
 };
-} /* namespace wsi */
+} /* namespace util */

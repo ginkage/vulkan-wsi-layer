@@ -30,14 +30,16 @@
 
 #pragma once
 
+extern "C" {
 #include <vulkan/vk_icd.h>
-#include <vulkan/vulkan.h>
+}
 
 #include "drm_display.hpp"
 #include "surface.hpp"
 #include <util/wsialloc/wsialloc.h>
 #include <wsi/external_memory.hpp>
 
+#include <wsi/image_backing_memory_external.hpp>
 #include <wsi/wsi_alloc_utils.hpp>
 
 namespace wsi
@@ -45,37 +47,6 @@ namespace wsi
 
 namespace display
 {
-
-struct display_image_data
-{
-   display_image_data(const VkDevice &device, const util::allocator &allocator)
-      : external_mem(device, allocator)
-      , fb_id(std::numeric_limits<uint32_t>::max())
-   {
-   }
-
-   external_memory external_mem;
-   uint32_t fb_id;
-   sync_fd_fence_sync present_fence;
-};
-
-struct image_creation_parameters
-{
-   wsialloc_format m_allocated_format;
-   util::vector<VkSubresourceLayout> m_image_layout;
-   VkExternalMemoryImageCreateInfoKHR m_external_info;
-   VkImageDrmFormatModifierExplicitCreateInfoEXT m_drm_mod_info;
-
-   image_creation_parameters(wsialloc_format allocated_format, util::allocator allocator,
-                             VkExternalMemoryImageCreateInfoKHR external_info,
-                             VkImageDrmFormatModifierExplicitCreateInfoEXT drm_mod_info)
-      : m_allocated_format(allocated_format)
-      , m_image_layout(allocator)
-      , m_external_info(external_info)
-      , m_drm_mod_info(drm_mod_info)
-   {
-   }
-};
 
 /**
  * @brief Display swapchain class.
@@ -87,15 +58,14 @@ public:
 
    virtual ~swapchain();
 
-   virtual VkResult init_platform(VkDevice device, const VkSwapchainCreateInfoKHR *swapchain_create_info,
-                                  bool &use_presentation_thread) override;
-
-   virtual VkResult bind_swapchain_image(VkDevice &device, const VkBindImageMemoryInfo *bind_image_mem_info,
-                                         const VkBindImageMemorySwapchainInfoKHR *bind_sc_info) override;
-
-   VkResult allocate_and_bind_swapchain_image(VkImageCreateInfo image_create_info, swapchain_image &image) override;
-
-   virtual VkResult create_swapchain_image(VkImageCreateInfo image_create_info, swapchain_image &image) override;
+   /**
+    * @brief Allocates and binds a new swapchain image.
+    *
+    * @param swapchain_image Swapchain image.
+    *
+    * @return Returns VK_SUCCESS on success, otherwise an appropriate error code.
+    */
+   VkResult allocate_and_bind_swapchain_image(swapchain_image &image) override;
 
    /**
     * @brief Method to present and image
@@ -106,40 +76,45 @@ public:
     */
    void present_image(const pending_present_request &pending_present) override;
 
-   virtual VkResult image_set_present_payload(swapchain_image &image, VkQueue queue,
-                                              const queue_submit_semaphores &semaphores,
-                                              const void *submission_pnext) override;
-
-   virtual VkResult image_wait_present(swapchain_image &image, uint64_t timeout) override;
-
-   void destroy_image(swapchain_image &image) override;
-
 protected:
    /**
-    * @brief Get backend specific image create info extensions.
+    * @brief Get the image factory used for creating swapchain images.
     *
-    * @param      swapchain_create_info Swapchain create info.
-    * @param[out] extensions            Backend specific swapchain image create info extensions.
+    * @return Swapchain image factory.
     */
-   VkResult get_required_image_creator_extensions(
-      const VkSwapchainCreateInfoKHR &swapchain_create_info,
-      util::vector<util::unique_ptr<swapchain_image_create_info_extension>> *extensions) override;
-
-   uint64_t get_modifier() override;
+   swapchain_image_factory &get_image_factory() override;
 
 private:
-   VkResult allocate_image(display_image_data *image_data);
+   /**
+    * @brief Platform specific initialization
+    *
+    * @param      device                  VkDevice object.
+    * @param      swapchain_create_info   Pointer to the swapchain create info struct.
+    * @param[out] use_presentation_thread Flag indicating if image presentation
+    *                                     must happen in a separate thread.
+    *
+    * @return VK_SUCCESS on success or an error code otherwise.
+    */
+   virtual VkResult init_platform(VkDevice device, const VkSwapchainCreateInfoKHR *swapchain_create_info,
+                                  bool &use_presentation_thread) override;
 
-   VkResult allocate_wsialloc(VkImageCreateInfo &image_create_info, display_image_data *image_data,
-                              util::vector<wsialloc_format> &importable_formats, wsialloc_format *allocated_format,
-                              bool avoid_allocation);
+   /**
+    * @brief Initalize backend specific image factory.
+    *
+    * @param swapchain_create_info Swapchain create info.
+    * @param image_factory Image factory to initalize.
+    * @return Vulkan result code.
+    */
+   VkResult init_image_factory(const VkSwapchainCreateInfoKHR &swapchain_create_info);
 
-   VkResult get_surface_compatible_formats(const VkImageCreateInfo &info,
-                                           util::vector<wsialloc_format> &importable_formats,
-                                           util::vector<uint64_t> &exportable_modifers,
-                                           util::vector<VkDrmFormatModifierPropertiesEXT> &drm_format_props);
-
-   VkResult create_framebuffer(const VkImageCreateInfo &image_create_info, display_image_data *image_data);
+   /**
+    * @brief Create a framebuffer for display
+    *
+    * @param image_external_memory Image external memory
+    * @param out_fb_id The framebuffer ID will be written here
+    * @return Vulkan result code
+    */
+   VkResult create_framebuffer(image_backing_memory_external &image_external_memory, uint32_t &out_fb_id);
 
    /**
     * @brief Adds required extensions to the extension list of the swapchain
@@ -150,10 +125,26 @@ private:
     */
    VkResult add_required_extensions(VkDevice device, const VkSwapchainCreateInfoKHR *swapchain_create_info) override;
 
-   util::unique_ptr<swapchain_wsialloc_allocator> m_wsi_allocator;
+   /**
+    * @brief Create the image creator with required extensions.
+    *
+    * @param swapchain_create_info VkSwapchainCreateInfoKHR passed by the application.
+    * @return If error occurred, returns VkResult, vulkan_image_handle_creator handle otherwise.
+    */
+   std::variant<VkResult, util::unique_ptr<vulkan_image_handle_creator>> create_image_creator(
+      const VkSwapchainCreateInfoKHR &swapchain_create_info);
 
    drm_display_mode *m_display_mode;
-   image_creation_parameters m_image_creation_parameters;
+
+   /**
+    * @brief WSIAllocator instance.
+    */
+   util::unique_ptr<swapchain_wsialloc_allocator> m_wsi_allocator;
+
+   /**
+    * @brief Image factory that is used to create swapchain images.
+    */
+   swapchain_image_factory m_image_factory;
 };
 } /* namespace display */
 
