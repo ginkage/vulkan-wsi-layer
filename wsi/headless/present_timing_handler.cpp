@@ -163,4 +163,13 @@ void wsi_ext_present_timing_headless::set_first_pixel_visible_timestamp_for_last
 {
    m_first_pixel_visible_timestamp_for_last_image = timestamp;
 }
+
+VkPresentStageFlagsEXT wsi_ext_present_timing_headless::stages_supported()
+{
+   VkPresentStageFlagsEXT stages =
+      VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT | VK_PRESENT_STAGE_REQUEST_DEQUEUED_BIT_EXT |
+      VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_OUT_BIT_EXT | VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_VISIBLE_BIT_EXT;
+   return stages;
+}
+
 #endif

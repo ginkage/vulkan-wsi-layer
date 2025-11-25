@@ -42,4 +42,11 @@ VWL_VKAPI_CALL(VkResult)
 wsi_layer_vkGetCalibratedTimestampsKHR(VkDevice device, uint32_t timestampCount,
                                        const VkCalibratedTimestampInfoKHR *pTimestampInfos, uint64_t *pTimestamps,
                                        uint64_t *pMaxDeviation) VWL_API_POST;
+
+VWL_VKAPI_CALL(VkResult)
+wsi_layer_vkGetPhysicalDeviceCalibrateableTimeDomainsKHR(VkPhysicalDevice physicalDevice, uint32_t *pTimeDomainCount,
+                                                         VkTimeDomainKHR *pTimeDomains) VWL_API_POST;
+VWL_VKAPI_CALL(VkResult)
+wsi_layer_vkGetPhysicalDeviceCalibrateableTimeDomainsEXT(VkPhysicalDevice physicalDevice, uint32_t *pTimeDomainCount,
+                                                         VkTimeDomainEXT *pTimeDomains) VWL_API_POST;
 #endif

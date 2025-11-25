@@ -57,10 +57,10 @@ class presentation_feedback
 {
 public:
    presentation_feedback(struct wp_presentation_feedback *feedback, wsi_ext_present_timing_wayland *ext_present_timing,
-                         uint32_t image_index)
+                         uint32_t image_index, uint64_t present_id)
       : m_feedback(feedback)
       , m_ext_present_id(nullptr)
-      , m_present_id(0)
+      , m_present_id(present_id)
       , m_ext_present_timing(ext_present_timing)
       , m_image_index(image_index)
    {

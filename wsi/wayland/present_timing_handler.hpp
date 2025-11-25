@@ -56,7 +56,7 @@ class wsi_ext_present_timing_wayland : public wsi::wsi_ext_present_timing
 public:
    static util::unique_ptr<wsi_ext_present_timing_wayland> create(
       VkDevice device, const util::allocator &allocator,
-      std::optional<VkTimeDomainKHR> image_first_pixel_visible_time_domain, uint32_t num_images);
+      std::optional<VkTimeDomainKHR> image_first_pixel_out_time_domain, uint32_t num_images);
 
    VkResult get_swapchain_timing_properties(uint64_t &timing_properties_counter,
                                             VkSwapchainTimingPropertiesEXT &timing_properties) override;
@@ -89,7 +89,8 @@ public:
     * @return Pointer to the presentation feedback object in the pending presents list.
     */
    presentation_feedback *insert_into_pending_present_feedback_list(uint32_t image_index,
-                                                                    struct wp_presentation_feedback *feedback_obj);
+                                                                    struct wp_presentation_feedback *feedback_obj,
+                                                                    uint64_t id);
    /*
     * @brief Copies the pixel out timestamp from the internal array to the present timing queue.
     *
@@ -112,6 +113,13 @@ public:
     */
    void init(wl_display *display, struct wl_event_queue *queue);
 
+   /*
+    * @brief The stages that are supported by the wayland backend.
+    *
+    * @return A bitmask of supported presentation stages.
+    */
+   VkPresentStageFlagsEXT stages_supported() override;
+
 private:
    /**
     * @brief Mutex for synchronising accesses to the pending present id list.
@@ -123,7 +131,8 @@ private:
     */
 
    wsi_ext_present_timing_wayland(const util::allocator &allocator, VkDevice device, uint32_t num_images,
-                                  util::vector<std::optional<uint64_t>> &&timestamp_first_pixel_out_storage);
+                                  util::vector<std::optional<uint64_t>> &&timestamp_first_pixel_out_storage,
+                                  bool stage_first_pixel_out_supported);
 
    /**
     * @brief Updates the first pixel out timing in the internal array.
@@ -151,6 +160,11 @@ private:
     * The timestamps are later copied to the first pixel out timing stage in presen_timing's m_queue.
     */
    util::vector<std::optional<uint64_t>> m_timestamp_first_pixel_out;
+
+   /**
+    * @brief Whether the first pixel out stage is supported.
+    */
+   bool m_stage_first_pixel_out_supported;
 
    /* Allow util::allocator to access the private constructor */
    friend util::allocator;

@@ -80,6 +80,13 @@ public:
     */
    void set_first_pixel_visible_timestamp_for_last_image(uint64_t timestamp);
 
+   /*
+    * @brief The stages that are supported by the headless backend.
+    *
+    * @return A bitmask of supported presentation stages.
+    */
+   VkPresentStageFlagsEXT stages_supported() override;
+
 private:
    wsi_ext_present_timing_headless(const util::allocator &allocator, VkDevice device, uint32_t num_images,
                                    std::optional<VkTimeDomainEXT> monotonic_domain);

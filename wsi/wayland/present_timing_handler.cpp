@@ -38,9 +38,10 @@ namespace wayland
 {
 wsi_ext_present_timing_wayland::wsi_ext_present_timing_wayland(
    const util::allocator &allocator, VkDevice device, uint32_t num_images,
-   util::vector<std::optional<uint64_t>> &&timestamp_first_pixel_out_storage)
+   util::vector<std::optional<uint64_t>> &&timestamp_first_pixel_out_storage, bool stage_first_pixel_out_supported)
    : wsi_ext_present_timing(allocator, device, num_images)
    , m_timestamp_first_pixel_out(allocator)
+   , m_stage_first_pixel_out_supported(stage_first_pixel_out_supported)
 {
    m_timestamp_first_pixel_out.swap(timestamp_first_pixel_out_storage);
 }
@@ -57,6 +58,8 @@ util::unique_ptr<wsi_ext_present_timing_wayland> wsi_ext_present_timing_wayland:
       return nullptr;
    }
 
+   util::vector<std::optional<uint64_t>> timestamp_first_pixel_out_storage(allocator);
+   bool stage_first_pixel_out_supported = false;
    if (image_first_pixel_out_time_domain.has_value())
    {
       std::tuple<VkTimeDomainEXT, bool> monotonic_query = { *image_first_pixel_out_time_domain, false };
@@ -75,16 +78,22 @@ util::unique_ptr<wsi_ext_present_timing_wayland> wsi_ext_present_timing_wayland:
          {
             return nullptr;
          }
+         if (!timestamp_first_pixel_out_storage.try_resize(num_images))
+         {
+            return nullptr;
+         }
+         stage_first_pixel_out_supported = true;
       }
    }
-   util::vector<std::optional<uint64_t>> timestamp_first_pixel_out_storage(allocator);
-   if (!timestamp_first_pixel_out_storage.try_resize(num_images))
+   else
    {
-      return nullptr;
+      timestamp_first_pixel_out_storage.clear();
+      timestamp_first_pixel_out_storage.shrink_to_fit();
    }
 
    return wsi_ext_present_timing::create<wsi_ext_present_timing_wayland>(
-      allocator, domains.data(), domains.size(), device, num_images, std::move(timestamp_first_pixel_out_storage));
+      allocator, domains.data(), domains.size(), device, num_images, std::move(timestamp_first_pixel_out_storage),
+      stage_first_pixel_out_supported);
 }
 
 VkResult wsi_ext_present_timing_wayland::get_swapchain_timing_properties(
@@ -113,7 +122,7 @@ void wsi_ext_present_timing_wayland::mark_buffer_release(uint32_t image_index)
 }
 
 presentation_feedback *wsi_ext_present_timing_wayland::insert_into_pending_present_feedback_list(
-   uint32_t image_index, struct wp_presentation_feedback *feedback_obj)
+   uint32_t image_index, struct wp_presentation_feedback *feedback_obj, uint64_t id)
 {
 
    util::unique_lock<util::mutex> lock(m_pending_presents_lock);
@@ -127,7 +136,7 @@ presentation_feedback *wsi_ext_present_timing_wayland::insert_into_pending_prese
     * that would discard or mark the pending present request as completed which could be an inidcation of a bug somewhere. */
    assert(!m_pending_presents[image_index].has_value());
 
-   m_pending_presents[image_index] = presentation_feedback(feedback_obj, this, image_index);
+   m_pending_presents[image_index] = presentation_feedback(feedback_obj, this, image_index, id);
    return &m_pending_presents[image_index].value();
 }
 
@@ -189,6 +198,17 @@ void wsi_ext_present_timing_wayland::init(wl_display *display, struct wl_event_q
    assert(m_queue == nullptr);
    m_display = display;
    m_queue = queue;
+}
+
+VkPresentStageFlagsEXT wsi_ext_present_timing_wayland::stages_supported()
+{
+   VkPresentStageFlagsEXT stages = VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT;
+
+   if (m_stage_first_pixel_out_supported)
+   {
+      stages |= VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_OUT_BIT_EXT;
+   }
+   return stages;
 }
 
 } // namespace wayland

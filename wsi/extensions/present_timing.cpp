@@ -29,7 +29,6 @@
  */
 #include <array>
 #include <cassert>
-#include <cmath>
 #include <wsi/swapchain_base.hpp>
 #include <util/helpers.hpp>
 
@@ -112,15 +111,6 @@ VkResult wsi_ext_present_timing::get_pixel_out_timing_to_queue(
    UNUSED(image_index);
    UNUSED(stage_timing_optional);
    return VK_SUCCESS;
-}
-
-static inline uint64_t ticks_to_ns(uint64_t ticks, const float &timestamp_period)
-{
-   /* timestamp_period is float (ns per tick).  Use double so we keep
-      52-bit integer precision (≈4.5×10¹⁵ ticks) without overflow. */
-   assert(std::isfinite(timestamp_period) && timestamp_period > 0.0f);
-   double ns = static_cast<double>(ticks) * static_cast<double>(timestamp_period);
-   return static_cast<uint64_t>(std::llround(ns));
 }
 
 swapchain_presentation_timing *wsi_ext_present_timing::get_pending_stage_timing(uint32_t image_index,
@@ -268,7 +258,7 @@ VkResult wsi_ext_present_timing::add_presentation_query_entry(VkQueue queue, uin
       return VK_ERROR_PRESENT_TIMING_QUEUE_FULL_EXT;
    }
    wsi::swapchain_presentation_entry presentation_entry(target_time, present_stage_queries, present_id, image_index,
-                                                        m_device.get_best_queue_family_index());
+                                                        m_device.get_best_queue_family_index(), stages_supported());
    if (!m_queue.try_push_back(std::move(presentation_entry)))
    {
       return VK_ERROR_OUT_OF_HOST_MEMORY;
@@ -312,6 +302,17 @@ VkResult wsi_ext_present_timing::add_presentation_entry(VkQueue queue, uint64_t 
    }
 
    return VK_SUCCESS;
+}
+
+VkResult wsi_ext_present_timing::queue_has_space()
+{
+   const util::unique_lock<util::mutex> lock(m_queue_mutex);
+   if (!lock)
+   {
+      WSI_LOG_WARNING("Failed to acquire queue mutex while checking for space in the queue");
+      return VK_ERROR_UNKNOWN;
+   }
+   return (m_queue.size() == m_queue.capacity()) ? VK_ERROR_PRESENT_TIMING_QUEUE_FULL_EXT : VK_SUCCESS;
 }
 
 swapchain_time_domains &wsi_ext_present_timing::get_swapchain_time_domains()
@@ -360,83 +361,44 @@ VkResult wsi_ext_present_timing::get_past_presentation_results(
       return VK_SUCCESS;
    }
 
+   uint64_t timing_count = 0, removed_entries = 0;
    VkPastPresentationTimingEXT *timings = past_present_timing_properties->pPresentationTimings;
-
-   bool seen_zero = false;
-   size_t last_zero_entry = 0;
-   uint64_t in = 0;
-   uint64_t out = 0;
-   uint64_t removed_entries = 0;
    const bool allow_partial = (flags & VK_PAST_PRESENTATION_TIMING_ALLOW_PARTIAL_RESULTS_BIT_EXT) != 0;
    const bool allow_out_of_order = (flags & VK_PAST_PRESENTATION_TIMING_ALLOW_OUT_OF_ORDER_RESULTS_BIT_EXT) != 0;
-   /*
-    * Single forward pass over the caller-supplied pPresentationTimings array:
-    *
-    * Locate the first matching presentation slot in `m_queue`.
-    *
-    * When a matching slot exists and at least one stage has available timings,
-    * copy its timestamps into the current entry.  Valid results are compacted
-    * in-place by writing to the `out` cursor while `in` continues to scan,
-    * so gaps are skipped without repeated shifting.
-    */
-   while (in < past_present_timing_properties->presentationTimingCount)
+   bool incomplete = false;
+
+   for (uint64_t i = 0; (i - removed_entries) < m_queue.size(); ++i)
    {
-      const uint64_t present_id = timings[in].presentId;
-      /*
-       * If presentId != 0, match the exact ID.
-       * If presentId == 0, pick the next unused zero-ID slot appearing
-       * after `last_zero_entry`, ensuring we never report the same slot twice.
-       */
-      auto slot = std::find_if(m_queue.begin(), m_queue.end(), [&](const swapchain_presentation_entry &e) {
-         bool zero_extra_cond =
-            (present_id == 0 && seen_zero) ? (&e - m_queue.data()) > static_cast<ptrdiff_t>(last_zero_entry) : true;
-         return (e.m_present_id == present_id) && zero_extra_cond;
-      });
+      auto slot = m_queue.begin() + (i - removed_entries);
 
-      if (slot != m_queue.end())
+      if (!slot->has_completed_stages(allow_partial))
       {
-         if (!slot->has_completed_stages(allow_partial))
+         if (allow_out_of_order)
          {
-            if (allow_out_of_order)
-            {
-               in++;
-               continue;
-            }
-            else
-            {
-               break;
-            }
+            continue;
          }
-
-         if (present_id == 0)
+         else
          {
-            seen_zero = true;
-            last_zero_entry = std::distance(m_queue.begin(), slot);
+            break;
          }
+      }
 
-         slot->populate(timings[in]);
-
-         if (in != out)
-         {
-            timings[out] = timings[in];
-         }
-
-         ++out;
-
-         if (timings[in].reportComplete)
+      if (timing_count < past_present_timing_properties->presentationTimingCount)
+      {
+         slot->populate(timings[timing_count]);
+         if (timings[timing_count++].reportComplete)
          {
             m_queue.erase(slot);
             removed_entries++;
          }
       }
-
-      ++in;
+      else
+      {
+         /* There are available results but were not returned. */
+         incomplete = true;
+      }
    }
-
-   past_present_timing_properties->presentationTimingCount = out;
-
-   const bool incomplete = (out < in) || (out < (get_num_available_results(flags) + removed_entries));
-
+   past_present_timing_properties->presentationTimingCount = timing_count;
    return incomplete ? VK_INCOMPLETE : VK_SUCCESS;
 }
 
@@ -472,7 +434,8 @@ VkResult wsi_ext_present_timing::physical_device_has_supported_queue_family(VkPh
 swapchain_presentation_entry::swapchain_presentation_entry(uint64_t target_time,
                                                            VkPresentStageFlagsEXT present_stage_queries,
                                                            uint64_t present_id, uint32_t image_index,
-                                                           uint32_t queue_family)
+                                                           uint32_t queue_family,
+                                                           VkPresentStageFlagsEXT stages_supported)
    : m_target_time(target_time)
    , m_target_stages(0)
    , m_present_id(present_id)
@@ -482,22 +445,25 @@ swapchain_presentation_entry::swapchain_presentation_entry(uint64_t target_time,
 {
    if (present_stage_queries & VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT)
    {
-      m_queue_end_timing = swapchain_presentation_timing();
+      m_queue_end_timing =
+         swapchain_presentation_timing(stages_supported & VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT);
       m_num_present_stages++;
    }
    if (present_stage_queries & VK_PRESENT_STAGE_REQUEST_DEQUEUED_BIT_EXT)
    {
-      m_latch_timing = swapchain_presentation_timing();
+      m_latch_timing = swapchain_presentation_timing(stages_supported & VK_PRESENT_STAGE_REQUEST_DEQUEUED_BIT_EXT);
       m_num_present_stages++;
    }
    if (present_stage_queries & VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_OUT_BIT_EXT)
    {
-      m_first_pixel_out_timing = swapchain_presentation_timing();
+      m_first_pixel_out_timing =
+         swapchain_presentation_timing(stages_supported & VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_OUT_BIT_EXT);
       m_num_present_stages++;
    }
    if (present_stage_queries & VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_VISIBLE_BIT_EXT)
    {
-      m_first_pixel_visible_timing = swapchain_presentation_timing();
+      m_first_pixel_visible_timing =
+         swapchain_presentation_timing(stages_supported & VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_VISIBLE_BIT_EXT);
       m_num_present_stages++;
    }
 }
@@ -615,6 +581,8 @@ void swapchain_presentation_entry::populate(VkPastPresentationTimingEXT &timing)
       timing.reportComplete = !has_outstanding_stages();
       timing.targetTime = m_target_time;
    }
+   /* Set how many stages have definitive results */
+   timing.presentStageCount = stage_index;
 }
 
 VkResult swapchain_time_domains::calibrate(VkPresentStageFlagBitsEXT present_stage,
@@ -630,6 +598,15 @@ VkResult swapchain_time_domains::calibrate(VkPresentStageFlagBitsEXT present_sta
    }
 
    return VK_ERROR_OUT_OF_HOST_MEMORY;
+}
+
+bool swapchain_time_domains::add_time_domain(util::unique_ptr<swapchain_time_domain> time_domain)
+{
+   if (time_domain)
+   {
+      return m_time_domains.try_push_back(std::move(time_domain));
+   }
+   return false;
 }
 
 VkResult swapchain_time_domains::get_swapchain_time_domain_properties(
@@ -653,21 +630,17 @@ VkResult swapchain_time_domains::get_swapchain_time_domain_properties(
 
    const uint32_t requested_domains_count = pSwapchainTimeDomainProperties->timeDomainCount;
    const uint32_t domains_count_to_write = std::min(requested_domains_count, available_domains_count);
-
-   pSwapchainTimeDomainProperties->pTimeDomains[0] = VK_TIME_DOMAIN_PRESENT_STAGE_LOCAL_EXT;
-   pSwapchainTimeDomainProperties->pTimeDomainIds[0] = 0;
+   if (pSwapchainTimeDomainProperties->pTimeDomains != nullptr)
+   {
+      pSwapchainTimeDomainProperties->pTimeDomains[0] = VK_TIME_DOMAIN_PRESENT_STAGE_LOCAL_EXT;
+   }
+   if (pSwapchainTimeDomainProperties->pTimeDomainIds != nullptr)
+   {
+      pSwapchainTimeDomainProperties->pTimeDomainIds[0] = 0;
+   }
    pSwapchainTimeDomainProperties->timeDomainCount = domains_count_to_write;
 
    return (domains_count_to_write < available_domains_count) ? VK_INCOMPLETE : VK_SUCCESS;
-}
-
-bool swapchain_time_domains::add_time_domain(util::unique_ptr<swapchain_time_domain> time_domain)
-{
-   if (time_domain)
-   {
-      return m_time_domains.try_push_back(std::move(time_domain));
-   }
-   return false;
 }
 
 VkResult check_time_domain_support(VkPhysicalDevice physical_device, std::tuple<VkTimeDomainEXT, bool> *domains,
