@@ -153,22 +153,22 @@ VkResult swapchain::add_required_extensions(VkDevice device, const VkSwapchainCr
    bool swapchain_support_enabled = swapchain_create_info->flags & VK_SWAPCHAIN_CREATE_PRESENT_TIMING_BIT_EXT;
    if (swapchain_support_enabled)
    {
-      std::optional<VkTimeDomainKHR> image_first_pixel_visible_time_domain;
+      std::optional<VkTimeDomainKHR> image_first_pixel_out_time_domain;
       if (m_wsi_surface->get_presentation_time_interface() != nullptr)
       {
          switch (m_wsi_surface->clockid())
          {
          case CLOCK_MONOTONIC:
-            image_first_pixel_visible_time_domain = VK_TIME_DOMAIN_CLOCK_MONOTONIC_KHR;
+            image_first_pixel_out_time_domain = VK_TIME_DOMAIN_CLOCK_MONOTONIC_KHR;
             break;
          case CLOCK_MONOTONIC_RAW:
-            image_first_pixel_visible_time_domain = VK_TIME_DOMAIN_CLOCK_MONOTONIC_RAW_KHR;
+            image_first_pixel_out_time_domain = VK_TIME_DOMAIN_CLOCK_MONOTONIC_RAW_KHR;
             break;
          }
       }
 
       if (!add_swapchain_extension(wsi_ext_present_timing_wayland::create(
-             m_device, m_allocator, image_first_pixel_visible_time_domain, swapchain_create_info->minImageCount)))
+             m_device, m_allocator, image_first_pixel_out_time_domain, swapchain_create_info->minImageCount)))
       {
          return VK_ERROR_OUT_OF_HOST_MEMORY;
       }
@@ -444,8 +444,8 @@ void swapchain::present_image(const pending_present_request &pending_present)
          wp_presentation *pres = m_wsi_surface->get_presentation_time_interface();
          struct wp_presentation_feedback *feedback = wp_presentation_feedback(pres, m_wsi_surface->get_wl_surface());
          wl_proxy_set_queue(reinterpret_cast<wl_proxy *>(feedback), m_buffer_queue);
-         presentation_feedback *feedback_obj =
-            present_timing_ext->insert_into_pending_present_feedback_list(pending_present.image_index, feedback);
+         presentation_feedback *feedback_obj = present_timing_ext->insert_into_pending_present_feedback_list(
+            pending_present.image_index, feedback, pending_present.present_id);
          if (feedback_obj == nullptr)
          {
             WSI_LOG_ERROR("Error adding to pending present feedback list");

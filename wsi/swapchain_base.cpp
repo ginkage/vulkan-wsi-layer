@@ -601,6 +601,21 @@ VkResult swapchain_base::notify_presentation_engine(const pending_present_reques
 VkResult swapchain_base::queue_present(VkQueue queue, const VkPresentInfoKHR *present_info,
                                        const swapchain_presentation_parameters &submit_info)
 {
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+   const VkPresentTimingInfoEXT *present_timing_info = nullptr;
+   const auto *present_timings_info =
+      util::find_extension<VkPresentTimingsInfoEXT>(VK_STRUCTURE_TYPE_PRESENT_TIMINGS_INFO_EXT, present_info->pNext);
+   if (present_timings_info != nullptr)
+   {
+      present_timing_info = present_timings_info->pTimingInfos;
+      assert(present_timing_info != nullptr);
+      auto *ext_present_timing = get_swapchain_extension<wsi::wsi_ext_present_timing>(true);
+      if (present_timing_info->presentStageQueries)
+      {
+         TRY(ext_present_timing->queue_has_space());
+      }
+   }
+#endif
    if (submit_info.switch_presentation_mode)
    {
       /* Assert when a presentation mode switch is requested and the swapchain_maintenance1 extension which implements this is not available */
@@ -649,19 +664,12 @@ VkResult swapchain_base::queue_present(VkQueue queue, const VkPresentInfoKHR *pr
          m_swapchain_images[submit_info.pending_present.image_index].get_present_fence_wait_semaphore();
    }
 #if VULKAN_WSI_LAYER_EXPERIMENTAL
-   const VkPresentTimingInfoEXT *present_timing_info = nullptr;
-   const auto *present_timings_info =
-      util::find_extension<VkPresentTimingsInfoEXT>(VK_STRUCTURE_TYPE_PRESENT_TIMINGS_INFO_EXT, present_info->pNext);
-   if (present_timings_info != nullptr)
+   if ((present_timing_info != nullptr) &&
+       (present_timing_info->presentStageQueries & VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT))
    {
-      present_timing_info = present_timings_info->pTimingInfos;
-      assert(present_timing_info != nullptr);
-      if (present_timing_info->presentStageQueries & VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT)
-      {
-         auto *ext_present_timing = get_swapchain_extension<wsi::wsi_ext_present_timing>(true);
-         signal_semaphores[count_signal_semaphores++] =
-            ext_present_timing->get_image_present_semaphore(submit_info.pending_present.image_index);
-      }
+      auto *ext_present_timing = get_swapchain_extension<wsi::wsi_ext_present_timing>(true);
+      signal_semaphores[count_signal_semaphores++] =
+         ext_present_timing->get_image_present_semaphore(submit_info.pending_present.image_index);
    }
 #endif
    queue_submit_semaphores semaphores = {

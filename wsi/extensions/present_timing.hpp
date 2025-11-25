@@ -40,6 +40,7 @@
 #include <functional>
 #include <cassert>
 #include <variant>
+#include <cmath>
 
 #include <layer/wsi_layer_experimental.hpp>
 #include <layer/private_data.hpp>
@@ -78,7 +79,15 @@ struct swapchain_presentation_timing
     */
    bool m_set{};
 
-   swapchain_presentation_timing()
+   /**
+    * For unsupported present stages (i.e. when stage_supported = false), the m_set is
+    * set to true. This allows the application to request stages that are not supported
+    * by the backend and get a response of zero.
+    */
+   swapchain_presentation_timing(bool stage_supported)
+      : m_timedomain_id(0)
+      , m_time(0)
+      , m_set(!stage_supported)
    {
    }
 
@@ -148,7 +157,7 @@ struct swapchain_presentation_entry
    std::optional<swapchain_presentation_timing> m_first_pixel_visible_timing;
 
    swapchain_presentation_entry(uint64_t target_time, VkPresentStageFlagsEXT present_stage_queries, uint64_t present_id,
-                                uint32_t image_index, uint32_t queue_family);
+                                uint32_t image_index, uint32_t queue_family, VkPresentStageFlagsEXT stages_supported);
    swapchain_presentation_entry(swapchain_presentation_entry &&) noexcept = default;
    swapchain_presentation_entry &operator=(swapchain_presentation_entry &&) noexcept = default;
 
@@ -299,8 +308,8 @@ public:
     *
     * @return Returns VK_SUCCESS on success, otherwise an appropriate error code.
     */
-   VkResult get_swapchain_time_domain_properties(VkSwapchainTimeDomainPropertiesEXT *pSwapchainTimeDomainProperties,
-                                                 uint64_t *pTimeDomainsCounter);
+   static VkResult get_swapchain_time_domain_properties(
+      VkSwapchainTimeDomainPropertiesEXT *pSwapchainTimeDomainProperties, uint64_t *pTimeDomainsCounter);
 
 private:
    util::vector<util::unique_ptr<swapchain_time_domain>> m_time_domains;
@@ -534,6 +543,13 @@ public:
                                    const VkPresentTimingInfoEXT &timing_info);
 
    /**
+    * @brief Check whether the queue has space for an entry.
+    *
+    * @return VK_SUCCESS when the there is space left in the queue, error otherwise.
+    */
+   VkResult queue_has_space();
+
+   /**
     * @brief Set the time for a stage, if it exists and is pending.
     *
     * @param image_index The index of the image in the present queue.
@@ -621,6 +637,13 @@ public:
     * @return VK_SUCCESS iff out set.
     */
    static VkResult physical_device_has_supported_queue_family(VkPhysicalDevice physical_device, bool &out);
+
+   /**
+    * @brief This function is used to check the present timing stages that are supported. It can be overriden by specific backends.
+    *
+    * @return The stages that are supported.
+    */
+   virtual VkPresentStageFlagsEXT stages_supported() = 0;
 
 protected:
    /**
@@ -781,6 +804,44 @@ private:
 VkResult check_time_domain_support(VkPhysicalDevice physical_device, std::tuple<VkTimeDomainEXT, bool> *domains,
                                    size_t domain_size);
 
+/**
+ * @brief Checks whether present timing dependencies are supported on a given physical device.
+ *
+ * This function queries the list of available device extensions for the specified
+ * Vulkan physical device and determines whether the `VK_KHR_maintenance9` extension
+ * is supported. If the extension is found, it further queries the device features
+ * to check if the `maintenance9` feature is enabled.
+ *
+ * @param physical_device Physical device used for the query
+ *
+ * @return std::variant<bool, VkResult>
+ *         - `true`  if the device supports present timing dependencies
+ *                    (i.e., `VK_KHR_maintenance9` extension and its feature are available).
+ *         - `false` if the device does not support the `VK_KHR_maintenance9` extension or its feature.
+ *         - `VkResult` (e.g., `VK_ERROR_OUT_OF_HOST_MEMORY`) if an error occurs during property enumeration.
+ */
 std::variant<bool, VkResult> present_timing_dependencies_supported(VkPhysicalDevice physical_device);
+
+/**
+ * @brief Converts a hardware tick count to nanoseconds.
+ *
+ * This function converts a given number of GPU hardware timestamp ticks
+ * into nanoseconds using the provided timestamp period.
+ *
+ * @param ticks The number of timestamp ticks to convert.
+ * @param timestamp_period The duration of a single tick, in nanoseconds per tick.
+ *
+ * @return The equivalent time duration in nanoseconds.
+ *
+ */
+inline uint64_t ticks_to_ns(uint64_t ticks, const float &timestamp_period)
+{
+   /* timestamp_period is float (ns per tick).  Use double so we keep
+      52-bit integer precision (≈4.5×10¹⁵ ticks) without overflow. */
+   assert(std::isfinite(timestamp_period) && timestamp_period > 0.0f);
+   double ns = static_cast<double>(ticks) * static_cast<double>(timestamp_period);
+   return static_cast<uint64_t>(std::llround(ns));
+}
+
 } /* namespace wsi */
 #endif
