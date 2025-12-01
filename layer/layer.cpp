@@ -756,6 +756,11 @@ wsi_layer_vkGetInstanceProcAddr(VkInstance instance, const char *funcName) VWL_A
    GET_PROC_ADDR(vkDestroyInstance);
    GET_PROC_ADDR(vkCreateDevice);
 
+   if (instance == VK_NULL_HANDLE)
+   {
+      return nullptr;
+   }
+
    auto &instance_data = layer::instance_private_data::get(instance);
    const bool core_1_1 = instance_data.api_version >= VK_API_VERSION_1_1;
    if ((instance_data.is_instance_extension_enabled(VK_KHR_DEVICE_GROUP_EXTENSION_NAME) &&
