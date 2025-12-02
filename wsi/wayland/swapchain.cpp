@@ -75,6 +75,11 @@ public:
       return m_buffer.get();
    }
 
+   void remove_proxy()
+   {
+      wl_proxy_set_queue(reinterpret_cast<wl_proxy *>(m_buffer.get()), nullptr);
+   }
+
 private:
    wayland::wayland_owner<wl_buffer> m_buffer;
 };
@@ -99,7 +104,11 @@ swapchain::~swapchain()
    {
       for (auto &img : m_swapchain_images)
       {
-         img.set_data(util::unique_ptr<swapchain_image_data>());
+         auto data = img.get_data<wayland_image_data>();
+         if (data != nullptr)
+         {
+            data->remove_proxy();
+         }
       }
 
       wl_display_roundtrip_queue(m_display, m_buffer_queue);
