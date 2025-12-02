@@ -97,6 +97,11 @@ swapchain::~swapchain()
 
    if (m_buffer_queue != nullptr)
    {
+      for (auto &img : m_swapchain_images)
+      {
+         img.set_data(util::unique_ptr<swapchain_image_data>());
+      }
+
       wl_display_roundtrip_queue(m_display, m_buffer_queue);
       wl_event_queue_destroy(m_buffer_queue);
    }
