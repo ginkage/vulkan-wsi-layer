@@ -156,6 +156,10 @@ VkResult swapchain::init_image_factory(const VkSwapchainCreateInfoKHR &swapchain
    auto image_handle_creator =
       std::get<util::unique_ptr<vulkan_image_handle_creator>>(std::move(image_handle_creator_result));
    auto backing_memory_creator = m_allocator.make_unique<device_backing_memory_creator>(m_device_data);
+   if (backing_memory_creator == nullptr)
+   {
+      return VK_ERROR_OUT_OF_HOST_MEMORY;
+   }
 
    m_image_factory.init(std::move(image_handle_creator), std::move(backing_memory_creator), false, true);
    return VK_SUCCESS;

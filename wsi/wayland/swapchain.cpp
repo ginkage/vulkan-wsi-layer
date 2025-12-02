@@ -272,6 +272,10 @@ VkResult swapchain::init_image_factory(const VkSwapchainCreateInfoKHR &swapchain
 
    auto backing_memory_creator =
       m_allocator.make_unique<external_image_backing_memory_creator>(m_device_data, *m_wsi_allocator, wsialloc_args);
+   if (backing_memory_creator == nullptr)
+   {
+      return VK_ERROR_OUT_OF_HOST_MEMORY;
+   }
 
    m_image_factory.init(std::move(image_handle_creator), std::move(backing_memory_creator), true, false);
    return VK_SUCCESS;
