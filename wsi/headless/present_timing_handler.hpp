@@ -43,7 +43,8 @@ class wsi_ext_present_timing_headless : public wsi::wsi_ext_present_timing
 {
 public:
    static util::unique_ptr<wsi_ext_present_timing_headless> create(const util::allocator &allocator,
-                                                                   const VkDevice &device, uint32_t num_images);
+                                                                   const VkDevice &device, uint32_t num_images,
+                                                                   bool is_swapchain_using_shared_present_mode);
 
    VkResult get_swapchain_timing_properties(uint64_t &timing_properties_counter,
                                             VkSwapchainTimingPropertiesEXT &timing_properties) override;
@@ -89,7 +90,8 @@ public:
 
 private:
    wsi_ext_present_timing_headless(const util::allocator &allocator, VkDevice device, uint32_t num_images,
-                                   std::optional<VkTimeDomainEXT> monotonic_domain);
+                                   std::optional<VkTimeDomainEXT> monotonic_domain,
+                                   bool is_swapchain_using_shared_present_mode);
 
    /* Allow util::allocator to access the private constructor */
    friend util::allocator;
@@ -101,6 +103,11 @@ private:
     * Timestamp for the last VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_VISIBLE_BIT_EXT stage.
     */
    std::optional<uint64_t> m_first_pixel_visible_timestamp_for_last_image;
+
+   /**
+    * @brief Indicates whether the swapchain is using shared present mode.
+    */
+   bool m_is_swapchain_using_shared_present_mode;
 };
 
 #endif

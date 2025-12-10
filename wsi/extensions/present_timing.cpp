@@ -80,28 +80,42 @@ wsi_ext_present_timing::~wsi_ext_present_timing()
    }
 }
 
-VkResult wsi_ext_present_timing::init_timing_resources()
+VkResult wsi_ext_present_timing::init(util::unique_ptr<wsi::vulkan_time_domain> *domains, size_t domain_count)
 {
+   for (size_t i = 0; i < domain_count; i++)
+   {
+      if (!get_swapchain_time_domains().add_time_domain(std::move(domains[i])))
+      {
+         WSI_LOG_ERROR("Failed to add a time domain.");
+         return VK_ERROR_OUT_OF_HOST_MEMORY;
+      }
+   }
+
+   if (is_present_stage_supported(VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT))
+   {
+      if (!m_present_semaphore.try_resize(m_num_images))
+      {
+         return VK_ERROR_OUT_OF_HOST_MEMORY;
+      }
+      for (auto &semaphore : m_present_semaphore)
+      {
+         semaphore = VK_NULL_HANDLE;
+         VkSemaphoreCreateInfo semaphore_info = {};
+         semaphore_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+         if (m_device.disp.CreateSemaphore(m_device.device, &semaphore_info, m_allocator.get_original_callbacks(),
+                                           &semaphore) != VK_SUCCESS)
+         {
+            return VK_ERROR_OUT_OF_HOST_MEMORY;
+         }
+      }
+      TRY_LOG_CALL(m_queue_family_resources.init(m_device.get_best_queue_family_index(), m_num_images));
+   }
+
    if (!m_scheduled_present_targets.try_resize(m_num_images))
    {
       return VK_ERROR_OUT_OF_HOST_MEMORY;
    }
-   if (!m_present_semaphore.try_resize(m_num_images))
-   {
-      return VK_ERROR_OUT_OF_HOST_MEMORY;
-   }
-   for (auto &semaphore : m_present_semaphore)
-   {
-      semaphore = VK_NULL_HANDLE;
-      VkSemaphoreCreateInfo semaphore_info = {};
-      semaphore_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-      if (m_device.disp.CreateSemaphore(m_device.device, &semaphore_info, m_allocator.get_original_callbacks(),
-                                        &semaphore) != VK_SUCCESS)
-      {
-         return VK_ERROR_OUT_OF_HOST_MEMORY;
-      }
-   }
-   TRY_LOG_CALL(m_queue_family_resources.init(m_device.get_best_queue_family_index(), m_num_images));
+
    return VK_SUCCESS;
 }
 
@@ -134,6 +148,11 @@ swapchain_presentation_entry *wsi_ext_present_timing::get_pending_stage_entry(ui
       }
    }
    return nullptr;
+}
+
+bool wsi_ext_present_timing::is_present_stage_supported(VkPresentStageFlagBitsEXT present_stage)
+{
+   return stages_supported() & present_stage;
 }
 
 VkResult wsi_ext_present_timing::write_pending_results()
@@ -263,7 +282,8 @@ VkResult wsi_ext_present_timing::add_presentation_query_entry(VkQueue queue, uin
    {
       return VK_ERROR_OUT_OF_HOST_MEMORY;
    }
-   if (present_stage_queries & VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT)
+   if ((present_stage_queries & VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT) &&
+       is_present_stage_supported(VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT))
    {
       TRY_LOG_CALL(queue_submit_queue_end_timing(m_device, queue, image_index));
    }
@@ -322,6 +342,7 @@ swapchain_time_domains &wsi_ext_present_timing::get_swapchain_time_domains()
 
 VkSemaphore wsi_ext_present_timing::get_image_present_semaphore(uint32_t image_index)
 {
+   assert(is_present_stage_supported(VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT));
    return m_present_semaphore[image_index];
 }
 

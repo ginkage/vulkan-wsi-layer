@@ -592,6 +592,13 @@ protected:
       }
    }
 
+   /**
+    * @brief Check if the swapchain is using a shared present mode.
+    *
+    * @return true if using a shared present mode, false otherwise.
+    */
+   bool is_using_shared_present_mode();
+
 private:
    util::mutex m_image_acquire_lock;
    /**
