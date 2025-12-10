@@ -446,15 +446,7 @@ public:
                                      VkDevice device, uint32_t num_images, arg_types &&...args)
    {
       auto present_timing = allocator.make_unique<T>(allocator, device, num_images, std::forward<arg_types>(args)...);
-      for (size_t i = 0; i < domain_count; i++)
-      {
-         if (!present_timing->get_swapchain_time_domains().add_time_domain(std::move(domains[i])))
-         {
-            WSI_LOG_ERROR("Failed to add a time domain.");
-            return nullptr;
-         }
-      }
-      if (present_timing->init_timing_resources() != VK_SUCCESS)
+      if (present_timing->wsi_ext_present_timing::init(domains, domain_count) != VK_SUCCESS)
       {
          WSI_LOG_ERROR("Failed to initialize present timing.");
          return nullptr;
@@ -645,6 +637,14 @@ public:
     */
    virtual VkPresentStageFlagsEXT stages_supported() = 0;
 
+   /**
+    * @brief Check if a present stage is supported.
+    *
+    * @param present_stage Present stage to check.
+    * @return true if stage is supported, false otherwise.
+    */
+   bool is_present_stage_supported(VkPresentStageFlagBitsEXT present_stage);
+
 protected:
    /**
     * @brief User provided memory allocation callbacks.
@@ -721,11 +721,13 @@ private:
                                           uint32_t image_index);
 
    /**
-    * @brief Initialize resources for timing queries.
+    * @brief Initialize the present timing extension.
     *
-    * @return VK_SUCCESS if the initialization is successful and error if otherwise.
+    * @param domains Array of time domains.
+    * @param domain_count Size of the @p domains array.
+    * @return VK_SUCCESS when the initialization is successful and error otherwise.
     */
-   VkResult init_timing_resources();
+   VkResult init(util::unique_ptr<wsi::vulkan_time_domain> *domains, size_t domain_count);
 
    /**
     * @brief Get all the pending results that are available to the queue.

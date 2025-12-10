@@ -54,6 +54,12 @@
 namespace wsi
 {
 
+bool swapchain_base::is_using_shared_present_mode()
+{
+   return (m_present_mode == VK_PRESENT_MODE_SHARED_DEMAND_REFRESH_KHR ||
+           m_present_mode == VK_PRESENT_MODE_SHARED_CONTINUOUS_REFRESH_KHR);
+}
+
 void swapchain_base::page_flip_thread()
 {
    auto &sc_images = m_swapchain_images;
@@ -69,40 +75,20 @@ void swapchain_base::page_flip_thread()
    while (m_page_flip_thread_run)
    {
       pending_present_request submit_info{};
-      if (m_present_mode == VK_PRESENT_MODE_SHARED_CONTINUOUS_REFRESH_KHR)
+      /* Waiting for the page_flip_semaphore which will be signalled once there is an
+       * image to display.*/
       {
-         /* In continuous mode the application will only make one presentation request,
-          * therefore the page flip semaphore will only be signalled once. */
-         if (m_first_present)
+         VkResult wait_res = m_page_flip_semaphore.wait(SEMAPHORE_TIMEOUT);
+         if (wait_res == VK_TIMEOUT)
          {
-            VkResult wait_res = m_page_flip_semaphore.wait(SEMAPHORE_TIMEOUT);
-            if (wait_res == VK_TIMEOUT)
-            {
-               /* Image is not ready yet. */
-               continue;
-            }
-            assert(wait_res == VK_SUCCESS);
+            /* Image is not ready yet. */
+            continue;
          }
-
-         /* For continuous mode there will be only one image in the swapchain.
-          * This image will always be used, and there is no pending state in this case. */
-         submit_info.image_index = 0;
       }
-      else
-      {
-         /* Waiting for the page_flip_semaphore which will be signalled once there is an
-          * image to display.*/
-         {
-            VkResult wait_res = m_page_flip_semaphore.wait(SEMAPHORE_TIMEOUT);
-            if (wait_res == VK_TIMEOUT)
-            {
-               /* Image is not ready yet. */
-               continue;
-            }
-         }
 
-         /* We want to present the oldest queued for present image from our present queue,
-          * which we can find at the sc->pending_buffer_pool.head index. */
+      /* We want to present the oldest queued for present image from our present queue,
+       * which we can find at the sc->pending_buffer_pool.head index. */
+      {
          util::unique_lock<util::recursive_mutex> image_status_lock(m_image_status_mutex);
          if (!image_status_lock)
          {
@@ -199,20 +185,12 @@ void swapchain_base::unpresent_image(uint32_t presented_index)
       abort();
    }
 
-   if (m_present_mode == VK_PRESENT_MODE_SHARED_DEMAND_REFRESH_KHR ||
-       m_present_mode == VK_PRESENT_MODE_SHARED_CONTINUOUS_REFRESH_KHR)
-   {
-      m_swapchain_images[presented_index].set_status(swapchain_image::ACQUIRED);
-   }
-   else
-   {
-      m_swapchain_images[presented_index].set_status(swapchain_image::FREE);
-   }
+   const bool is_shared_present = is_using_shared_present_mode();
+   m_swapchain_images[presented_index].set_status(is_shared_present ? swapchain_image::ACQUIRED :
+                                                                      swapchain_image::FREE);
 
    image_status_lock.unlock();
-
-   if (m_present_mode != VK_PRESENT_MODE_SHARED_DEMAND_REFRESH_KHR &&
-       m_present_mode != VK_PRESENT_MODE_SHARED_CONTINUOUS_REFRESH_KHR)
+   if (!is_shared_present)
    {
       m_free_image_semaphore.post();
    }
@@ -635,13 +613,6 @@ VkResult swapchain_base::queue_present(VkQueue queue, const VkPresentInfoKHR *pr
       sem_count = present_info->waitSemaphoreCount;
    }
 
-   if (!m_page_flip_thread_run)
-   {
-      /* If the page flip thread is not running, we need to wait for any present payload here, before setting a new present payload. */
-      constexpr uint64_t WAIT_PRESENT_TIMEOUT = 1000000000; /* 1 second */
-      TRY_LOG_CALL(m_swapchain_images[submit_info.pending_present.image_index].wait_present(WAIT_PRESENT_TIMEOUT));
-   }
-
    void *submission_pnext = nullptr;
    uint32_t count_signal_semaphores = 0;
    std::optional<VkFrameBoundaryEXT> frame_boundary;
@@ -668,8 +639,11 @@ VkResult swapchain_base::queue_present(VkQueue queue, const VkPresentInfoKHR *pr
        (present_timing_info->presentStageQueries & VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT))
    {
       auto *ext_present_timing = get_swapchain_extension<wsi::wsi_ext_present_timing>(true);
-      signal_semaphores[count_signal_semaphores++] =
-         ext_present_timing->get_image_present_semaphore(submit_info.pending_present.image_index);
+      if (ext_present_timing->is_present_stage_supported(VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT))
+      {
+         signal_semaphores[count_signal_semaphores++] =
+            ext_present_timing->get_image_present_semaphore(submit_info.pending_present.image_index);
+      }
    }
 #endif
    queue_submit_semaphores semaphores = {

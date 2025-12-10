@@ -54,7 +54,7 @@ std::variant<VkResult, swapchain_image> swapchain_image::create(create_args &cre
       return result;
    }
 
-   util::unique_ptr<fence_sync> present_fence;
+   util::unique_ptr<fence_sync> present_fence{ nullptr };
    if (create_args.m_exportable_fence)
    {
       auto present_fence_opt = sync_fd_fence_sync::create(*device_data);
@@ -70,23 +70,20 @@ std::variant<VkResult, swapchain_image> swapchain_image::create(create_args &cre
    }
    else
    {
-      auto present_fence_opt = fence_sync::create(*device_data);
-      if (!present_fence_opt.has_value())
+      /* If we are not exporting fence and are not waiting on it then skip creating one. */
+      if (create_args.m_wait_on_present_fence)
       {
-         device_data->disp.DestroySemaphore(device, present_semaphore,
-                                            create_args.m_allocator.get_original_callbacks());
-         device_data->disp.DestroySemaphore(device, present_fence_wait,
-                                            create_args.m_allocator.get_original_callbacks());
-         return VK_ERROR_OUT_OF_HOST_MEMORY;
+         auto present_fence_opt = fence_sync::create(*device_data);
+         if (!present_fence_opt.has_value())
+         {
+            device_data->disp.DestroySemaphore(device, present_semaphore,
+                                               create_args.m_allocator.get_original_callbacks());
+            device_data->disp.DestroySemaphore(device, present_fence_wait,
+                                               create_args.m_allocator.get_original_callbacks());
+            return VK_ERROR_OUT_OF_HOST_MEMORY;
+         }
+         present_fence = create_args.m_allocator.make_unique<fence_sync>(std::move(present_fence_opt.value()));
       }
-      present_fence = create_args.m_allocator.make_unique<fence_sync>(std::move(present_fence_opt.value()));
-   }
-
-   if (present_fence == nullptr)
-   {
-      device_data->disp.DestroySemaphore(device, present_semaphore, create_args.m_allocator.get_original_callbacks());
-      device_data->disp.DestroySemaphore(device, present_fence_wait, create_args.m_allocator.get_original_callbacks());
-      return VK_ERROR_OUT_OF_HOST_MEMORY;
    }
 
    return swapchain_image(create_args.m_image_handle, present_semaphore, present_fence_wait, std::move(present_fence),
@@ -144,12 +141,16 @@ VkResult swapchain_image::bind(const VkBindImageMemoryInfo *bind_image_mem_info)
 VkResult swapchain_image::set_present_payload(VkQueue queue, const queue_submit_semaphores &semaphores,
                                               const void *submission_pnext)
 {
+   if (!m_present_fence)
+   {
+      return sync_queue_submit(*m_device_data, queue, VK_NULL_HANDLE, semaphores, submission_pnext);
+   }
    return m_present_fence->set_payload(queue, semaphores, submission_pnext);
 }
 
 VkResult swapchain_image::wait_present(uint64_t timeout_ns)
 {
-   if (m_wait_on_present_fence)
+   if (m_wait_on_present_fence && m_present_fence)
    {
       return m_present_fence->wait_payload(timeout_ns);
    }

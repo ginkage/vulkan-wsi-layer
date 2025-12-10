@@ -103,8 +103,8 @@ VkResult swapchain::add_required_extensions(VkDevice device, const VkSwapchainCr
    bool swapchain_support_enabled = swapchain_create_info->flags & VK_SWAPCHAIN_CREATE_PRESENT_TIMING_BIT_EXT;
    if (swapchain_support_enabled)
    {
-      if (!add_swapchain_extension(
-             wsi_ext_present_timing_headless::create(m_allocator, device, swapchain_create_info->minImageCount)))
+      if (!add_swapchain_extension(wsi_ext_present_timing_headless::create(
+             m_allocator, device, swapchain_create_info->minImageCount, is_using_shared_present_mode())))
       {
          return VK_ERROR_OUT_OF_HOST_MEMORY;
       }
@@ -132,15 +132,8 @@ VkResult swapchain::init_platform(VkDevice device, const VkSwapchainCreateInfoKH
                                   bool &use_presentation_thread)
 {
    UNUSED(device);
-   if (swapchain_create_info->presentMode == VK_PRESENT_MODE_SHARED_DEMAND_REFRESH_KHR)
-   {
-      use_presentation_thread = false;
-   }
-   else
-   {
-      use_presentation_thread = true;
-   }
 
+   use_presentation_thread = !is_using_shared_present_mode();
    return init_image_factory(*swapchain_create_info);
 }
 
@@ -161,7 +154,11 @@ VkResult swapchain::init_image_factory(const VkSwapchainCreateInfoKHR &swapchain
       return VK_ERROR_OUT_OF_HOST_MEMORY;
    }
 
-   m_image_factory.init(std::move(image_handle_creator), std::move(backing_memory_creator), false, true);
+   /* On shared present modes we don't want to wait on present fence as the image is re-used and never released. */
+   bool wait_on_present_fence = !is_using_shared_present_mode();
+
+   m_image_factory.init(std::move(image_handle_creator), std::move(backing_memory_creator), false,
+                        wait_on_present_fence);
    return VK_SUCCESS;
 }
 

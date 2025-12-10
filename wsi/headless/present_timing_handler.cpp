@@ -36,14 +36,17 @@
 
 wsi_ext_present_timing_headless::wsi_ext_present_timing_headless(const util::allocator &allocator, VkDevice device,
                                                                  uint32_t num_images,
-                                                                 std::optional<VkTimeDomainEXT> monotonic_domain)
+                                                                 std::optional<VkTimeDomainEXT> monotonic_domain,
+                                                                 bool is_swapchain_using_shared_present_mode)
    : wsi::wsi_ext_present_timing(allocator, device, num_images)
    , m_monotonic_domain(monotonic_domain)
+   , m_is_swapchain_using_shared_present_mode(is_swapchain_using_shared_present_mode)
 {
 }
 
 util::unique_ptr<wsi_ext_present_timing_headless> wsi_ext_present_timing_headless::create(
-   const util::allocator &allocator, const VkDevice &device, uint32_t num_images)
+   const util::allocator &allocator, const VkDevice &device, uint32_t num_images,
+   bool is_swapchain_using_shared_present_mode)
 {
    auto &dev_data = layer::device_private_data::get(device);
 
@@ -73,33 +76,37 @@ util::unique_ptr<wsi_ext_present_timing_headless> wsi_ext_present_timing_headles
    }
 
    util::vector<util::unique_ptr<wsi::vulkan_time_domain>> domains(allocator);
-   if (!domains.try_push_back(allocator.make_unique<wsi::vulkan_time_domain>(
-          VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT, VK_TIME_DOMAIN_DEVICE_KHR)))
+   if (!is_swapchain_using_shared_present_mode)
    {
-      return nullptr;
-   }
+      if (!domains.try_push_back(allocator.make_unique<wsi::vulkan_time_domain>(
+             VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT, VK_TIME_DOMAIN_DEVICE_KHR)))
+      {
+         return nullptr;
+      }
 
-   if (monotonic_domain)
-   {
-      if (!domains.try_push_back(allocator.make_unique<wsi::vulkan_time_domain>(
-             VK_PRESENT_STAGE_REQUEST_DEQUEUED_BIT_EXT, *monotonic_domain)))
+      if (monotonic_domain)
       {
-         return nullptr;
-      }
-      if (!domains.try_push_back(allocator.make_unique<wsi::vulkan_time_domain>(
-             VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_OUT_BIT_EXT, *monotonic_domain)))
-      {
-         return nullptr;
-      }
-      if (!domains.try_push_back(allocator.make_unique<wsi::vulkan_time_domain>(
-             VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_VISIBLE_BIT_EXT, *monotonic_domain)))
-      {
-         return nullptr;
+         if (!domains.try_push_back(allocator.make_unique<wsi::vulkan_time_domain>(
+                VK_PRESENT_STAGE_REQUEST_DEQUEUED_BIT_EXT, *monotonic_domain)))
+         {
+            return nullptr;
+         }
+         if (!domains.try_push_back(allocator.make_unique<wsi::vulkan_time_domain>(
+                VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_OUT_BIT_EXT, *monotonic_domain)))
+         {
+            return nullptr;
+         }
+         if (!domains.try_push_back(allocator.make_unique<wsi::vulkan_time_domain>(
+                VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_VISIBLE_BIT_EXT, *monotonic_domain)))
+         {
+            return nullptr;
+         }
       }
    }
 
    return wsi_ext_present_timing::create<wsi_ext_present_timing_headless>(allocator, domains.data(), domains.size(),
-                                                                          device, num_images, monotonic_domain);
+                                                                          device, num_images, monotonic_domain,
+                                                                          is_swapchain_using_shared_present_mode);
 }
 
 VkResult wsi_ext_present_timing_headless::get_swapchain_timing_properties(
@@ -166,9 +173,14 @@ void wsi_ext_present_timing_headless::set_first_pixel_visible_timestamp_for_last
 
 VkPresentStageFlagsEXT wsi_ext_present_timing_headless::stages_supported()
 {
-   VkPresentStageFlagsEXT stages =
-      VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT | VK_PRESENT_STAGE_REQUEST_DEQUEUED_BIT_EXT |
-      VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_OUT_BIT_EXT | VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_VISIBLE_BIT_EXT;
+   VkPresentStageFlagsEXT stages = {};
+
+   /* Do not expose any stage when using shared present modes. */
+   if (!m_is_swapchain_using_shared_present_mode)
+   {
+      stages |= VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT | VK_PRESENT_STAGE_REQUEST_DEQUEUED_BIT_EXT |
+                VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_OUT_BIT_EXT | VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_VISIBLE_BIT_EXT;
+   }
    return stages;
 }
 
