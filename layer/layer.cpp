@@ -553,7 +553,7 @@ wsi_layer_vkGetPhysicalDeviceFeatures2(VkPhysicalDevice physical_device,
       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_WAIT_2_FEATURES_KHR, pFeatures->pNext);
    if (present_wait2_features != nullptr)
    {
-      present_wait2_features->presentWait2 = VK_TRUE;
+      present_wait2_features->presentWait2 = VK_FALSE;
    }
 
    auto *image_compression_control_swapchain_features =
@@ -578,15 +578,23 @@ wsi_layer_vkGetPhysicalDeviceFeatures2(VkPhysicalDevice physical_device,
    {
       present_id2_features->presentId2 = VK_TRUE;
    }
-
    wsi::set_swapchain_maintenance1_state(physical_device, swapchain_maintenance1_features);
 
    if (present_wait_features != nullptr)
    {
-      /* If there is an surface extension in use that is unsupported by the layer, defer to the ICD */
+      /* If there is a surface extension in use that is unsupported by the layer, defer to the ICD */
       if (!instance.is_unsupported_surface_extension_enabled())
       {
          present_wait_features->presentWait = VK_TRUE;
+      }
+   }
+
+   if (present_wait2_features != nullptr)
+   {
+      /* If there is a surface extension in use that is unsupported by the layer, defer to the ICD */
+      if (!instance.is_unsupported_surface_extension_enabled())
+      {
+         present_wait2_features->presentWait2 = VK_TRUE;
       }
    }
 
