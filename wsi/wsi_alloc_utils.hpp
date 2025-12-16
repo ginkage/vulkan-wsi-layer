@@ -54,8 +54,8 @@ class swapchain_wsialloc_allocator
 public:
    static std::optional<swapchain_wsialloc_allocator> create();
 
-   swapchain_wsialloc_allocator(swapchain_wsialloc_allocator &other) = delete;
-   swapchain_wsialloc_allocator &operator=(swapchain_wsialloc_allocator &other) = delete;
+   swapchain_wsialloc_allocator(const swapchain_wsialloc_allocator &other) = delete;
+   swapchain_wsialloc_allocator &operator=(const swapchain_wsialloc_allocator &other) = delete;
 
    swapchain_wsialloc_allocator(swapchain_wsialloc_allocator &&other)
       : m_allocator(other.m_allocator)
