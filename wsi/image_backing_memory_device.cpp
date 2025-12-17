@@ -72,18 +72,18 @@ VkResult image_backing_memory_device::allocate_and_bind(VkImage image)
    VkMemoryAllocateInfo mem_info = {};
    mem_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
    mem_info.allocationSize = memory_requirements.size;
-   mem_info.memoryTypeIndex = mem_type_idx;
+   mem_info.memoryTypeIndex = static_cast<uint32_t>(mem_type_idx);
 
    TRY(disp_table.AllocateMemory(m_device_data.device, &mem_info, m_allocator.get_original_callbacks(),
                                  &m_device_memory));
-   TRY(disp_table.BindImageMemory(m_device_data.device, image, m_device_memory, 0));
+   TRY(disp_table.BindImageMemory(m_device_data.device, image, m_device_memory, 0ull));
 
    return VK_SUCCESS;
 }
 
 VkResult image_backing_memory_device::bind(const VkBindImageMemoryInfo *bind_image_mem_info)
 {
-   return m_device_data.disp.BindImageMemory(m_device_data.device, bind_image_mem_info->image, m_device_memory, 0);
+   return m_device_data.disp.BindImageMemory(m_device_data.device, bind_image_mem_info->image, m_device_memory, 0ull);
 }
 
 uint64_t image_backing_memory_device::get_modifier() const

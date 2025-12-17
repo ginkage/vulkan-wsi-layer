@@ -201,11 +201,11 @@ T *allocator::create(size_t num_objects, arg_types &&...args) const noexcept
       return nullptr;
    }
 
-   custom_allocator<T> allocator(*this);
+   custom_allocator<T> object_allocator(*this);
    T *ptr;
    try
    {
-      ptr = allocator.allocate(num_objects);
+      ptr = object_allocator.allocate(num_objects);
    }
    catch (...)
    {
@@ -232,7 +232,7 @@ T *allocator::create(size_t num_objects, arg_types &&...args) const noexcept
          objects_constructed--;
          ptr[objects_constructed].~T();
       }
-      allocator.deallocate(ptr, num_objects);
+      object_allocator.deallocate(ptr, num_objects);
       return nullptr;
    }
    return ptr;
@@ -247,12 +247,12 @@ void allocator::destroy(size_t num_objects, T *objects) const noexcept
       return;
    }
 
-   custom_allocator<T> allocator(*this);
+   custom_allocator<T> object_allocator(*this);
    for (size_t i = 0; i < num_objects; i++)
    {
       objects[i].~T();
    }
-   allocator.deallocate(objects, num_objects);
+   object_allocator.deallocate(objects, num_objects);
 }
 
 /**

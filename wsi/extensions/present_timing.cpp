@@ -390,7 +390,8 @@ VkResult wsi_ext_present_timing::get_past_presentation_results(
 
    for (uint64_t i = 0; (i - removed_entries) < m_queue.size(); ++i)
    {
-      auto slot = m_queue.begin() + (i - removed_entries);
+      const auto slot_offset = static_cast<decltype(m_queue)::difference_type>(i - removed_entries);
+      auto slot = m_queue.begin() + slot_offset;
 
       if (!slot->has_completed_stages(allow_partial))
       {
@@ -419,7 +420,7 @@ VkResult wsi_ext_present_timing::get_past_presentation_results(
          incomplete = true;
       }
    }
-   past_present_timing_properties->presentationTimingCount = timing_count;
+   past_present_timing_properties->presentationTimingCount = static_cast<uint32_t>(timing_count);
    return incomplete ? VK_INCOMPLETE : VK_SUCCESS;
 }
 

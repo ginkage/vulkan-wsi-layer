@@ -35,13 +35,15 @@ endif()
 
 string(APPEND CMAKE_CXX_FLAGS
     " -Wall -Werror -Wextra"
+    " -Wshadow -Wconversion"
     " -Wdouble-promotion -Wnon-virtual-dtor -Wdelete-non-virtual-dtor"
-    " -Wcast-qual -Werror=return-type -Wmissing-format-attribute"
+    " -Wcast-qual -Wmissing-format-attribute"
     " -pthread -fPIC"
 )
 
 string(APPEND CMAKE_C_FLAGS
     " -Wall -Werror -Wextra"
+    " -Wshadow -Wconversion"
     " -Wstrict-prototypes"
     " -fPIC"
 )

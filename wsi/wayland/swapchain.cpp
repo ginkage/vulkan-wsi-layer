@@ -341,8 +341,9 @@ wayland_owner<wl_buffer> swapchain::create_wl_buffer(image_backing_memory_extern
 
    /* create a wl_buffer using the dma_buf protocol */
    zwp_linux_buffer_params_v1 *params = zwp_linux_dmabuf_v1_create_params(m_wsi_surface->get_dmabuf_interface());
-   uint32_t modifier_hi = image_external_memory.get_image_create_info().selected_format.modifier >> 32;
-   uint32_t modifier_low = image_external_memory.get_image_create_info().selected_format.modifier & 0xFFFFFFFF;
+   const uint64_t modifier = image_external_memory.get_image_create_info().selected_format.modifier;
+   const auto modifier_hi = static_cast<uint32_t>(modifier >> 32);
+   const auto modifier_low = static_cast<uint32_t>(modifier & 0xFFFFFFFF);
    for (uint32_t plane = 0; plane < ext_memory.get_num_planes(); plane++)
    {
       zwp_linux_buffer_params_v1_add(params, ext_memory.get_buffer_fds()[plane], plane, ext_memory.get_offsets()[plane],
@@ -516,15 +517,9 @@ bool swapchain::free_image_found()
 VkResult swapchain::get_free_buffer(uint64_t *timeout)
 {
    int ms_timeout, res;
-
-   if (*timeout >= INT_MAX * 1000llu * 1000llu)
-   {
-      ms_timeout = INT_MAX;
-   }
-   else
-   {
-      ms_timeout = *timeout / 1000llu / 1000llu;
-   }
+   const uint64_t timeout_ns = *timeout;
+   const uint64_t timeout_ms = timeout_ns / 1000000ULL;
+   ms_timeout = timeout_ms > static_cast<uint64_t>(INT_MAX) ? INT_MAX : static_cast<int>(timeout_ms);
 
    /* The current dispatch_queue implementation will return if any
     * events are returned, even if no events are dispatched to the buffer

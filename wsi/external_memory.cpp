@@ -179,7 +179,8 @@ VkResult external_memory::bind_swapchain_image_memory(const VkImage &image)
          bind_img_mem_infos[plane].memoryOffset = m_offsets[plane];
       }
 
-      return device_data.disp.BindImageMemory2KHR(m_device, bind_img_mem_infos.size(), bind_img_mem_infos.data());
+      return device_data.disp.BindImageMemory2KHR(m_device, static_cast<uint32_t>(bind_img_mem_infos.size()),
+                                                  bind_img_mem_infos.data());
    }
 
    return device_data.disp.BindImageMemory(m_device, image, m_memories[0], m_offsets[0]);

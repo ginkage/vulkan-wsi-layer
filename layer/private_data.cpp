@@ -179,12 +179,12 @@ PFN_vkVoidFunction device_dispatch_table::get_user_enabled_entrypoint(VkDevice d
 }
 
 instance_private_data::instance_private_data(instance_dispatch_table table, PFN_vkSetInstanceLoaderData set_loader_data,
-                                             util::wsi_platform_set enabled_layer_platforms, const uint32_t api_version,
-                                             const util::allocator &alloc)
+                                             util::wsi_platform_set layer_platforms,
+                                             const uint32_t instance_api_version, const util::allocator &alloc)
    : disp{ std::move(table) }
-   , api_version{ api_version }
+   , api_version{ instance_api_version }
    , SetInstanceLoaderData{ set_loader_data }
-   , enabled_layer_platforms{ enabled_layer_platforms }
+   , enabled_layer_platforms{ layer_platforms }
    , allocator{ alloc }
    , surfaces{ alloc }
    , enabled_extensions{ allocator }
@@ -205,11 +205,11 @@ static inline void *get_key(dispatchable_type dispatchable_object)
 
 VkResult instance_private_data::associate(VkInstance instance, instance_dispatch_table table,
                                           PFN_vkSetInstanceLoaderData set_loader_data,
-                                          util::wsi_platform_set enabled_layer_platforms, const uint32_t api_version,
-                                          const util::allocator &allocator)
+                                          util::wsi_platform_set enabled_layer_platforms,
+                                          const uint32_t instance_api_version, const util::allocator &allocator)
 {
-   auto instance_data = allocator.make_unique<instance_private_data>(std::move(table), set_loader_data,
-                                                                     enabled_layer_platforms, api_version, allocator);
+   auto instance_data = allocator.make_unique<instance_private_data>(
+      std::move(table), set_loader_data, enabled_layer_platforms, instance_api_version, allocator);
 
    if (instance_data == nullptr)
    {

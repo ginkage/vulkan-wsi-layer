@@ -423,7 +423,7 @@ wsi_layer_vkBindImageMemory2(VkDevice device, uint32_t bindInfoCount,
       if (bind_sc_info == nullptr || bind_sc_info->swapchain == VK_NULL_HANDLE ||
           !device_data.layer_owns_swapchain(bind_sc_info->swapchain))
       {
-         result = device_data.disp.BindImageMemory2KHR(device, 1, &pBindInfos[i]);
+         result = device_data.disp.BindImageMemory2KHR(device, 1u, &pBindInfos[i]);
          error_message = "Failed to bind image memory";
       }
       else
