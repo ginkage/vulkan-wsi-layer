@@ -44,7 +44,7 @@ static uint64_t round_size_up_to_align(uint64_t size)
 }
 
 static wsialloc_error calculate_format_properties(const wsialloc_format_descriptor *descriptor,
-                                                  const wsialloc_allocate_info *info, int *strides, int *offsets,
+                                                  const wsialloc_allocate_info *info, int *strides, uint32_t *offsets,
                                                   uint64_t *total_size)
 {
    assert(descriptor != NULL);
@@ -76,11 +76,11 @@ static wsialloc_error calculate_format_properties(const wsialloc_format_descript
       assert(plane_bytes_per_pixel * 8 == bits_per_pixel[plane]);
 
       /* With large enough width, this can overflow as strides are signed. In practice, this shouldn't happen */
-      strides[plane] = round_size_up_to_align(info->width * plane_bytes_per_pixel);
+      strides[plane] = (int)round_size_up_to_align((uint64_t)info->width * plane_bytes_per_pixel);
 
-      offsets[plane] = size;
+      offsets[plane] = (uint32_t)size;
 
-      size += strides[plane] * info->height;
+      size += (uint64_t)strides[plane] * info->height;
    }
    *total_size = size;
    return WSIALLOC_ERROR_NONE;
@@ -138,7 +138,7 @@ wsialloc_error wsiallocp_alloc(wsialloc_allocator *allocator, wsiallocp_alloc_ca
    }
 
    int local_strides[WSIALLOC_MAX_PLANES];
-   int local_offsets[WSIALLOC_MAX_PLANES];
+   uint32_t local_offsets[WSIALLOC_MAX_PLANES];
    wsialloc_error err = WSIALLOC_ERROR_NONE;
    wsialloc_format_descriptor selected_format_desc = {};
 

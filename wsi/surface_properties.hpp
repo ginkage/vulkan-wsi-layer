@@ -206,7 +206,9 @@ VkResult surface_properties_formats_helper(It begin, It end, uint32_t *surface_f
 {
    assert(surface_formats_count != nullptr);
 
-   const uint32_t supported_formats_count = std::distance(begin, end);
+   const auto distance = std::distance(begin, end);
+   assert(distance >= 0);
+   const auto supported_formats_count = static_cast<uint32_t>(distance);
    if (surface_formats == nullptr && extended_surface_formats == nullptr)
    {
       *surface_formats_count = supported_formats_count;
@@ -307,17 +309,20 @@ VkResult get_surface_present_modes_common(uint32_t *present_mode_count, VkPresen
 
    assert(present_mode_count != nullptr);
 
+   assert(modes.size() <= UINT32_MAX);
+   const auto modes_count = static_cast<uint32_t>(modes.size());
+
    if (nullptr == present_modes)
    {
-      *present_mode_count = modes.size();
+      *present_mode_count = modes_count;
       return VK_SUCCESS;
    }
 
-   if (modes.size() > *present_mode_count)
+   if (modes_count > *present_mode_count)
    {
       res = VK_INCOMPLETE;
    }
-   *present_mode_count = std::min(*present_mode_count, static_cast<uint32_t>(modes.size()));
+   *present_mode_count = std::min(*present_mode_count, modes_count);
    for (uint32_t i = 0; i < *present_mode_count; ++i)
    {
       present_modes[i] = modes[i];

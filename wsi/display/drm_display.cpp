@@ -98,7 +98,7 @@ static int find_compatible_crtc(int fd, drm_resources_owner &resources, drm_conn
 
          /* Make the assumption that only one connector will be in use at a time so there is no
           * need to check that any other connectors are being driven by this CRTC. */
-         return resources->crtcs[j];
+         return static_cast<int>(resources->crtcs[j]);
       }
    }
 
@@ -183,7 +183,8 @@ static bool fill_supported_formats_with_modifiers(uint32_t primary_plane_index, 
       if (!strcmp(property->name, "IN_FORMATS"))
       {
          drmModeFormatModifierIterator iter{};
-         drm_property_blob_owner blob{ drmModeGetPropertyBlob(drm_fd.get(), object_properties->prop_values[i]) };
+         drm_property_blob_owner blob{ drmModeGetPropertyBlob(
+            drm_fd.get(), static_cast<uint32_t>(object_properties->prop_values[i])) };
          if (blob == nullptr)
          {
             return false;
@@ -403,8 +404,8 @@ const util::vector<util::drm::drm_format_pair> *drm_display::get_supported_forma
 bool drm_display::is_format_supported(const util::drm::drm_format_pair &format) const
 {
    auto supported_format =
-      std::find_if(m_supported_formats->begin(), m_supported_formats->end(), [format](const auto &supported_format) {
-         return format.fourcc == supported_format.fourcc && format.modifier == supported_format.modifier;
+      std::find_if(m_supported_formats->begin(), m_supported_formats->end(), [format](const auto &candidate) {
+         return format.fourcc == candidate.fourcc && format.modifier == candidate.modifier;
       });
 
    return supported_format != m_supported_formats->end();

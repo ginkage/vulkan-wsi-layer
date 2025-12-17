@@ -215,7 +215,7 @@ CreateDisplayModeKHR(VkPhysicalDevice physicalDevice, VkDisplayKHR display,
    assert(pCreateInfo->pNext == NULL);
    assert(pCreateInfo->flags == 0);
 
-   drm_display *dpy = reinterpret_cast<drm_display *>(display);
+   auto *dpy = reinterpret_cast<drm_display *>(display);
 
    const VkDisplayModeParametersKHR *params = &pCreateInfo->parameters;
 
@@ -224,9 +224,10 @@ CreateDisplayModeKHR(VkPhysicalDevice physicalDevice, VkDisplayKHR display,
       return VK_ERROR_INITIALIZATION_FAILED;
    }
 
-   auto *mode = std::find_if(dpy->get_display_modes_begin(), dpy->get_display_modes_end(), [params](auto &mode) {
-      return mode.get_width() == params->visibleRegion.width && mode.get_height() == params->visibleRegion.height &&
-             mode.get_refresh_rate() == params->refreshRate;
+   auto *mode = std::find_if(dpy->get_display_modes_begin(), dpy->get_display_modes_end(), [params](auto &candidate) {
+      return candidate.get_width() == params->visibleRegion.width &&
+             candidate.get_height() == params->visibleRegion.height &&
+             candidate.get_refresh_rate() == params->refreshRate;
    });
 
    if (mode != dpy->get_display_modes_end())
@@ -246,7 +247,7 @@ CreateDisplayPlaneSurfaceKHR(VkInstance instance, const VkDisplaySurfaceCreateIn
    auto &instance_data = layer::instance_private_data::get(instance);
    util::allocator allocator{ instance_data.get_allocator(), VK_SYSTEM_ALLOCATION_SCOPE_OBJECT, pAllocator };
 
-   drm_display_mode *display_mode = reinterpret_cast<drm_display_mode *>(pCreateInfo->displayMode);
+   auto *display_mode = reinterpret_cast<drm_display_mode *>(pCreateInfo->displayMode);
 
    VkResult res = instance_data.disp.CreateDisplayPlaneSurfaceKHR(instance, pCreateInfo, pAllocator, pSurface);
    if (res == VK_SUCCESS)
@@ -276,11 +277,11 @@ GetDisplayModePropertiesKHR(VkPhysicalDevice physicalDevice, VkDisplayKHR displa
    assert(display != VK_NULL_HANDLE);
    assert(pPropertyCount != nullptr);
 
-   drm_display *dpy = reinterpret_cast<drm_display *>(display);
+   auto *dpy = reinterpret_cast<drm_display *>(display);
    assert(dpy != nullptr);
 
    drm_display_mode *modes{ dpy->get_display_modes_begin() };
-   size_t num_modes{ dpy->get_num_display_modes() };
+   auto num_modes = static_cast<uint32_t>(dpy->get_num_display_modes());
 
    if (pProperties == nullptr)
    {
@@ -288,12 +289,12 @@ GetDisplayModePropertiesKHR(VkPhysicalDevice physicalDevice, VkDisplayKHR displa
       return VK_SUCCESS;
    }
 
-   uint32_t nr_properties = std::min(*pPropertyCount, static_cast<uint32_t>(num_modes));
+   uint32_t nr_properties = std::min(*pPropertyCount, num_modes);
    *pPropertyCount = 0;
    std::for_each(modes, modes + nr_properties, [&pProperties, &pPropertyCount](auto &mode) {
       VkDisplayModePropertiesKHR properties = {};
 
-      VkDisplayModeKHR display_mode = reinterpret_cast<VkDisplayModeKHR>(&mode);
+      auto display_mode = reinterpret_cast<VkDisplayModeKHR>(&mode);
       properties.displayMode = display_mode;
 
       VkDisplayModeParametersKHR parameters{};
@@ -305,7 +306,7 @@ GetDisplayModePropertiesKHR(VkPhysicalDevice physicalDevice, VkDisplayKHR displa
       *pPropertyCount += 1;
    });
 
-   if (*pPropertyCount < static_cast<uint32_t>(num_modes))
+   if (*pPropertyCount < num_modes)
    {
       return VK_INCOMPLETE;
    }
@@ -323,7 +324,7 @@ GetDisplayPlaneCapabilitiesKHR(VkPhysicalDevice physicalDevice, VkDisplayModeKHR
    assert(mode != VK_NULL_HANDLE);
    assert(pCapabilities != nullptr);
 
-   drm_display_mode *display_mode = reinterpret_cast<drm_display_mode *>(mode);
+   auto *display_mode = reinterpret_cast<drm_display_mode *>(mode);
    assert(display_mode != nullptr);
 
    auto &display = drm_display::get_display();
@@ -337,11 +338,12 @@ GetDisplayPlaneCapabilitiesKHR(VkPhysicalDevice physicalDevice, VkDisplayModeKHR
     * images. Therefore plane index must be 0. */
    assert(planeIndex == 0);
 
-   auto valid_mode =
-      std::find_if(display->get_display_modes_begin(), display->get_display_modes_end(), [&display_mode](auto &mode) {
-         return (display_mode->get_width() == mode.get_width()) && (display_mode->get_height() == mode.get_height()) &&
-                (display_mode->get_refresh_rate() == mode.get_refresh_rate());
-      });
+   auto valid_mode = std::find_if(display->get_display_modes_begin(), display->get_display_modes_end(),
+                                  [&display_mode](auto &candidate) {
+                                     return (display_mode->get_width() == candidate.get_width()) &&
+                                            (display_mode->get_height() == candidate.get_height()) &&
+                                            (display_mode->get_refresh_rate() == candidate.get_refresh_rate());
+                                  });
 
    assert(valid_mode != display->get_display_modes_end());
    UNUSED(valid_mode);

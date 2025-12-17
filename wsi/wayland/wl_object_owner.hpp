@@ -108,7 +108,7 @@ static std::unique_ptr<T, std::function<void(T *)>> make_proxy_with_queue(T *obj
       wl_proxy_set_queue(reinterpret_cast<wl_proxy *>(proxy), queue);
    }
 
-   auto delete_proxy = [](T *proxy) { wl_proxy_wrapper_destroy(reinterpret_cast<wl_proxy *>(proxy)); };
+   auto delete_proxy = [](T *wrapped_proxy) { wl_proxy_wrapper_destroy(reinterpret_cast<wl_proxy *>(wrapped_proxy)); };
 
    return std::unique_ptr<T, std::function<void(T *)>>(proxy, delete_proxy);
 }

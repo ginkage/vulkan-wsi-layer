@@ -62,7 +62,7 @@ uint64_t wsi_ext_present_id_wayland::get_present_id_from_image_index(uint32_t im
    }
 
    auto feedback = m_pending_presents.find(
-      [image_index](const presentation_feedback &feedback) { return feedback.get_image_index() == image_index; });
+      [image_index](const presentation_feedback &candidate) { return candidate.get_image_index() == image_index; });
 
    return feedback != nullptr ? feedback->get_present_id() : 0;
 }

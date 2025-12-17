@@ -73,10 +73,11 @@ VkResult wsi_ext_present_wait_wayland::wait_for_update(uint64_t present_id, uint
       int delay_in_ms = 0;
       if (timeout_in_ns != UINT64_MAX)
       {
-         uint64_t min_delay_in_ns = std::min(static_cast<uint64_t>(5000000ULL /* 5ms */), timeout_in_ns);
-         timeout_in_ns -= min_delay_in_ns;
+         const uint64_t min_delay_in_ns = std::min(static_cast<uint64_t>(5000000ULL /* 5ms */), timeout_in_ns);
+         const uint64_t min_delay_in_ms = min_delay_in_ns / 1000000ULL;
 
-         delay_in_ms = std::min(static_cast<unsigned long long>(INT_MAX), min_delay_in_ns / 1000ULL / 1000UL);
+         timeout_in_ns -= min_delay_in_ns;
+         delay_in_ms = static_cast<int>(std::min<uint64_t>(min_delay_in_ms, static_cast<uint64_t>(INT_MAX)));
       }
       else
       {

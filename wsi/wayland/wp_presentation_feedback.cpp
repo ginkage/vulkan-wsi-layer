@@ -45,13 +45,13 @@ wp_presentation_feedback_presented(void *data, struct wp_presentation_feedback *
    if (feedback_obj->ext_present_timing() != nullptr)
    {
       uint64_t timestamp_seconds = (static_cast<uint64_t>(tv_sec_hi) << 32) | tv_sec_lo;
-      double timestamp_limit = static_cast<double>(UINT64_MAX - tv_nsec) / 1e9;
-      if (static_cast<double>(timestamp_seconds) > timestamp_limit)
+      const uint64_t seconds_limit = (UINT64_MAX - static_cast<uint64_t>(tv_nsec)) / 1000000000ULL;
+      if (timestamp_seconds > seconds_limit)
       {
          WSI_LOG_ERROR("timestamp_seconds overflow, capping to safe maximum");
-         timestamp_seconds = static_cast<uint64_t>(std::floor(timestamp_limit));
+         timestamp_seconds = seconds_limit;
       }
-      uint64_t timestamp_ns = static_cast<uint64_t>(timestamp_seconds * 1e9) + tv_nsec;
+      const uint64_t timestamp_ns = (timestamp_seconds * 1000000000ULL) + static_cast<uint64_t>(tv_nsec);
       feedback_obj->ext_present_timing()->mark_delivered(feedback_obj->get_image_index(), timestamp_ns);
    }
    else if (feedback_obj->ext_present_id() != nullptr)

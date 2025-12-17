@@ -68,7 +68,7 @@ public:
    }
 
 private:
-   uint32_t m_drm_fd;
+   int m_drm_fd;
    uint32_t m_fb_id;
 };
 
@@ -236,7 +236,7 @@ VkResult swapchain::create_framebuffer(image_backing_memory_external &image_exte
    for (uint32_t plane = 0; plane < ext_memory.get_num_planes(); plane++)
    {
       assert(ext_memory.get_strides()[plane] > 0);
-      strides[plane] = ext_memory.get_strides()[plane];
+      strides[plane] = static_cast<uint32_t>(ext_memory.get_strides()[plane]);
       modifiers[plane] = allocated_format.modifier;
       if (drmPrimeFDToHandle(display->get_drm_fd(), buffer_fds[plane], &buffer_handles[plane]) != 0)
       {
@@ -332,8 +332,8 @@ void swapchain::present_image(const pending_present_request &pending_present)
       drmModeModeInfo modeInfo = m_display_mode->get_drm_mode();
 
       uint32_t connector_id = display->get_connector_id();
-      drm_res = drmModeSetCrtc(display->get_drm_fd(), display->get_crtc_id(), image_data->get_fb_id(), 0, 0,
-                               &connector_id, 1, &modeInfo);
+      drm_res = drmModeSetCrtc(display->get_drm_fd(), static_cast<uint32_t>(display->get_crtc_id()),
+                               image_data->get_fb_id(), 0, 0, &connector_id, 1, &modeInfo);
 
       if (drm_res != 0)
       {
@@ -348,8 +348,8 @@ void swapchain::present_image(const pending_present_request &pending_present)
 
       bool page_flip_complete = false;
 
-      drm_res = drmModePageFlip(display->get_drm_fd(), display->get_crtc_id(), image_data->get_fb_id(),
-                                DRM_MODE_PAGE_FLIP_EVENT, (void *)&page_flip_complete);
+      drm_res = drmModePageFlip(display->get_drm_fd(), static_cast<uint32_t>(display->get_crtc_id()),
+                                image_data->get_fb_id(), DRM_MODE_PAGE_FLIP_EVENT, (void *)&page_flip_complete);
 
       if (drm_res != 0)
       {
@@ -398,7 +398,7 @@ void swapchain::present_image(const pending_present_request &pending_present)
    }
 
    /* Find currently presented image */
-   uint32_t presented_index = m_swapchain_images.size();
+   auto presented_index = static_cast<uint32_t>(m_swapchain_images.size());
    if (!m_first_present)
    {
       for (uint32_t i = 0; i < m_swapchain_images.size(); ++i)
@@ -426,8 +426,6 @@ void swapchain::present_image(const pending_present_request &pending_present)
    {
       unpresent_image(presented_index);
    }
-
-   return;
 }
 
 std::variant<VkResult, util::unique_ptr<vulkan_image_handle_creator>> swapchain::create_image_creator(

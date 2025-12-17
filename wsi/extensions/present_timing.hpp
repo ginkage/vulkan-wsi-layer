@@ -334,8 +334,8 @@ public:
    {
       if (m_command_pool != VK_NULL_HANDLE)
       {
-         m_device.disp.FreeCommandBuffers(m_device.device, m_command_pool, m_command_buffer.size(),
-                                          m_command_buffer.data());
+         m_device.disp.FreeCommandBuffers(m_device.device, m_command_pool,
+                                          static_cast<uint32_t>(m_command_buffer.size()), m_command_buffer.data());
 
          m_device.disp.DestroyCommandPool(m_device.device, m_command_pool, m_allocator.get_original_callbacks());
          m_command_pool = VK_NULL_HANDLE;
@@ -377,7 +377,7 @@ public:
       TRY_LOG_CALL(
          m_device.disp.AllocateCommandBuffers(m_device.device, &command_buffer_info, m_command_buffer.data()));
       VkCommandBufferBeginInfo begin_info = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, nullptr, 0, nullptr };
-      for (size_t image_index = 0; image_index < num_images; image_index++)
+      for (uint32_t image_index = 0; image_index < num_images; image_index++)
       {
          TRY_LOG_CALL(m_device.disp.BeginCommandBuffer(m_command_buffer[image_index], &begin_info));
          m_device.disp.CmdResetQueryPool(m_command_buffer[image_index], m_query_pool, image_index, 1);

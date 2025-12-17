@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Arm Limited.
+ * Copyright (c) 2024-2025 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -85,7 +85,7 @@ static int allocate(int fd, uint64_t size)
       return -errno;
    }
    assert(heap_data.fd > 0);
-   return heap_data.fd;
+   return (int)heap_data.fd;
 }
 
 static int dma_allocate(const wsialloc_allocator *allocator, const wsialloc_allocate_info *info, uint64_t size)

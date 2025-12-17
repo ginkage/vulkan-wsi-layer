@@ -158,7 +158,7 @@ VKAPI_ATTR VkResult create_instance(const VkInstanceCreateInfo *pCreateInfo, con
 
    TRY_LOG_CALL(extensions.get_extension_strings(modified_enabled_extensions));
    modified_info.ppEnabledExtensionNames = modified_enabled_extensions.data();
-   modified_info.enabledExtensionCount = modified_enabled_extensions.size();
+   modified_info.enabledExtensionCount = static_cast<uint32_t>(modified_enabled_extensions.size());
 
    /* Advance the link info for the next element on the chain. */
    layer_link_info->u.pLayerInfo = layer_link_info->u.pLayerInfo->pNext;
@@ -291,7 +291,7 @@ VKAPI_ATTR VkResult create_device(VkPhysicalDevice physicalDevice, const VkDevic
       TRY_LOG_CALL(enabled_extensions.get_extension_strings(modified_enabled_extensions));
 
       modified_info.ppEnabledExtensionNames = modified_enabled_extensions.data();
-      modified_info.enabledExtensionCount = modified_enabled_extensions.size();
+      modified_info.enabledExtensionCount = static_cast<uint32_t>(modified_enabled_extensions.size());
    }
 
    bool should_layer_handle_frame_boundary_events = false;

@@ -101,7 +101,7 @@ VkResult fence_sync::wait_payload(uint64_t timeout)
    VkResult res = VK_SUCCESS;
    if (has_payload && !payload_finished)
    {
-      res = dev->disp.WaitForFences(dev->device, 1, &fence, VK_TRUE, timeout);
+      res = dev->disp.WaitForFences(dev->device, 1u, &fence, VK_TRUE, timeout);
       if (res == VK_SUCCESS)
       {
          payload_finished = true;
@@ -112,7 +112,7 @@ VkResult fence_sync::wait_payload(uint64_t timeout)
 
 VkResult fence_sync::set_payload(VkQueue queue, const queue_submit_semaphores &semaphores, const void *submission_pnext)
 {
-   VkResult result = dev->disp.ResetFences(dev->device, 1, &fence);
+   VkResult result = dev->disp.ResetFences(dev->device, 1u, &fence);
    if (result != VK_SUCCESS)
    {
       return result;
@@ -233,7 +233,7 @@ VkResult sync_queue_submit(const layer::device_private_data &device, VkQueue que
                                 semaphores.signal_semaphores_count,
                                 semaphores.signal_semaphores };
 
-   TRY(device.disp.QueueSubmit(queue, 1, &submit_info, fence));
+   TRY(device.disp.QueueSubmit(queue, 1u, &submit_info, fence));
    return VK_SUCCESS;
 }
 
@@ -257,7 +257,7 @@ VkResult sync_queue_submit(const layer::device_private_data &device, VkQueue que
                                 pipeline_stage_flags_vector.data(),    command_buffer_data.m_command_buffer_count,
                                 command_buffer_data.m_command_buffers, semaphores.signal_semaphores_count,
                                 semaphores.signal_semaphores };
-   TRY(device.disp.QueueSubmit(queue, 1, &submit_info, fence));
+   TRY(device.disp.QueueSubmit(queue, 1u, &submit_info, fence));
    return VK_SUCCESS;
 }
 } /* namespace wsi */

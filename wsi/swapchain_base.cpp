@@ -285,7 +285,8 @@ VkResult swapchain_base::init(VkDevice device, const VkSwapchainCreateInfoKHR *s
       }
    }
 
-   if (VkResult result = m_free_image_semaphore.init(m_swapchain_images.size()); result != VK_SUCCESS)
+   if (VkResult result = m_free_image_semaphore.init(static_cast<uint32_t>(m_swapchain_images.size()));
+       result != VK_SUCCESS)
    {
       assert(result == VK_ERROR_OUT_OF_HOST_MEMORY);
       return result;
@@ -299,7 +300,7 @@ VkResult swapchain_base::init(VkDevice device, const VkSwapchainCreateInfoKHR *s
        * Vulkan spec, vkGetDeviceQueue2 should be used to get queues
        * that were created with non zero flags parameters.
        */
-      m_device_data.disp.GetDeviceQueue(m_device, 0, 0, &m_queue);
+      m_device_data.disp.GetDeviceQueue(m_device, 0u, 0u, &m_queue);
       TRY_LOG_CALL(m_device_data.SetDeviceLoaderData(m_device, m_queue));
    }
 
@@ -416,24 +417,24 @@ VkResult swapchain_base::acquire_next_image(uint64_t timeout, VkSemaphore semaph
       return VK_ERROR_OUT_OF_HOST_MEMORY;
    }
 
-   size_t i;
-   for (i = 0; i < m_swapchain_images.size(); ++i)
+   size_t image_index_candidate = 0;
+   for (; image_index_candidate < m_swapchain_images.size(); ++image_index_candidate)
    {
-      if (m_swapchain_images[i].get_status() == swapchain_image::UNALLOCATED)
+      if (m_swapchain_images[image_index_candidate].get_status() == swapchain_image::UNALLOCATED)
       {
-         TRY_LOG_CALL(allocate_and_bind_swapchain_image(m_swapchain_images[i]));
-         m_swapchain_images[i].set_status(swapchain_image::FREE);
+         TRY_LOG_CALL(allocate_and_bind_swapchain_image(m_swapchain_images[image_index_candidate]));
+         m_swapchain_images[image_index_candidate].set_status(swapchain_image::FREE);
       }
 
-      if (m_swapchain_images[i].get_status() == swapchain_image::FREE)
+      if (m_swapchain_images[image_index_candidate].get_status() == swapchain_image::FREE)
       {
-         m_swapchain_images[i].set_status(swapchain_image::ACQUIRED);
-         *image_index = i;
+         m_swapchain_images[image_index_candidate].set_status(swapchain_image::ACQUIRED);
+         *image_index = static_cast<uint32_t>(image_index_candidate);
          break;
       }
    }
 
-   assert(i < m_swapchain_images.size());
+   assert(image_index_candidate < m_swapchain_images.size());
 
    image_status_lock.unlock();
 
@@ -490,7 +491,7 @@ VkResult swapchain_base::get_swapchain_images(uint32_t *swapchain_image_count, V
    if (swapchain_images == nullptr)
    {
       /* Return the number of swapchain images. */
-      *swapchain_image_count = m_swapchain_images.size();
+      *swapchain_image_count = static_cast<uint32_t>(m_swapchain_images.size());
 
       return VK_SUCCESS;
    }
@@ -508,7 +509,7 @@ VkResult swapchain_base::get_swapchain_images(uint32_t *swapchain_image_count, V
 
          current_image++;
 
-         if (current_image == m_swapchain_images.size())
+         if (current_image == static_cast<uint32_t>(m_swapchain_images.size()))
          {
             *swapchain_image_count = current_image;
 
@@ -660,11 +661,11 @@ VkResult swapchain_base::queue_present(VkQueue queue, const VkPresentInfoKHR *pr
    {
       VkSemaphore present_fence_wait_sem =
          m_swapchain_images[submit_info.pending_present.image_index].get_present_fence_wait_semaphore();
-      const queue_submit_semaphores wait_semaphores = { &present_fence_wait_sem, 1, nullptr, 0 };
+      const queue_submit_semaphores present_fence_semaphores = { &present_fence_wait_sem, 1, nullptr, 0 };
       /*
-       * Here we chain wait_semaphores with present_fence through present_fence_wait.
+       * Here we chain present_fence_semaphores with present_fence through present_fence_wait.
        */
-      TRY(sync_queue_submit(m_device_data, queue, submit_info.present_fence, wait_semaphores));
+      TRY(sync_queue_submit(m_device_data, queue, submit_info.present_fence, present_fence_semaphores));
    }
 
 #if VULKAN_WSI_LAYER_EXPERIMENTAL

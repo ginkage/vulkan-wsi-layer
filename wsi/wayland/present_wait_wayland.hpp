@@ -77,7 +77,6 @@ private:
     */
    VkResult wait_for_update(uint64_t present_id, uint64_t timeout_in_ns) override;
 
-private:
    /**
     * @brief Wayland display object.
     */
