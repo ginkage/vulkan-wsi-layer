@@ -168,9 +168,9 @@ VkResult wsi_ext_present_timing::write_pending_results()
          }
 
          uint64_t timestamp;
-         VkResult res = m_device.disp.GetQueryPoolResults(m_device.device, m_queue_family_resources.m_query_pool,
-                                                          slot.m_image_index, 1, sizeof(timestamp), &timestamp, 0,
-                                                          VK_QUERY_RESULT_64_BIT);
+         VkResult res = m_device.disp.GetQueryPoolResults(
+            m_device.device, m_queue_family_resources.m_query_pool, slot.m_image_index, 1u, sizeof(timestamp),
+            &timestamp, static_cast<VkDeviceSize>(0), static_cast<VkQueryResultFlags>(VK_QUERY_RESULT_64_BIT));
          if (res != VK_SUCCESS && res != VK_NOT_READY)
          {
             return res;

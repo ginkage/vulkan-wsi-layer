@@ -154,7 +154,7 @@ std::optional<uint64_t> wsi_ext_present_timing_headless::get_current_clock_time_
       return std::nullopt;
    }
 
-   return now.tv_sec * static_cast<uint64_t>(1e9) + now.tv_nsec;
+   return static_cast<uint64_t>(now.tv_sec) * static_cast<uint64_t>(1e9) + static_cast<uint64_t>(now.tv_nsec);
 }
 
 std::optional<uint64_t> wsi_ext_present_timing_headless::get_first_pixel_visible_timestamp_for_last_image() const
