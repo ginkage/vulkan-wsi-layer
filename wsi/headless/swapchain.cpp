@@ -208,7 +208,7 @@ void swapchain::present_image(const pending_present_request &pending_present)
              * This is OK as the sleep should only be dispatched on the page_flip thread and not on main. */
             assert(m_page_flip_thread_run);
 
-            int64_t time_diff = absolute_future_present_time_ns - *current_time_ns;
+            int64_t time_diff = static_cast<int64_t>(absolute_future_present_time_ns - *current_time_ns);
             std::this_thread::sleep_for(std::chrono::nanoseconds(time_diff));
          }
       }

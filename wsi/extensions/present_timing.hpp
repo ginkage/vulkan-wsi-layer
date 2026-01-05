@@ -380,7 +380,7 @@ public:
       for (uint32_t image_index = 0; image_index < num_images; image_index++)
       {
          TRY_LOG_CALL(m_device.disp.BeginCommandBuffer(m_command_buffer[image_index], &begin_info));
-         m_device.disp.CmdResetQueryPool(m_command_buffer[image_index], m_query_pool, image_index, 1);
+         m_device.disp.CmdResetQueryPool(m_command_buffer[image_index], m_query_pool, image_index, 1u);
          m_device.disp.CmdWriteTimestamp(m_command_buffer[image_index], VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
                                          m_query_pool, image_index);
          TRY_LOG_CALL(m_device.disp.EndCommandBuffer(m_command_buffer[image_index]));
