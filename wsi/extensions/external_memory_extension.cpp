@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Arm Limited.
+ * Copyright (c) 2025-2026 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -266,7 +266,7 @@ std::variant<VkResult, util::unique_ptr<swapchain_image_create_external_memory>>
    {
       return VK_ERROR_OUT_OF_HOST_MEMORY;
    }
-   return std::move(ext_memory);
+   return ext_memory;
 }
 
 swapchain_image_create_external_memory::swapchain_image_create_external_memory(
