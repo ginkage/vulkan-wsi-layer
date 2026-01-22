@@ -82,6 +82,7 @@ set(WSIALLOC_MEMORY_HEAP_NAME "linux,cma" CACHE STRING "Heap name used by the dm
 option(BUILD_WSI_DISPLAY_SUPPORT_FORMAT_MODIFIERS "Build with support for format modifiers in VK_KHR_display" ON)
 option(VULKAN_WSI_LAYER_EXPERIMENTAL "Enable the Vulkan WSI Experimental features" OFF)
 option(ENABLE_WAYLAND_FIFO_PRESENTATION_THREAD "Enable the non-conformant FIFO presentation thread implementation in the Wayland backend" OFF)
+option(ENABLE_WAIT_FOR_QUERY_RESULT "Enable waiting for result while querying present timing queue operations end timestamp" OFF)
 
 # Enables the layer to pass frame boundary events if the ICD or layers below have support for it by
 # making use of the VK_EXT_frame_boundary extension. If the application itself makes use of the
@@ -357,6 +358,11 @@ else()
    add_definitions("-DENABLE_INSTRUMENTATION=0")
 endif()
 
+if(ENABLE_WAIT_FOR_QUERY_RESULT)
+   target_compile_definitions(${PROJECT_NAME} PRIVATE WAIT_FOR_QUERY_RESULT_ENABLED=1)
+else()
+   target_compile_definitions(${PROJECT_NAME} PRIVATE WAIT_FOR_QUERY_RESULT_ENABLED=0)
+endif()
 target_link_libraries(${PROJECT_NAME} ${LINK_WSI_LIBS})
 
 add_custom_target(manifest_json ALL COMMAND
