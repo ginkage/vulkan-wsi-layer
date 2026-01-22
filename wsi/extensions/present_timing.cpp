@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024-2025 Arm Limited.
+ * Copyright (c) 2024-2026 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -168,9 +168,11 @@ VkResult wsi_ext_present_timing::write_pending_results()
          }
 
          uint64_t timestamp;
+         VkQueryResultFlags wait_for_result = WAIT_FOR_QUERY_RESULT_ENABLED ? VK_QUERY_RESULT_WAIT_BIT : 0;
          VkResult res = m_device.disp.GetQueryPoolResults(
             m_device.device, m_queue_family_resources.m_query_pool, slot.m_image_index, 1u, sizeof(timestamp),
-            &timestamp, static_cast<VkDeviceSize>(0), static_cast<VkQueryResultFlags>(VK_QUERY_RESULT_64_BIT));
+            &timestamp, static_cast<VkDeviceSize>(0),
+            static_cast<VkQueryResultFlags>(VK_QUERY_RESULT_64_BIT | wait_for_result));
          if (res != VK_SUCCESS && res != VK_NOT_READY)
          {
             return res;

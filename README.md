@@ -169,6 +169,12 @@ for applications that do not make use of this extension.
 In order to enable this feature `-DENABLE_INSTRUMENTATION=1` option can
 be passed at build time.
 
+### Build with wait for present timing query results
+
+The option `-DENABLE_WAIT_FOR_QUERY_RESULT=1` provides a way to wait for
+present timing queue operations end bit timestamps to be available when
+queried.
+
 ### Debug builds
 
 The layer can be built with different values of the CMAKE_BUILD_TYPE variable.
