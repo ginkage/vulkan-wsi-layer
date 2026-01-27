@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, 2024-2025 Arm Limited.
+ * Copyright (c) 2022, 2024-2026 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -95,11 +95,24 @@ void surface_format_properties::fill_format_properties(VkSurfaceFormat2KHR &surf
    }
 }
 
-void get_surface_capabilities_common(VkPhysicalDevice physical_device, VkSurfaceCapabilitiesKHR *surface_capabilities)
+void get_surface_capabilities_common(VkPhysicalDevice physical_device, VkSurfaceCapabilitiesKHR *surface_capabilities,
+                                     const surface_properties_override_params *override_params)
 {
    /* Image count limits */
    surface_capabilities->minImageCount = 1;
    surface_capabilities->maxImageCount = surface_properties::MAX_SWAPCHAIN_IMAGE_COUNT;
+
+   if (override_params != nullptr)
+   {
+      if (override_params->min_swapchain_image_count != 0)
+      {
+         surface_capabilities->minImageCount = override_params->min_swapchain_image_count;
+      }
+      if (override_params->max_swapchain_image_count != 0)
+      {
+         surface_capabilities->maxImageCount = override_params->max_swapchain_image_count;
+      }
+   }
 
    /* Surface extents */
    surface_capabilities->currentExtent = { 0xffffffff, 0xffffffff };

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2025 Arm Limited.
+ * Copyright (c) 2017-2026 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -176,7 +176,7 @@ VkResult swapchain_base::init_page_flip_thread()
    return VK_SUCCESS;
 }
 
-void swapchain_base::unpresent_image(uint32_t presented_index)
+void swapchain_base::unpresent_image(uint32_t presented_index, bool release_image)
 {
    util::unique_lock<util::recursive_mutex> image_status_lock(m_image_status_mutex);
    if (!image_status_lock)
@@ -186,11 +186,12 @@ void swapchain_base::unpresent_image(uint32_t presented_index)
    }
 
    const bool is_shared_present = is_using_shared_present_mode();
-   m_swapchain_images[presented_index].set_status(is_shared_present ? swapchain_image::ACQUIRED :
-                                                                      swapchain_image::FREE);
+   const bool should_keep_acquired = is_shared_present && !release_image;
+   m_swapchain_images[presented_index].set_status(should_keep_acquired ? swapchain_image::ACQUIRED :
+                                                                         swapchain_image::FREE);
 
    image_status_lock.unlock();
-   if (!is_shared_present)
+   if (!should_keep_acquired)
    {
       m_free_image_semaphore.post();
    }
@@ -781,7 +782,7 @@ void swapchain_base::release_images(uint32_t image_count, const uint32_t *indice
       assert(index < m_swapchain_images.size());
       /* Applications can only pass acquired images that the device doesn't own */
       assert(m_swapchain_images[index].get_status() == swapchain_image::ACQUIRED);
-      unpresent_image(index);
+      unpresent_image(index, true);
    }
 }
 

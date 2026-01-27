@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024-2025 Arm Limited.
+ * Copyright (c) 2024-2026 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -59,7 +59,9 @@ surface_properties::surface_properties()
 VkResult surface_properties::get_surface_capabilities(VkPhysicalDevice physical_device,
                                                       VkSurfaceCapabilitiesKHR *pSurfaceCapabilities)
 {
-   get_surface_capabilities_common(physical_device, pSurfaceCapabilities);
+   /* Image count limits */
+   surface_properties_override_params override_params = { 2, 3 };
+   get_surface_capabilities_common(physical_device, pSurfaceCapabilities, &override_params);
 
    if (m_specific_surface != nullptr)
    {
@@ -67,10 +69,6 @@ VkResult surface_properties::get_surface_capabilities(VkPhysicalDevice physical_
       pSurfaceCapabilities->minImageExtent = m_specific_surface->get_extent();
       pSurfaceCapabilities->maxImageExtent = m_specific_surface->get_extent();
    }
-
-   /* Image count limits */
-   pSurfaceCapabilities->minImageCount = 2;
-   pSurfaceCapabilities->maxImageCount = 3;
 
    /* Composite alpha */
    pSurfaceCapabilities->supportedCompositeAlpha =

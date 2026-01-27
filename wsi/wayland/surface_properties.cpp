@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2019, 2021-2025 Arm Limited.
+ * Copyright (c) 2017-2019, 2021-2026 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -90,8 +90,8 @@ VkResult surface_properties::get_surface_capabilities(VkPhysicalDevice physical_
 {
 
    /* Image count limits */
-   get_surface_capabilities_common(physical_device, pSurfaceCapabilities);
-   pSurfaceCapabilities->minImageCount = 2;
+   surface_properties_override_params override_params = { 2, 0 };
+   get_surface_capabilities_common(physical_device, pSurfaceCapabilities, &override_params);
 
    /* Composite alpha */
    pSurfaceCapabilities->supportedCompositeAlpha = static_cast<VkCompositeAlphaFlagsKHR>(
