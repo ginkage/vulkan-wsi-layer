@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2019, 2021-2025 Arm Limited.
+ * Copyright (c) 2017-2019, 2021-2026 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -42,7 +42,11 @@
 
 namespace wsi
 {
-
+struct surface_properties_override_params
+{
+   uint32_t min_swapchain_image_count = 0;
+   uint32_t max_swapchain_image_count = 0;
+};
 /**
  * @brief The base surface property query interface.
  */
@@ -285,9 +289,10 @@ VkResult check_surface_present_mode_query_is_supported(const VkPhysicalDeviceSur
  *
  * @param physical_device          Vulkan physical_device.
  * @param surface_capabilities     address of Vulkan surface capabilities struct.
- *
+ * @param override_params          Backend specfic parameters to override.
  */
-void get_surface_capabilities_common(VkPhysicalDevice physical_device, VkSurfaceCapabilitiesKHR *surface_capabilities);
+void get_surface_capabilities_common(VkPhysicalDevice physical_device, VkSurfaceCapabilitiesKHR *surface_capabilities,
+                                     const surface_properties_override_params *override_params = nullptr);
 
 /**
  * @brief Common function for the get_surface_present_modes.

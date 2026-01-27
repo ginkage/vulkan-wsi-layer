@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2025 Arm Limited.
+ * Copyright (c) 2017-2026 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -538,8 +538,9 @@ protected:
     * Called by swapchain implementation when a new image has been presented.
     *
     * @param presented_index Index of the image to be marked as free.
+    * @param release_image   The image is released.
     */
-   void unpresent_image(uint32_t presented_index);
+   void unpresent_image(uint32_t presented_index, bool release_image = false);
 
    /**
     * @brief Hook for any actions to free up a buffer for acquire

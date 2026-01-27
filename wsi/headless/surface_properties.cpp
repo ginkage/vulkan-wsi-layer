@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2019, 2021-2025 Arm Limited.
+ * Copyright (c) 2017-2019, 2021-2026 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -93,7 +93,16 @@ VkResult surface_properties::get_surface_capabilities(VkPhysicalDevice physical_
                                                       VkSurfaceCapabilities2KHR *surface_capabilities)
 {
    TRY(check_surface_present_mode_query_is_supported(surface_info, m_supported_modes));
-   get_surface_capabilities_common(physical_device, &surface_capabilities->surfaceCapabilities);
+   surface_properties_override_params override_params = {};
+   auto surface_present_mode =
+      util::find_extension<VkSurfacePresentModeEXT>(VK_STRUCTURE_TYPE_SURFACE_PRESENT_MODE_EXT, surface_info);
+   if ((surface_present_mode != nullptr) &&
+       ((surface_present_mode->presentMode == VK_PRESENT_MODE_SHARED_DEMAND_REFRESH_KHR) ||
+        (surface_present_mode->presentMode == VK_PRESENT_MODE_SHARED_CONTINUOUS_REFRESH_KHR)))
+   {
+      override_params = { 1, 1 };
+   }
+   get_surface_capabilities_common(physical_device, &surface_capabilities->surfaceCapabilities, &override_params);
    m_compatible_present_modes.get_surface_present_mode_compatibility_common(surface_info, surface_capabilities);
 
    auto surface_scaling_capabilities = util::find_extension<VkSurfacePresentScalingCapabilitiesEXT>(
