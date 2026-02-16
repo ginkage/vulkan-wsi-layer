@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2025 Arm Limited.
+# Copyright (c) 2019-2026 Arm Limited.
 #
 # SPDX-License-Identifier: MIT
 #
@@ -152,16 +152,13 @@ if(BUILD_WSI_WAYLAND)
       wsi/wayland/surface_properties.cpp
       wsi/wayland/surface.cpp
       wsi/wayland/wl_helpers.cpp
-      wsi/wayland/swapchain.cpp
+      wsi/wayland/present_id_wayland.cpp
+      wsi/wayland/present_timing_handler.cpp
       wsi/wayland/present_wait_wayland.cpp
+      wsi/wayland/swapchain.cpp
+      wsi/wayland/wp_presentation_feedback.cpp
       wsi/extensions/external_memory_extension.cpp
       wsi/image_backing_memory_external.cpp)
-
-   if(VULKAN_WSI_LAYER_EXPERIMENTAL)
-      target_sources(wayland_wsi PRIVATE wsi/wayland/present_id_wayland.cpp)
-      target_sources(wayland_wsi PRIVATE wsi/wayland/present_timing_handler.cpp)
-      target_sources(wayland_wsi PRIVATE wsi/wayland/wp_presentation_feedback.cpp)
-   endif()
 
    pkg_check_modules(WAYLAND_CLIENT REQUIRED wayland-client)
    message(STATUS "Using Wayland client include directories: ${WAYLAND_CLIENT_INCLUDE_DIRS}")
@@ -243,12 +240,9 @@ if(BUILD_WSI_HEADLESS)
       wsi/headless/surface_properties.cpp
       wsi/headless/surface.cpp
       wsi/headless/swapchain.cpp
+      wsi/headless/present_timing_handler.cpp
       wsi/headless/present_wait_headless.cpp
       wsi/image_backing_memory_device.cpp)
-
-   if(VULKAN_WSI_LAYER_EXPERIMENTAL)
-      target_sources(wsi_headless PRIVATE wsi/headless/present_timing_handler.cpp)
-   endif()
 
    target_include_directories(wsi_headless PRIVATE
       ${PROJECT_SOURCE_DIR}
@@ -307,6 +301,7 @@ add_library(${PROJECT_NAME} SHARED
    layer/surface_api.cpp
    layer/swapchain_api.cpp
    layer/swapchain_maintenance_api.cpp
+   layer/present_timing_api.cpp
    layer/present_wait_api.cpp
    util/timed_semaphore.cpp
    util/custom_allocator.cpp
@@ -320,6 +315,7 @@ add_library(${PROJECT_NAME} SHARED
    wsi/extensions/present_wait.cpp
    wsi/extensions/frame_boundary.cpp
    wsi/extensions/mutable_format_extension.cpp
+   wsi/extensions/present_timing.cpp
    util/wsi_extension.cpp
    wsi/extensions/swapchain_maintenance.cpp
    wsi/surface_properties.cpp
@@ -329,15 +325,12 @@ add_library(${PROJECT_NAME} SHARED
    wsi/vulkan_image_handle_creator.cpp
    wsi/swapchain_image_factory.cpp
    wsi/swapchain_image.cpp)
+
 if (VULKAN_WSI_LAYER_EXPERIMENTAL)
-   target_sources(${PROJECT_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/layer/present_timing_api.cpp)
-   target_sources(${PROJECT_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/wsi/extensions/present_timing.cpp)
    add_definitions("-DVULKAN_WSI_LAYER_EXPERIMENTAL=1")
 else()
-   list(APPEND JSON_COMMANDS COMMAND sed -Ei '/VK_EXT_present_timing/d' ${CMAKE_CURRENT_BINARY_DIR}/VkLayer_window_system_integration.json)
    add_definitions("-DVULKAN_WSI_LAYER_EXPERIMENTAL=0")
 endif()
-
 
 if((CMAKE_BUILD_TYPE MATCHES "^[Dd]ebug$") OR (CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo"))
    target_sources(${PROJECT_NAME} PUBLIC util/debug.cpp)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Arm Limited.
+ * Copyright (c) 2025-2026 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -27,7 +27,6 @@
  *
  * @brief Contains the functionality to implement features for present timing extension.
  */
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
 #include <cstdint>
 #include <array>
 #include <algorithm>
@@ -154,7 +153,7 @@ std::optional<uint64_t> wsi_ext_present_timing_headless::get_current_clock_time_
       return std::nullopt;
    }
 
-   return static_cast<uint64_t>(now.tv_sec) * static_cast<uint64_t>(1e9) + static_cast<uint64_t>(now.tv_nsec);
+   return (static_cast<uint64_t>(now.tv_sec) * static_cast<uint64_t>(1e9)) + static_cast<uint64_t>(now.tv_nsec);
 }
 
 std::optional<uint64_t> wsi_ext_present_timing_headless::get_first_pixel_visible_timestamp_for_last_image() const
@@ -163,7 +162,7 @@ std::optional<uint64_t> wsi_ext_present_timing_headless::get_first_pixel_visible
    {
       return std::nullopt;
    }
-   return m_first_pixel_visible_timestamp_for_last_image.value();
+   return m_first_pixel_visible_timestamp_for_last_image;
 }
 
 void wsi_ext_present_timing_headless::set_first_pixel_visible_timestamp_for_last_image(uint64_t timestamp)
@@ -183,5 +182,3 @@ VkPresentStageFlagsEXT wsi_ext_present_timing_headless::stages_supported()
    }
    return stages;
 }
-
-#endif

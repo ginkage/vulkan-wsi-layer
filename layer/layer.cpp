@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2025 Arm Limited.
+ * Copyright (c) 2016-2026 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -31,8 +31,8 @@
 #include <vulkan/vulkan.h>
 
 #include "layer/calibrated_timestamps_api.hpp"
+#include "present_timing_api.hpp"
 #include "present_wait_api.hpp"
-#include "wsi_layer_experimental.hpp"
 #include "private_data.hpp"
 #include "surface_api.hpp"
 #include "swapchain_api.hpp"
@@ -246,16 +246,13 @@ VKAPI_ATTR VkResult create_device(VkPhysicalDevice physicalDevice, const VkDevic
    util::vector<const char *> modified_enabled_extensions{ allocator };
    util::extension_list enabled_extensions{ allocator };
 
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
    VkPhysicalDeviceMaintenance9FeaturesKHR maintenance9_features = {};
-#endif /* VULKAN_WSI_LAYER_EXPERIMENTAL */
    const util::wsi_platform_set &enabled_platforms = inst_data.get_enabled_platforms();
    if (!enabled_platforms.empty())
    {
       TRY_LOG_CALL(enabled_extensions.add(pCreateInfo->ppEnabledExtensionNames, pCreateInfo->enabledExtensionCount));
       TRY_LOG_CALL(wsi::add_device_extensions_required_by_layer(physicalDevice, enabled_platforms, enabled_extensions,
                                                                 inst_data.api_version));
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
       auto present_timing_supported = wsi::present_timing_dependencies_supported(physicalDevice);
       if (std::holds_alternative<VkResult>(present_timing_supported))
       {
@@ -286,7 +283,6 @@ VKAPI_ATTR VkResult create_device(VkPhysicalDevice physicalDevice, const VkDevic
             modified_info.pNext = &maintenance9_features;
          }
       }
-#endif /* VULKAN_WSI_LAYER_EXPERIMENTAL */
 
       TRY_LOG_CALL(enabled_extensions.get_extension_strings(modified_enabled_extensions));
 
@@ -598,7 +594,6 @@ wsi_layer_vkGetPhysicalDeviceFeatures2(VkPhysicalDevice physical_device,
       }
    }
 
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
    auto *present_timing_features = util::find_extension<VkPhysicalDevicePresentTimingFeaturesEXT>(
       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_TIMING_FEATURES_EXT, pFeatures->pNext);
    if (present_timing_features != nullptr)
@@ -615,7 +610,6 @@ wsi_layer_vkGetPhysicalDeviceFeatures2(VkPhysicalDevice physical_device,
       present_timing_features->presentAtAbsoluteTime = VK_TRUE;
       present_timing_features->presentAtRelativeTime = VK_TRUE;
    }
-#endif
 
    auto *present_mode_fifo_latest_ready_features =
       util::find_extension<VkPhysicalDevicePresentModeFifoLatestReadyFeaturesEXT>(
@@ -679,7 +673,7 @@ wsi_layer_vkGetDeviceProcAddr(VkDevice device, const char *funcName) VWL_API_POS
    {
       GET_PROC_ADDR(vkGetSwapchainStatusKHR);
    }
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
+
    if (device_data.is_device_extension_enabled(VK_EXT_PRESENT_TIMING_EXTENSION_NAME))
    {
       GET_PROC_ADDR(vkSetSwapchainPresentTimingQueueSizeEXT);
@@ -692,7 +686,7 @@ wsi_layer_vkGetDeviceProcAddr(VkDevice device, const char *funcName) VWL_API_POS
          GET_PROC_ADDR(vkGetCalibratedTimestampsEXT);
       }
    }
-#endif
+
    GET_PROC_ADDR(vkDestroyDevice);
    GET_PROC_ADDR(vkCreateImage);
 
@@ -809,10 +803,9 @@ wsi_layer_vkGetInstanceProcAddr(VkInstance instance, const char *funcName) VWL_A
          GET_PROC_ADDR(vkGetPhysicalDeviceSurfaceCapabilities2KHR);
          GET_PROC_ADDR(vkGetPhysicalDeviceSurfaceFormats2KHR);
       }
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
+
       GET_PROC_ADDR(vkGetPhysicalDeviceCalibrateableTimeDomainsKHR);
       GET_PROC_ADDR(vkGetPhysicalDeviceCalibrateableTimeDomainsEXT);
-#endif
 
       if (instance_data.is_instance_extension_enabled(VK_EXT_DISPLAY_SURFACE_COUNTER_EXTENSION_NAME))
       {

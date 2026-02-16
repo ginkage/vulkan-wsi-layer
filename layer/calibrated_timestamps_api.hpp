@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Arm Limited.
+ * Copyright (c) 2025-2026 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -32,7 +32,6 @@
 #pragma once
 #include "util/macros.hpp"
 
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
 VWL_VKAPI_CALL(VkResult)
 wsi_layer_vkGetCalibratedTimestampsEXT(VkDevice device, uint32_t timestampCount,
                                        const VkCalibratedTimestampInfoKHR *pTimestampInfos, uint64_t *pTimestamps,
@@ -49,4 +48,3 @@ wsi_layer_vkGetPhysicalDeviceCalibrateableTimeDomainsKHR(VkPhysicalDevice physic
 VWL_VKAPI_CALL(VkResult)
 wsi_layer_vkGetPhysicalDeviceCalibrateableTimeDomainsEXT(VkPhysicalDevice physicalDevice, uint32_t *pTimeDomainCount,
                                                          VkTimeDomainEXT *pTimeDomains) VWL_API_POST;
-#endif

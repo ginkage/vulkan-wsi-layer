@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Arm Limited.
+ * Copyright (c) 2025-2026 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -27,7 +27,6 @@
  *
  * @brief Contains the functionality to implement Wayland specific features for present ID extension.
  */
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
 
 #include <util/custom_mutex.hpp>
 #include "present_id_wayland.hpp"
@@ -105,5 +104,3 @@ void wsi_ext_present_id_wayland::remove_from_pending_present_feedback_list(uint6
 
 } // namespace wayland
 } // namespace wsi
-
-#endif /* VULKAN_WSI_LAYER_EXPERIMENTAL */

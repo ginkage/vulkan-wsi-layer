@@ -31,7 +31,7 @@
 #pragma once
 
 #include <vulkan/vulkan.h>
-#include "layer/wsi_layer_experimental.hpp"
+#include "layer/present_timing_api.hpp"
 #include "layer/private_data.hpp"
 #include "util/custom_allocator.hpp"
 #include "util/drm/drm_utils.hpp"
@@ -119,13 +119,11 @@ public:
 
    virtual bool is_compatible_present_modes(VkPresentModeKHR present_mode_a, VkPresentModeKHR present_mode_b) = 0;
 
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
    /**
     * @brief Get the present timing surface capabilities for the specific VkSurface type.
     */
    VkResult get_present_timing_surface_caps(VkPhysicalDevice physical_device,
                                             VkPresentTimingSurfaceCapabilitiesEXT *present_timing_surface_caps);
-#endif /* VULKAN_WSI_LAYER_EXPERIMENTAL */
 
    /**
     * @brief Virtual destructor.
@@ -138,13 +136,11 @@ private:
     */
    virtual void populate_present_mode_compatibilities() = 0;
 
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
    /**
     * @brief Get the present timing surface capabilities for the specific VkSurface type.
     */
    virtual VkResult get_present_timing_surface_caps_internal(
       VkPhysicalDevice physical_device, VkPresentTimingSurfaceCapabilitiesEXT *present_timing_surface_caps) = 0;
-#endif /* VULKAN_WSI_LAYER_EXPERIMENTAL */
 };
 
 class surface_format_properties

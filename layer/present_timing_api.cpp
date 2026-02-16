@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024-2025 Arm Limited.
+ * Copyright (c) 2024-2026 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -28,13 +28,12 @@
  * @brief Contains the Vulkan entrypoints for the present timing.
  */
 #include <cassert>
-#include "wsi_layer_experimental.hpp"
 
+#include "present_timing_api.hpp"
 #include <wsi/extensions/present_timing.hpp>
 #include <wsi/swapchain_base.hpp>
 #include "util/macros.hpp"
 
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
 /**
  * @brief Implements vkSetSwapchainPresentTimingQueueSizeEXT Vulkan entrypoint.
  */
@@ -93,11 +92,8 @@ wsi_layer_vkGetSwapchainTimeDomainPropertiesEXT(VkDevice device, VkSwapchainKHR 
       return device_data.disp.GetSwapchainTimeDomainPropertiesEXT(device, swapchain, pSwapchainTimeDomainProperties,
                                                                   pTimeDomainsCounter);
    }
-
-   auto *sc = reinterpret_cast<wsi::swapchain_base *>(swapchain);
-   auto *ext = sc->get_swapchain_extension<wsi::wsi_ext_present_timing>(true);
-   return ext->get_swapchain_time_domains().get_swapchain_time_domain_properties(pSwapchainTimeDomainProperties,
-                                                                                 pTimeDomainsCounter);
+   return wsi::swapchain_time_domains::get_swapchain_time_domain_properties(pSwapchainTimeDomainProperties,
+                                                                            pTimeDomainsCounter);
 }
 
 /**
@@ -119,4 +115,3 @@ wsi_layer_vkGetPastPresentationTimingEXT(
    auto *ext = sc->get_swapchain_extension<wsi::wsi_ext_present_timing>(true);
    return ext->get_past_presentation_results(pPastPresentationTimingProperties, pPastPresentationTimingInfo->flags);
 }
-#endif /* VULKAN_WSI_LAYER_EXPERIMENTAL */

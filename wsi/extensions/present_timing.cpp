@@ -34,7 +34,6 @@
 
 #include "present_timing.hpp"
 
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
 namespace wsi
 {
 /* VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT,
@@ -132,7 +131,10 @@ swapchain_presentation_timing *wsi_ext_present_timing::get_pending_stage_timing(
 {
    if (auto *entry = get_pending_stage_entry(image_index, stage))
    {
-      return &entry->get_stage_timing(stage)->get();
+      if (auto stage_timing_optional = entry->get_stage_timing(stage))
+      {
+         return &stage_timing_optional->get();
+      }
    }
    return nullptr;
 }
@@ -384,7 +386,8 @@ VkResult wsi_ext_present_timing::get_past_presentation_results(
       return VK_SUCCESS;
    }
 
-   uint64_t timing_count = 0, removed_entries = 0;
+   uint64_t timing_count = 0;
+   uint64_t removed_entries = 0;
    VkPastPresentationTimingEXT *timings = past_present_timing_properties->pPresentationTimings;
    const bool allow_partial = (flags & VK_PAST_PRESENTATION_TIMING_ALLOW_PARTIAL_RESULTS_BIT_EXT) != 0;
    const bool allow_out_of_order = (flags & VK_PAST_PRESENTATION_TIMING_ALLOW_OUT_OF_ORDER_RESULTS_BIT_EXT) != 0;
@@ -505,7 +508,11 @@ std::optional<bool> swapchain_presentation_entry::is_complete(VkPresentStageFlag
 bool swapchain_presentation_entry::is_pending(VkPresentStageFlagBitsEXT stage)
 {
    auto stage_timing_optional = get_stage_timing(stage);
-   return stage_timing_optional.has_value() ? !stage_timing_optional->get().m_set : false;
+   if (!stage_timing_optional.has_value())
+   {
+      return false;
+   }
+   return !stage_timing_optional->get().m_set;
 }
 
 bool swapchain_presentation_entry::has_outstanding_stages()
@@ -572,11 +579,17 @@ std::optional<std::reference_wrapper<swapchain_presentation_timing>> swapchain_p
 void swapchain_presentation_entry::set_stage_timing(VkPresentStageFlagBitsEXT stage, uint64_t time)
 {
    auto stage_timing_optional = get_stage_timing(stage);
-   if (stage_timing_optional->get().m_set)
+   if (!stage_timing_optional.has_value())
    {
       return;
    }
-   stage_timing_optional->get().set_time(time);
+
+   auto &stage_timing = stage_timing_optional->get();
+   if (stage_timing.m_set)
+   {
+      return;
+   }
+   stage_timing.set_time(time);
 }
 
 void swapchain_presentation_entry::populate(VkPastPresentationTimingEXT &timing)
@@ -732,5 +745,3 @@ std::variant<bool, VkResult> present_timing_dependencies_supported(VkPhysicalDev
    return maintenance9.maintenance9 != VK_FALSE;
 }
 } /* namespace wsi */
-
-#endif /* VULKAN_WSI_LAYER_EXPERIMENTAL */

@@ -23,7 +23,7 @@
  */
 
 /**
- * @file wsi_layer_experimental.hpp
+ * @file present_timing_api.hpp
  *
  * @brief Contains the declarations of the structures and entry point APIs of experimental extensions.
  *
@@ -32,6 +32,20 @@
 #pragma once
 #include "util/macros.hpp"
 
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
+VWL_VKAPI_CALL(VkResult)
+wsi_layer_vkSetSwapchainPresentTimingQueueSizeEXT(VkDevice device, VkSwapchainKHR swapchain,
+                                                  uint32_t size) VWL_API_POST;
 
-#endif
+VWL_VKAPI_CALL(VkResult)
+wsi_layer_vkGetSwapchainTimingPropertiesEXT(VkDevice device, VkSwapchainKHR swapchain,
+                                            VkSwapchainTimingPropertiesEXT *pSwapchainTimingProperties,
+                                            uint64_t *pSwapchainTimingPropertiesCounter) VWL_API_POST;
+VWL_VKAPI_CALL(VkResult)
+wsi_layer_vkGetSwapchainTimeDomainPropertiesEXT(VkDevice device, VkSwapchainKHR swapchain,
+                                                VkSwapchainTimeDomainPropertiesEXT *pSwapchainTimeDomainProperties,
+                                                uint64_t *pTimeDomainsCounter) VWL_API_POST;
+
+VWL_VKAPI_CALL(VkResult)
+wsi_layer_vkGetPastPresentationTimingEXT(
+   VkDevice device, const VkPastPresentationTimingInfoEXT *pPastPresentationTimingInfo,
+   VkPastPresentationTimingPropertiesEXT *pPastPresentationTimingProperties) VWL_API_POST;

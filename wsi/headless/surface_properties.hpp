@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2019, 2022-2025 Arm Limited.
+ * Copyright (c) 2017-2019, 2022-2026 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -75,10 +75,8 @@ private:
 
    void get_surface_present_scaling_and_gravity(VkSurfacePresentScalingCapabilitiesEXT *scaling_capabilities) override;
 
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
    VkResult get_present_timing_surface_caps_internal(
       VkPhysicalDevice physical_device, VkPresentTimingSurfaceCapabilitiesEXT *present_timing_surface_caps) override;
-#endif
 };
 
 } /* namespace headless */
