@@ -581,7 +581,6 @@ VkResult swapchain_base::notify_presentation_engine(const pending_present_reques
 VkResult swapchain_base::queue_present(VkQueue queue, const VkPresentInfoKHR *present_info,
                                        const swapchain_presentation_parameters &submit_info)
 {
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
    const VkPresentTimingInfoEXT *present_timing_info = nullptr;
    const auto *present_timings_info =
       util::find_extension<VkPresentTimingsInfoEXT>(VK_STRUCTURE_TYPE_PRESENT_TIMINGS_INFO_EXT, present_info->pNext);
@@ -595,7 +594,7 @@ VkResult swapchain_base::queue_present(VkQueue queue, const VkPresentInfoKHR *pr
          TRY(ext_present_timing->queue_has_space());
       }
    }
-#endif
+
    if (submit_info.switch_presentation_mode)
    {
       /* Assert when a presentation mode switch is requested and the swapchain_maintenance1 extension which implements this is not available */
@@ -636,7 +635,6 @@ VkResult swapchain_base::queue_present(VkQueue queue, const VkPresentInfoKHR *pr
       signal_semaphores[count_signal_semaphores++] =
          m_swapchain_images[submit_info.pending_present.image_index].get_present_fence_wait_semaphore();
    }
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
    if ((present_timing_info != nullptr) &&
        (present_timing_info->presentStageQueries & VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT))
    {
@@ -647,7 +645,7 @@ VkResult swapchain_base::queue_present(VkQueue queue, const VkPresentInfoKHR *pr
             ext_present_timing->get_image_present_semaphore(submit_info.pending_present.image_index);
       }
    }
-#endif
+
    queue_submit_semaphores semaphores = {
       wait_semaphores,
       sem_count,
@@ -669,14 +667,12 @@ VkResult swapchain_base::queue_present(VkQueue queue, const VkPresentInfoKHR *pr
       TRY(sync_queue_submit(m_device_data, queue, submit_info.present_fence, present_fence_semaphores));
    }
 
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
    if (present_timing_info != nullptr)
    {
       auto *ext_present_timing = get_swapchain_extension<wsi::wsi_ext_present_timing>(true);
       TRY_LOG_CALL(ext_present_timing->add_presentation_entry(
          queue, submit_info.pending_present.present_id, submit_info.pending_present.image_index, *present_timing_info));
    }
-#endif
    TRY(notify_presentation_engine(submit_info.pending_present));
 
    return VK_SUCCESS;

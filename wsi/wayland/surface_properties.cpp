@@ -36,6 +36,7 @@
 #include <algorithm>
 #include <array>
 #include <cstring>
+#include "present_timing_handler.hpp"
 #include "surface_properties.hpp"
 #include "surface.hpp"
 #include "layer/private_data.hpp"
@@ -45,10 +46,6 @@
 #include "util/log.hpp"
 #include "util/macros.hpp"
 #include "util/helpers.hpp"
-
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
-#include "present_timing_handler.hpp"
-#endif
 
 namespace wsi
 {
@@ -454,7 +451,6 @@ bool surface_properties::is_compatible_present_modes(VkPresentModeKHR present_mo
    return m_compatible_present_modes.is_compatible_present_modes(present_mode_a, present_mode_b);
 }
 
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
 VkResult surface_properties::get_present_timing_surface_caps_internal(
    VkPhysicalDevice physical_device, VkPresentTimingSurfaceCapabilitiesEXT *present_timing_surface_caps)
 {
@@ -503,7 +499,6 @@ VkResult surface_properties::get_present_timing_surface_caps_internal(
 
    return VK_SUCCESS;
 }
-#endif
 
 } // namespace wayland
 } // namespace wsi

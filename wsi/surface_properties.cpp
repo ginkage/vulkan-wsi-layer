@@ -141,7 +141,6 @@ void get_surface_capabilities_common(VkPhysicalDevice physical_device, VkSurface
       VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
 }
 
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
 /**
  * @brief Get the present timing surface capabilities for the specific VkSurface type.
  */
@@ -163,6 +162,5 @@ VkResult surface_properties::get_present_timing_surface_caps(
 
    return VK_SUCCESS;
 }
-#endif /* VULKAN_WSI_LAYER_EXPERIMENTAL */
 
 } /* namespace wsi */

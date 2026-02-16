@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Arm Limited.
+ * Copyright (c) 2025-2026 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -31,7 +31,6 @@
 #include <wsi/extensions/present_timing.hpp>
 #include <wsi/swapchain_base.hpp>
 
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
 VWL_VKAPI_CALL(VkResult)
 wsi_layer_vkGetCalibratedTimestampsKHR(VkDevice device, uint32_t timestampCount,
                                        const VkCalibratedTimestampInfoKHR *pTimestampInfos, uint64_t *pTimestamps,
@@ -173,4 +172,3 @@ wsi_layer_vkGetPhysicalDeviceCalibrateableTimeDomainsEXT(VkPhysicalDevice physic
 {
    return wsi_layer_vkGetPhysicalDeviceCalibrateableTimeDomainsKHR(physicalDevice, pTimeDomainCount, pTimeDomains);
 }
-#endif /* VULKAN_WSI_LAYER_EXPERIMENTAL */

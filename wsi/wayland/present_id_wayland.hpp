@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Arm Limited.
+ * Copyright (c) 2025-2026 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -28,8 +28,6 @@
  * @brief Contains the functionality to implement Wayland specific features for present id extension.
  */
 #pragma once
-
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
 
 #include <wsi/extensions/present_id.hpp>
 #include <util/ring_buffer.hpp>
@@ -97,5 +95,3 @@ private:
 
 } // namespace wayland
 } // namespace wsi
-
-#endif /* VULKAN_WSI_LAYER_EXPERIMENTAL */

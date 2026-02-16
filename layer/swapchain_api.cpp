@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, 2021-2025 Arm Limited.
+ * Copyright (c) 2017, 2019, 2021-2026 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -218,14 +218,13 @@ wsi_layer_vkQueuePresentKHR(VkQueue queue, const VkPresentInfoKHR *pPresentInfo)
       VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_FENCE_INFO_EXT, present_info->pNext);
    const auto swapchain_present_mode_info = util::find_extension<VkSwapchainPresentModeInfoEXT>(
       VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_MODE_INFO_EXT, present_info->pNext);
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
    const auto present_timings_info =
       util::find_extension<VkPresentTimingsInfoEXT>(VK_STRUCTURE_TYPE_PRESENT_TIMINGS_INFO_EXT, present_info->pNext);
    if (present_timings_info)
    {
       assert(present_timings_info->swapchainCount == pPresentInfo->swapchainCount);
    }
-#endif
+
    for (uint32_t i = 0; i < pPresentInfo->swapchainCount; ++i)
    {
       VkSwapchainKHR swapc = pPresentInfo->pSwapchains[i];
@@ -260,13 +259,11 @@ wsi_layer_vkQueuePresentKHR(VkQueue queue, const VkPresentInfoKHR *pPresentInfo)
       present_params.use_image_present_semaphore = use_image_present_semaphore;
       present_params.handle_present_frame_boundary_event = frame_boundary_event_handled;
 
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
       if (present_timings_info)
       {
          present_params.m_present_timing_info = present_timings_info->pTimingInfos[i];
          present_params.m_present_timing_info.pNext = nullptr;
       }
-#endif
       VkResult res = sc->queue_present(queue, present_info, present_params);
       if (pPresentInfo->pResults != nullptr)
       {

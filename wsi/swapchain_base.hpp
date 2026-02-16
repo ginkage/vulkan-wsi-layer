@@ -100,20 +100,16 @@ struct swapchain_presentation_parameters
     */
    VkBool32 handle_present_frame_boundary_event{ true };
 
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
    /**
     * The present timing info.
     */
    VkPresentTimingInfoEXT m_present_timing_info;
-#endif
 };
 
 enum signal_semaphores_type
 {
    SIGNAL_SEMAPHORE_PRESENT_FENCE,
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
    SIGNAL_SEMAPHORE_PRESENT_TIMING,
-#endif
    SIGNAL_SEMAPHORE_MAX_NUM,
 };
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Arm Limited.
+ * Copyright (c) 2025-2026 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -28,8 +28,6 @@
  * @brief Contains the functionality to implement features for present timing extension.
  */
 #pragma once
-
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
 
 #include <optional>
 #include <array>
@@ -178,5 +176,3 @@ private:
 
 } // namespace wayland
 } // namespace wsi
-
-#endif

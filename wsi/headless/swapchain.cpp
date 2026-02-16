@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2025 Arm Limited.
+ * Copyright (c) 2017-2026 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -99,7 +99,6 @@ VkResult swapchain::add_required_extensions(VkDevice device, const VkSwapchainCr
       }
    }
 
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
    bool swapchain_support_enabled = swapchain_create_info->flags & VK_SWAPCHAIN_CREATE_PRESENT_TIMING_BIT_EXT;
    if (swapchain_support_enabled)
    {
@@ -109,7 +108,6 @@ VkResult swapchain::add_required_extensions(VkDevice device, const VkSwapchainCr
          return VK_ERROR_OUT_OF_HOST_MEMORY;
       }
    }
-#endif
 
    bool present_wait2;
    constexpr VkSwapchainCreateFlagsKHR present_wait2_mask =
@@ -176,7 +174,6 @@ VkResult swapchain::allocate_and_bind_swapchain_image(swapchain_image &image)
 
 void swapchain::present_image(const pending_present_request &pending_present)
 {
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
    auto *ext_present_timing = get_swapchain_extension<wsi_ext_present_timing_headless>();
    if (ext_present_timing)
    {
@@ -202,20 +199,19 @@ void swapchain::present_image(const pending_present_request &pending_present)
             absolute_future_present_time_ns = presentation_target->m_target_present_time;
          }
          auto current_time_ns = ext_present_timing->get_current_clock_time_ns();
-         if (*current_time_ns < absolute_future_present_time_ns)
+         if (current_time_ns.has_value() && current_time_ns.value() < absolute_future_present_time_ns)
          {
             /* Sleep until we can schedule the image for completion.
              * This is OK as the sleep should only be dispatched on the page_flip thread and not on main. */
             assert(m_page_flip_thread_run);
 
-            int64_t time_diff = static_cast<int64_t>(absolute_future_present_time_ns - *current_time_ns);
+            const auto time_diff = static_cast<int64_t>(absolute_future_present_time_ns - current_time_ns.value());
             std::this_thread::sleep_for(std::chrono::nanoseconds(time_diff));
          }
       }
 
       ext_present_timing->remove_presentation_target_entry(pending_present.image_index);
    }
-#endif
 
    auto *ext = get_swapchain_extension<wsi_ext_present_id>();
    if (ext != nullptr)
@@ -223,7 +219,6 @@ void swapchain::present_image(const pending_present_request &pending_present)
       ext->mark_delivered(pending_present.present_id);
    }
 
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
    if (ext_present_timing && ext_present_timing->get_monotonic_domain().has_value())
    {
       auto current_time = ext_present_timing->get_current_clock_time_ns();
@@ -244,8 +239,6 @@ void swapchain::present_image(const pending_present_request &pending_present)
          ext_present_timing->set_pending_stage_time(pending_present.image_index, stage, *current_time);
       }
    }
-#endif
-
    unpresent_image(pending_present.image_index);
 }
 

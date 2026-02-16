@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2025 Arm Limited.
+ * Copyright (c) 2018-2026 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -472,9 +472,7 @@ device_private_data::device_private_data(instance_private_data &inst_data, VkPhy
    , compression_control_enabled{ false }
    , present_id_enabled { false }
    , swapchain_maintenance1_enabled{ false }
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
    , present_timing_enabled { true }
-#endif
    , present_wait2_enabled { false }
    , present_id2_enabled { false }
    , present_mode_fifo_latest_ready_enabled { false }

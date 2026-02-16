@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2025 Arm Limited.
+ * Copyright (c) 2017-2026 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -123,11 +123,7 @@ VkResult swapchain::add_required_extensions(VkDevice device, const VkSwapchainCr
    if (m_device_data.is_present_id_enabled() ||
        (swapchain_create_info->flags & VK_SWAPCHAIN_CREATE_PRESENT_ID_2_BIT_KHR))
    {
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
       if (!add_swapchain_extension(m_allocator.make_unique<wsi_ext_present_id_wayland>()))
-#else
-      if (!add_swapchain_extension(m_allocator.make_unique<wsi_ext_present_id>()))
-#endif
       {
          return VK_ERROR_OUT_OF_HOST_MEMORY;
       }
@@ -163,7 +159,6 @@ VkResult swapchain::add_required_extensions(VkDevice device, const VkSwapchainCr
       }
    }
 
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
    bool swapchain_support_enabled = swapchain_create_info->flags & VK_SWAPCHAIN_CREATE_PRESENT_TIMING_BIT_EXT;
    if (swapchain_support_enabled)
    {
@@ -187,8 +182,6 @@ VkResult swapchain::add_required_extensions(VkDevice device, const VkSwapchainCr
          return VK_ERROR_OUT_OF_HOST_MEMORY;
       }
    }
-#endif
-
    return VK_SUCCESS;
 }
 
@@ -225,13 +218,12 @@ VkResult swapchain::init_platform(VkDevice device, const VkSwapchainCreateInfoKH
    {
       present_wait->set_wayland_dispatcher(m_display, m_buffer_queue);
    }
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
+
    auto *present_timing_ext = get_swapchain_extension<wsi_ext_present_timing_wayland>();
    if (present_timing_ext != nullptr)
    {
       present_timing_ext->init(m_display, m_buffer_queue);
    }
-#endif
 
    auto wsi_allocator = swapchain_wsialloc_allocator::create();
    if (!wsi_allocator.has_value())
@@ -304,7 +296,6 @@ void swapchain::release_buffer(struct wl_buffer *wayl_buffer)
       auto data = m_swapchain_images[i].get_data<wayland_image_data>();
       if (data && data->get_buffer() == wayl_buffer)
       {
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
          /* Some compositors might not deliver wp_presentation_feedback events if the images are pushed to compositor quick enough
           * in presentation modes that allow it (mailbox). If that happens, double check if these images were submitted for feedback
           * and handle it as a 'image discarded' event. */
@@ -318,8 +309,6 @@ void swapchain::release_buffer(struct wl_buffer *wayl_buffer)
          {
             present_id_ext->mark_buffer_release(i);
          }
-#endif
-
          unpresent_image(i);
          break;
       }
@@ -433,7 +422,6 @@ void swapchain::present_image(const pending_present_request &pending_present)
       }
    }
 
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
    auto *present_id_ext = get_swapchain_extension<wsi_ext_present_id_wayland>();
    if (present_id_ext != nullptr)
    {
@@ -474,7 +462,6 @@ void swapchain::present_image(const pending_present_request &pending_present)
          register_wp_presentation_feedback_listener(feedback, feedback_obj);
       }
    }
-#endif
 
    wl_surface_commit(m_surface);
    int res = wl_display_flush(m_display);
@@ -485,21 +472,14 @@ void swapchain::present_image(const pending_present_request &pending_present)
       set_error_state(VK_ERROR_SURFACE_LOST_KHR);
    }
 
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
    auto *ext = get_swapchain_extension<wsi_ext_present_id_wayland>();
    if (ext != nullptr)
    {
       if (m_wsi_surface->get_presentation_time_interface() == nullptr)
-#else
-   auto *ext = get_swapchain_extension<wsi_ext_present_id>();
-   if (ext != nullptr)
-#endif
       {
          ext->mark_delivered(pending_present.present_id);
       }
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
    }
-#endif
 }
 
 bool swapchain::free_image_found()

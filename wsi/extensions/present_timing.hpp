@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024-2025 Arm Limited.
+ * Copyright (c) 2024-2026 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -42,15 +42,14 @@
 #include <variant>
 #include <cmath>
 
-#include <layer/wsi_layer_experimental.hpp>
 #include <layer/private_data.hpp>
+#include <layer/present_timing_api.hpp>
 #include <util/custom_allocator.hpp>
 #include <util/custom_mutex.hpp>
 #include <util/macros.hpp>
 #include <util/wsi_extension.hpp>
 #include <wsi/swapchain_base.hpp>
 
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
 namespace wsi
 {
 
@@ -146,7 +145,7 @@ struct swapchain_presentation_entry
     * keeps the status of whether the slot had already been copied to
     * the results.
     */
-   bool copied;
+   bool copied{ false };
 
    /**
     * The variables to keep timing stages.
@@ -846,4 +845,3 @@ inline uint64_t ticks_to_ns(uint64_t ticks, const float &timestamp_period)
 }
 
 } /* namespace wsi */
-#endif

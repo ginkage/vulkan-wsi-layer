@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2025 Arm Limited.
+ * Copyright (c) 2018-2026 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -24,7 +24,7 @@
 
 #pragma once
 
-#include <layer/wsi_layer_experimental.hpp>
+#include <layer/present_timing_api.hpp>
 
 #include <util/platform_set.hpp>
 #include <util/custom_allocator.hpp>
@@ -379,15 +379,7 @@ private:
  * alias: Name of the promoted entrypoint alias if different to entrypoint_name.
  */
 
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
-#define DEVICE_ENTRYPOINTS_LIST_EXPERIMENTAL(EP)                                                             \
-   EP(GetSwapchainTimeDomainPropertiesEXT, VK_EXT_PRESENT_TIMING_EXTENSION_NAME, API_VERSION_MAX, false, )   \
-   EP(GetSwapchainTimingPropertiesEXT, VK_EXT_PRESENT_TIMING_EXTENSION_NAME, API_VERSION_MAX, false, )       \
-   EP(SetSwapchainPresentTimingQueueSizeEXT, VK_EXT_PRESENT_TIMING_EXTENSION_NAME, API_VERSION_MAX, false, ) \
-   EP(GetPastPresentationTimingEXT, VK_EXT_PRESENT_TIMING_EXTENSION_NAME, API_VERSION_MAX, false, )
-#else
 #define DEVICE_ENTRYPOINTS_LIST_EXPERIMENTAL(EP)
-#endif
 
 /* Define a list of custom entrypoints that might rely on preprocessor conditions and similar */
 #define DEVICE_ENTRYPOINTS_LIST_EXPANSION(EP) DEVICE_ENTRYPOINTS_LIST_EXPERIMENTAL(EP)
@@ -481,6 +473,10 @@ private:
    EP(WaitForPresentKHR, VK_KHR_PRESENT_WAIT_EXTENSION_NAME, API_VERSION_MAX, false, )                                      \
    /* VK_KHR_present_wait2 */                                                                                               \
    EP(WaitForPresent2KHR, VK_KHR_PRESENT_WAIT_2_EXTENSION_NAME, API_VERSION_MAX, false, )                                   \
+   EP(GetSwapchainTimeDomainPropertiesEXT, VK_EXT_PRESENT_TIMING_EXTENSION_NAME, API_VERSION_MAX, false, )                  \
+   EP(GetSwapchainTimingPropertiesEXT, VK_EXT_PRESENT_TIMING_EXTENSION_NAME, API_VERSION_MAX, false, )                      \
+   EP(SetSwapchainPresentTimingQueueSizeEXT, VK_EXT_PRESENT_TIMING_EXTENSION_NAME, API_VERSION_MAX, false, )                \
+   EP(GetPastPresentationTimingEXT, VK_EXT_PRESENT_TIMING_EXTENSION_NAME, API_VERSION_MAX, false, )                         \
    /* Custom entrypoints */                                                                                                 \
    DEVICE_ENTRYPOINTS_LIST_EXPANSION(EP)
 
@@ -1099,12 +1095,10 @@ private:
     */
    bool present_wait_enabled{ false };
 
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
    /**
     * @brief Stores whether the device has enabled support for the present timing features.
     */
    bool present_timing_enabled{ false };
-#endif
 
    /**
     * @brief Stores whether the device supports the present wait2 feature.

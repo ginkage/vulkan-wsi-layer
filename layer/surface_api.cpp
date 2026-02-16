@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2017, 2019, 2021-2022, 2024-2025 Arm Limited.
+ * Copyright (c) 2016-2017, 2019, 2021-2022, 2024-2026 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -119,14 +119,12 @@ wsi_layer_vkGetPhysicalDeviceSurfaceCapabilities2KHR(VkPhysicalDevice physicalDe
       wsi::surface_properties *props = wsi::get_surface_properties(instance, pSurfaceInfo->surface);
       assert(props != nullptr);
 
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
       auto *surf_caps_ext = util::find_extension<VkPresentTimingSurfaceCapabilitiesEXT>(
          VK_STRUCTURE_TYPE_PRESENT_TIMING_SURFACE_CAPABILITIES_EXT, pSurfaceCapabilities);
       if (surf_caps_ext != nullptr)
       {
          TRY_LOG_CALL(props->get_present_timing_surface_caps(physicalDevice, surf_caps_ext));
       }
-#endif
 
       auto shared_present_surface_cap_struct = util::find_extension<VkSharedPresentSurfaceCapabilitiesKHR>(
          VK_STRUCTURE_TYPE_SHARED_PRESENT_SURFACE_CAPABILITIES_KHR, pSurfaceCapabilities);
