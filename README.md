@@ -35,7 +35,8 @@ implements the following extensions:
   * VK_EXT_present_mode_fifo_latest_ready (For Headless and Wayland only)
   * VK_KHR_present_mode_fifo_latest_ready (For Headless and Wayland only)
   * VK_KHR_swapchain_mutable_format (For Headless and Wayland only)
-  
+  * VK_EXT_present_timing (For Headless and Wayland only)
+
 ## Building
 
 ### Dependencies
@@ -52,6 +53,8 @@ The ICDs installed in the system are required to support the following extension
   * VK_KHR_external_fence_capabilities
   * VK_KHR_external_semaphore_capabilities
   * VK_KHR_external_memory_capabilities
+* Device extensions (required when Headless/Wayland support is enabled):
+  * VK_KHR_calibrated_timestamps
 * Device extensions (only required when Wayland support is enabled):
   * VK_EXT_image_drm_format_modifier
   * VK_KHR_image_format_list
