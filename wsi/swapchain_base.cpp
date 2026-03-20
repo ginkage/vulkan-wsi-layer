@@ -581,6 +581,22 @@ VkResult swapchain_base::notify_presentation_engine(const pending_present_reques
 VkResult swapchain_base::queue_present(VkQueue queue, const VkPresentInfoKHR *present_info,
                                        const swapchain_presentation_parameters &submit_info)
 {
+   if (m_present_mode == VK_PRESENT_MODE_SHARED_CONTINUOUS_REFRESH_KHR)
+   {
+      const util::unique_lock<util::recursive_mutex> image_status_lock(m_image_status_mutex);
+      if (!image_status_lock)
+      {
+         WSI_LOG_ERROR("Failed to acquire image status lock in queue_present.");
+         return VK_ERROR_UNKNOWN;
+      }
+
+      const auto image_status = m_swapchain_images[submit_info.pending_present.image_index].get_status();
+      if (image_status == swapchain_image::PENDING)
+      {
+         return VK_SUCCESS;
+      }
+   }
+
    const VkPresentTimingInfoEXT *present_timing_info = nullptr;
    const auto *present_timings_info =
       util::find_extension<VkPresentTimingsInfoEXT>(VK_STRUCTURE_TYPE_PRESENT_TIMINGS_INFO_EXT, present_info->pNext);
