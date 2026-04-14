@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024-2025 Arm Limited.
+ * Copyright (c) 2024-2026 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -359,11 +359,12 @@ void swapchain::present_image(const pending_present_request &pending_present)
       }
 
       fd_set fds;
-      FD_ZERO(&fds);
-      FD_SET(display->get_drm_fd(), &fds);
 
       do
       {
+         FD_ZERO(&fds);
+         FD_SET(display->get_drm_fd(), &fds);
+
          struct timeval t;
          t.tv_sec = 1;
          t.tv_usec = 0;
