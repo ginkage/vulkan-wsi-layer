@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Arm Limited.
+ * Copyright (c) 2025-2026 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -32,7 +32,6 @@
 #pragma once
 
 #include <optional>
-#include <utility>
 
 #include <util/custom_allocator.hpp>
 #include <util/macros.hpp>
@@ -71,10 +70,14 @@ public:
       }
 
       auto compression_control = image_create_compression_control(extension);
-      std::swap(m_compression_control, compression_control.m_compression_control);
-      for (uint32_t i = 0; i < compression_control.m_compression_control.compressionControlPlaneCount; i++)
+      m_compression_control = compression_control.m_compression_control;
+      if (compression_control.m_compression_control.pFixedRateFlags != nullptr)
       {
-         m_compression_control.pFixedRateFlags[i] = compression_control.m_compression_control.pFixedRateFlags[i];
+         m_compression_control.pFixedRateFlags = m_array_fixed_rate_flags;
+         for (uint32_t i = 0; i < compression_control.m_compression_control.compressionControlPlaneCount; i++)
+         {
+            m_compression_control.pFixedRateFlags[i] = compression_control.m_compression_control.pFixedRateFlags[i];
+         }
       }
 
       return *this;

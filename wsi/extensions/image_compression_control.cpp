@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024-2025 Arm Limited.
+ * Copyright (c) 2024-2026 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -38,11 +38,15 @@ namespace wsi
 {
 image_create_compression_control::image_create_compression_control(const VkImageCompressionControlEXT &extension)
    : m_compression_control{ VK_STRUCTURE_TYPE_IMAGE_COMPRESSION_CONTROL_EXT, nullptr, extension.flags,
-                            extension.compressionControlPlaneCount, m_array_fixed_rate_flags }
+                            extension.compressionControlPlaneCount, nullptr }
 {
-   for (uint32_t i = 0; i < extension.compressionControlPlaneCount; i++)
+   if ((extension.flags & VK_IMAGE_COMPRESSION_FIXED_RATE_EXPLICIT_EXT) != 0)
    {
-      m_compression_control.pFixedRateFlags[i] = extension.pFixedRateFlags[i];
+      m_compression_control.pFixedRateFlags = m_array_fixed_rate_flags;
+      for (uint32_t i = 0; i < extension.compressionControlPlaneCount; i++)
+      {
+         m_compression_control.pFixedRateFlags[i] = extension.pFixedRateFlags[i];
+      }
    }
 }
 
