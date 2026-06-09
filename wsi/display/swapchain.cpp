@@ -296,14 +296,23 @@ VkResult swapchain::allocate_and_bind_swapchain_image(swapchain_image &image)
    uint32_t fb_id = 0;
    TRY_LOG(create_framebuffer(backing_memory, fb_id), "Failed to create framebuffer");
 
-   TRY_LOG_CALL(backing_memory.import_and_bind(image.get_image()));
+   VkResult import_result = backing_memory.import_and_bind(image.get_image());
+   if (import_result != VK_SUCCESS)
+   {
+      int drm_result = drmModeRmFB(display->get_drm_fd(), fb_id);
+      assert(drm_result == 0);
+      UNUSED(drm_result);
+
+      WSI_LOG_ERROR("backing_memory.import_and_bind(image.get_image())");
+      return import_result;
+   }
 
    auto image_data = m_allocator.make_unique<display_image_data>(display->get_drm_fd(), fb_id);
    if (image_data == nullptr)
    {
-      int result = drmModeRmFB(display->get_drm_fd(), fb_id);
-      assert(result == 0);
-      UNUSED(result);
+      int drm_result = drmModeRmFB(display->get_drm_fd(), fb_id);
+      assert(drm_result == 0);
+      UNUSED(drm_result);
 
       return VK_ERROR_OUT_OF_HOST_MEMORY;
    }

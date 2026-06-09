@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Arm Limited.
+ * Copyright (c) 2025-2026 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -111,6 +111,11 @@ void swapchain_image::destroy()
       m_present_fence_wait_semaphore = VK_NULL_HANDLE;
    }
 
+   if (m_data)
+   {
+      m_data.reset();
+   }
+
    if (m_image != VK_NULL_HANDLE)
    {
       m_device_data->disp.DestroyImage(m_device_data->device, m_image, m_allocator.get_original_callbacks());
@@ -125,11 +130,6 @@ void swapchain_image::destroy()
    if (m_image_memory)
    {
       m_image_memory.reset();
-   }
-
-   if (m_data)
-   {
-      m_data.reset();
    }
 }
 
