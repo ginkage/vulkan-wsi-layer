@@ -278,7 +278,12 @@ VkResult swapchain::init_image_factory(const VkSwapchainCreateInfoKHR &swapchain
       return VK_ERROR_OUT_OF_HOST_MEMORY;
    }
 
-   m_image_factory.init(std::move(image_handle_creator), std::move(backing_memory_creator), true, false);
+   /* RK3588: when the compositor lacks explicit sync the surface has no sync interface, so fall back
+    * to implicit sync - create a CPU-waitable (non-exportable) present fence and wait on it instead
+    * of handing an acquire fence to the compositor. */
+   bool has_explicit_sync = (m_wsi_surface->get_surface_sync_interface() != nullptr);
+   m_image_factory.init(std::move(image_handle_creator), std::move(backing_memory_creator), has_explicit_sync,
+                        !has_explicit_sync);
    return VK_SUCCESS;
 }
 
@@ -339,7 +344,16 @@ wayland_owner<wl_buffer> swapchain::create_wl_buffer(image_backing_memory_extern
                                      ext_memory.get_strides()[plane], modifier_hi, modifier_low);
    }
 
-   const auto fourcc = util::drm::vk_to_drm_format(image_create_info.format);
+   auto fourcc = util::drm::vk_to_drm_format(image_create_info.format);
+   /* RK3588: emulate OPAQUE composite alpha by presenting through an alpha-less format. */
+   if (fourcc == DRM_FORMAT_ARGB8888)
+   {
+      fourcc = DRM_FORMAT_XRGB8888;
+   }
+   if (fourcc == DRM_FORMAT_ABGR8888)
+   {
+      fourcc = DRM_FORMAT_XBGR8888;
+   }
    auto buffer = zwp_linux_buffer_params_v1_create_immed(params, image_create_info.extent.width,
                                                          image_create_info.extent.height, fourcc, 0);
    zwp_linux_buffer_params_v1_destroy(params);
@@ -399,16 +413,21 @@ void swapchain::present_image(const pending_present_request &pending_present)
 
    wl_surface_attach(m_surface, image_data->get_buffer(), 0, 0);
 
-   auto present_sync_fd = static_cast<sync_fd_fence_sync *>(image.get_present_fence())->export_sync_fd();
-   if (!present_sync_fd.has_value())
+   /* RK3588: only hand an acquire fence to the compositor when explicit sync is available. Without
+    * it the present fence is non-exportable and CPU-waited in swapchain_image::wait_present instead. */
+   if (m_wsi_surface->get_surface_sync_interface() != nullptr)
    {
-      WSI_LOG_ERROR("Failed to export present fence.");
-      set_error_state(VK_ERROR_SURFACE_LOST_KHR);
-   }
-   else if (present_sync_fd->is_valid())
-   {
-      zwp_linux_surface_synchronization_v1_set_acquire_fence(m_wsi_surface->get_surface_sync_interface(),
-                                                             present_sync_fd->get());
+      auto present_sync_fd = static_cast<sync_fd_fence_sync *>(image.get_present_fence())->export_sync_fd();
+      if (!present_sync_fd.has_value())
+      {
+         WSI_LOG_ERROR("Failed to export present fence.");
+         set_error_state(VK_ERROR_SURFACE_LOST_KHR);
+      }
+      else if (present_sync_fd->is_valid())
+      {
+         zwp_linux_surface_synchronization_v1_set_acquire_fence(m_wsi_surface->get_surface_sync_interface(),
+                                                                present_sync_fd->get());
+      }
    }
 
    /* TODO: work out damage */
