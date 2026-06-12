@@ -262,21 +262,20 @@ bool surface::init()
       return false;
    }
 
-   if (explicit_sync_interface.get() == nullptr)
+   /* RK3588: explicit sync is optional. If the compositor does not provide
+    * zwp_linux_explicit_synchronization_v1, fall back to implicit (CPU fence) sync. */
+   if (explicit_sync_interface.get() != nullptr)
    {
-      WSI_LOG_ERROR("Failed to obtain zwp_linux_explicit_synchronization_v1 interface.");
-      return false;
-   }
+      auto surface_sync_obj =
+         zwp_linux_explicit_synchronization_v1_get_synchronization(explicit_sync_interface.get(), wayland_surface);
+      if (surface_sync_obj == nullptr)
+      {
+         WSI_LOG_ERROR("Failed to retrieve surface synchronization interface");
+         return false;
+      }
 
-   auto surface_sync_obj =
-      zwp_linux_explicit_synchronization_v1_get_synchronization(explicit_sync_interface.get(), wayland_surface);
-   if (surface_sync_obj == nullptr)
-   {
-      WSI_LOG_ERROR("Failed to retrieve surface synchronization interface");
-      return false;
+      surface_sync_interface.reset(surface_sync_obj);
    }
-
-   surface_sync_interface.reset(surface_sync_obj);
 
    VkResult vk_res = VK_SUCCESS;
    if (presentation_time_interface.get() != nullptr)
