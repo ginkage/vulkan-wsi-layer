@@ -61,6 +61,22 @@ public:
     */
    virtual util::unique_ptr<swapchain_base> allocate_swapchain(layer::device_private_data &dev_data,
                                                                const VkAllocationCallbacks *allocator) = 0;
+
+   /**
+    * @brief Whether vkDestroySurfaceKHR should be forwarded down the loader chain for this surface.
+    *
+    * True (the default) for surfaces whose VkSurfaceKHR handle was obtained by calling down the chain
+    * (Wayland, headless, display), so the loader/ICD owns the handle and must destroy it. The X11
+    * backend fabricates its handle - the loader/ICD never saw it - and sets this false so the destroy
+    * is not forwarded (forwarding a fabricated pointer would crash the loader).
+    */
+   bool created_by_icd_calldown() const
+   {
+      return m_created_by_icd_calldown;
+   }
+
+protected:
+   bool m_created_by_icd_calldown = true;
 };
 
 } /* namespace wsi */
