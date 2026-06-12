@@ -74,19 +74,19 @@ endif()
 
 # Build Configuration options
 
-# Backend support
-option(BUILD_WSI_HEADLESS "Build with support for VK_EXT_headless_surface" ON)
-option(BUILD_WSI_WAYLAND "Build with support for VK_KHR_wayland_surface" OFF)
+# Backend support - defaults tuned for the RK3588 target (Wayland on, headless off).
+option(BUILD_WSI_HEADLESS "Build with support for VK_EXT_headless_surface" OFF)
+option(BUILD_WSI_WAYLAND "Build with support for VK_KHR_wayland_surface" ON)
 option(BUILD_WSI_DISPLAY "Build with support for VK_KHR_display" OFF)
 
-set(SELECT_EXTERNAL_ALLOCATOR "none" CACHE STRING "Select an external system allocator (none, dma_buf_heaps)")
+set(SELECT_EXTERNAL_ALLOCATOR "dma_buf_heaps" CACHE STRING "Select an external system allocator (none, dma_buf_heaps)")
 set(EXTERNAL_WSIALLOC_LIBRARY "" CACHE STRING "External implementation of the wsialloc interface to use")
-set(WSIALLOC_MEMORY_HEAP_NAME "linux,cma" CACHE STRING "Heap name used by the dma_buf_heaps allocator")
+set(WSIALLOC_MEMORY_HEAP_NAME "system-uncached" CACHE STRING "Heap name used by the dma_buf_heaps allocator")
 
 # Optional features
 option(BUILD_WSI_DISPLAY_SUPPORT_FORMAT_MODIFIERS "Build with support for format modifiers in VK_KHR_display" ON)
 option(VULKAN_WSI_LAYER_EXPERIMENTAL "Enable the Vulkan WSI Experimental features" OFF)
-option(ENABLE_WAYLAND_FIFO_PRESENTATION_THREAD "Enable the non-conformant FIFO presentation thread implementation in the Wayland backend" OFF)
+option(ENABLE_WAYLAND_FIFO_PRESENTATION_THREAD "Enable the non-conformant FIFO presentation thread implementation in the Wayland backend" ON)
 option(ENABLE_WAIT_FOR_QUERY_RESULT "Enable waiting for result while querying present timing queue operations end timestamp" OFF)
 
 # Enables the layer to pass frame boundary events if the ICD or layers below have support for it by
@@ -124,10 +124,10 @@ if(NOT SELECT_EXTERNAL_ALLOCATOR STREQUAL "none" AND EXTERNAL_WSIALLOC_LIBRARY S
    if(SELECT_EXTERNAL_ALLOCATOR STREQUAL "dma_buf_heaps")
       target_sources(wsialloc PRIVATE util/wsialloc/wsialloc_dma_buf_heaps.c util/wsialloc/wsialloc_helpers.c)
       target_link_libraries(wsialloc drm_utils)
+      # KERNEL_HEADER_DIR was a requirement of the old ion allocator (now removed) and is not needed
+      # for dma_buf_heaps - its uapi header linux/dma-heap.h is in the default include path. Honour it if set.
       if(DEFINED KERNEL_HEADER_DIR)
          target_include_directories(wsialloc PRIVATE "${KERNEL_HEADER_DIR}")
-      else()
-         message(FATAL_ERROR "KERNEL_HEADER_DIR must be defined as the directory that includes the kernel headers.")
       endif()
       add_definitions(-Ulinux -DWSIALLOC_MEMORY_HEAP_NAME=${WSIALLOC_MEMORY_HEAP_NAME})
    else()
