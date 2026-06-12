@@ -39,13 +39,9 @@
 #include <cstring>
 #include <algorithm>
 #include <thread>
-#include <future>
 #include <vector>
 #include <chrono>
 #include <cmath>
-#ifdef ENABLE_ARM_NEON
-#include <arm_neon.h>
-#endif
 #include <X11/Xlib.h>
 #include <X11/extensions/Xrandr.h>
 #include <xcb/sync.h>
@@ -56,9 +52,7 @@ namespace x11
 {
 
 static constexpr uint32_t THREADING_PIXEL_THRESHOLD = 400 * 400;
-static constexpr uint32_t MAX_WORKER_THREADS = 8u;
-static constexpr uint32_t SIMD_VECTOR_SIZE = 4;
-static constexpr uint32_t LOOP_UNROLL_BOUNDARY = 3;
+static constexpr uint32_t COPY_POOL_MAX_THREADS = 4u;
 static constexpr int SHM_PERMISSIONS = 0666;
 static constexpr uint32_t GC_COLOR_MASK = XCB_GC_BACKGROUND | XCB_GC_FOREGROUND;
 
@@ -71,25 +65,13 @@ shm_presenter::shm_presenter()
 
 shm_presenter::~shm_presenter()
 {
+   shutdown_copy_pool();
    if (m_sync_pending)
    {
       ensure_sync_completion();
    }
    cleanup_fence_sync();
 }
-
-bool shm_presenter::is_aligned(const void *ptr, size_t alignment)
-{
-   return (reinterpret_cast<uintptr_t>(ptr) & (alignment - 1)) == 0;
-}
-
-#ifdef ENABLE_ARM_NEON
-bool shm_presenter::are_pointers_neon_aligned(const void *src, void *dst)
-{
-   constexpr size_t NEON_ALIGNMENT = 16;
-   return is_aligned(src, NEON_ALIGNMENT) && is_aligned(dst, NEON_ALIGNMENT);
-}
-#endif
 
 double shm_presenter::get_window_refresh_rate()
 {
@@ -251,187 +233,159 @@ void shm_presenter::precompute_scaling_lut(uint32_t gpu_width, uint32_t display_
    m_last_display_width = display_width;
 }
 
-#ifdef ENABLE_ARM_NEON
-void shm_presenter::copy_pixels_simd(const uint32_t *src_pixels, uint32_t *dst_pixels, uint32_t src_stride_pixels,
-                                     uint32_t dst_width, uint32_t height)
+void shm_presenter::copy_pixel_rows(const uint32_t *src, uint32_t *dst, uint32_t src_stride, uint32_t dst_width,
+                                    uint32_t num_rows)
 {
-   if (m_scaling_lut.empty() || m_scaling_lut[dst_width - 1] == dst_width - 1)
+   if (num_rows == 0)
    {
-      /* Each row is a contiguous strided->packed copy; memcpy (tuned LDP/STP + prefetch on AArch64)
-       * beats a hand-rolled 16-byte intrinsic loop. */
-      for (uint32_t row = 0; row < height; row++)
+      return;
+   }
+
+   const bool scaling = !m_scaling_lut.empty() && m_scaling_lut[dst_width - 1] != dst_width - 1;
+   if (!scaling)
+   {
+      if (src_stride == dst_width)
       {
-         std::memcpy(dst_pixels + (row * dst_width), src_pixels + (row * src_stride_pixels),
-                     static_cast<size_t>(dst_width) * sizeof(uint32_t));
+         /* Fully contiguous chunk: a single memcpy (NEON-optimised inside libc on AArch64). */
+         std::memcpy(dst, src, static_cast<size_t>(dst_width) * num_rows * sizeof(uint32_t));
+      }
+      else
+      {
+         /* Row-stride padding: copy each row tightly packed. */
+         for (uint32_t row = 0; row < num_rows; row++)
+         {
+            std::memcpy(dst + static_cast<size_t>(row) * dst_width, src + static_cast<size_t>(row) * src_stride,
+                        static_cast<size_t>(dst_width) * sizeof(uint32_t));
+         }
       }
    }
    else
    {
-      copy_pixels_scalar(src_pixels, dst_pixels, src_stride_pixels, dst_width, height);
-   }
-}
-#endif
-
-void shm_presenter::copy_pixels_scalar(const uint32_t *src_pixels, uint32_t *dst_pixels, uint32_t src_stride_pixels,
-                                       uint32_t dst_width, uint32_t height)
-{
-   uint32_t src_width = src_stride_pixels;
-
-   if (src_width == dst_width &&
-       (m_scaling_lut.empty() || (dst_width > 0 && m_scaling_lut[dst_width - 1] == dst_width - 1)))
-   {
-      size_t copy_size = dst_width * sizeof(uint32_t);
-      for (uint32_t row = 0; row < height; row++)
+      /* Horizontal scaling via the precomputed nearest-neighbour LUT. */
+      for (uint32_t row = 0; row < num_rows; row++)
       {
-         const uint32_t *src_row = src_pixels + (row * src_stride_pixels);
-         uint32_t *dst_row = dst_pixels + (row * dst_width);
-
-         if (row + 1 < height)
+         const uint32_t *src_row = src + static_cast<size_t>(row) * src_stride;
+         uint32_t *dst_row = dst + static_cast<size_t>(row) * dst_width;
+         for (uint32_t x = 0; x < dst_width; x++)
          {
-            __builtin_prefetch(src_row + src_stride_pixels, 0, 3);
+            dst_row[x] = src_row[m_scaling_lut[x]];
          }
-
-         memcpy(dst_row, src_row, copy_size);
-      }
-      return;
-   }
-
-   for (uint32_t row = 0; row < height; row++)
-   {
-      const uint32_t *src_row = src_pixels + (row * src_stride_pixels);
-      uint32_t *dst_row = dst_pixels + (row * dst_width);
-
-      if (row + 1 < height)
-      {
-         __builtin_prefetch(src_row + src_stride_pixels, 0, 3);
-      }
-
-      uint32_t dst_x = 0;
-      for (; dst_x + LOOP_UNROLL_BOUNDARY < dst_width; dst_x += SIMD_VECTOR_SIZE)
-      {
-         dst_row[dst_x] = src_row[m_scaling_lut[dst_x]];
-         dst_row[dst_x + 1] = src_row[m_scaling_lut[dst_x + 1]];
-         dst_row[dst_x + 2] = src_row[m_scaling_lut[dst_x + 2]];
-         dst_row[dst_x + 3] = src_row[m_scaling_lut[dst_x + 3]];
-      }
-
-      for (; dst_x < dst_width; dst_x++)
-      {
-         dst_row[dst_x] = src_row[m_scaling_lut[dst_x]];
       }
    }
 }
 
-void shm_presenter::copy_pixels_threaded(const uint32_t *src_pixels, uint32_t *dst_pixels, uint32_t src_stride_pixels,
-                                         uint32_t dst_width, uint32_t height)
+void shm_presenter::copy_pool_worker(uint32_t worker_index)
 {
-   if (!src_pixels || !dst_pixels || dst_width == 0 || height == 0)
+   uint64_t last_generation = 0;
+   for (;;)
    {
-      return;
-   }
-
-   const uint32_t total_pixels = dst_width * height;
-
-   if (total_pixels > THREADING_PIXEL_THRESHOLD)
-   {
-      const uint32_t num_threads = std::min(std::thread::hardware_concurrency(), MAX_WORKER_THREADS);
-      if (num_threads > 1)
+      copy_job job;
       {
-         const uint32_t rows_per_thread = height / num_threads;
-         std::vector<std::future<void>> futures;
-         futures.reserve(num_threads);
-
-         try
+         std::unique_lock<std::mutex> lock(m_copy_mutex);
+         m_copy_cv.wait(lock,
+                        [this, last_generation] { return m_copy_shutdown || m_copy_generation != last_generation; });
+         if (m_copy_shutdown)
          {
-            for (uint32_t t = 0; t < num_threads; t++)
-            {
-               uint32_t start_row = t * rows_per_thread;
-               uint32_t end_row = (t == num_threads - 1) ? height : (t + 1) * rows_per_thread;
-
-               if (start_row >= height)
-                  break;
-               if (end_row > height)
-                  end_row = height;
-
-               futures.emplace_back(std::async(std::launch::async, [=]() {
-                  try
-                  {
-                     const uint32_t *thread_src = src_pixels + (start_row * src_stride_pixels);
-                     uint32_t *thread_dst = dst_pixels + (start_row * dst_width);
-                     uint32_t thread_height = end_row - start_row;
-
-                     if (thread_height > 0)
-                     {
-#ifdef ENABLE_ARM_NEON
-                        copy_pixels_simd(thread_src, thread_dst, src_stride_pixels, dst_width, thread_height);
-#else
-                        copy_pixels_scalar(thread_src, thread_dst, src_stride_pixels, dst_width, thread_height);
-#endif
-                     }
-                  }
-                  catch (const std::exception &e)
-                  {
-                     WSI_LOG_ERROR("Thread pixel copy failed with exception: %s", e.what());
-                     m_thread_error_occurred.store(true, std::memory_order_release);
-                  }
-                  catch (...)
-                  {
-                     WSI_LOG_ERROR("Thread pixel copy failed with unknown exception");
-                     m_thread_error_occurred.store(true, std::memory_order_release);
-                  }
-               }));
-            }
-
-            for (auto &future : futures)
-            {
-               if (future.valid())
-               {
-                  future.wait();
-               }
-            }
-
-            if (m_thread_error_occurred.load(std::memory_order_acquire))
-            {
-               std::lock_guard<std::mutex> lock(m_error_recovery_mutex);
-               WSI_LOG_ERROR("Thread errors detected, falling back to single-threaded processing");
-               m_thread_error_occurred.store(false, std::memory_order_release);
-               copy_pixels_optimized_single_thread(src_pixels, dst_pixels, src_stride_pixels, dst_width, height);
-            }
+            return;
          }
-         catch (...)
+         last_generation = m_copy_generation;
+         job = m_copy_job;
+      }
+
+      /* Worker i handles chunk i; the dispatcher (present thread) handles the final, remainder chunk. */
+      const uint32_t rows_per_chunk = job.height / job.num_chunks;
+      const uint32_t start_row = worker_index * rows_per_chunk;
+      copy_pixel_rows(job.src + static_cast<size_t>(start_row) * job.src_stride,
+                      job.dst + static_cast<size_t>(start_row) * job.dst_width, job.src_stride, job.dst_width,
+                      rows_per_chunk);
+
+      {
+         std::unique_lock<std::mutex> lock(m_copy_mutex);
+         if (--m_copy_pending == 0)
          {
-            std::lock_guard<std::mutex> lock(m_error_recovery_mutex);
-            WSI_LOG_ERROR("Threading setup failed, falling back to single-threaded processing");
-            copy_pixels_optimized_single_thread(src_pixels, dst_pixels, src_stride_pixels, dst_width, height);
+            m_copy_done_cv.notify_one();
          }
-         return;
       }
    }
-
-   copy_pixels_optimized_single_thread(src_pixels, dst_pixels, src_stride_pixels, dst_width, height);
 }
 
-void shm_presenter::copy_pixels_optimized_single_thread(const uint32_t *src_pixels, uint32_t *dst_pixels,
-                                                        uint32_t src_stride_pixels, uint32_t dst_width, uint32_t height)
+void shm_presenter::init_copy_pool()
 {
-#ifdef ENABLE_ARM_NEON
-   copy_pixels_simd(src_pixels, dst_pixels, src_stride_pixels, dst_width, height);
-#else
-   copy_pixels_scalar(src_pixels, dst_pixels, src_stride_pixels, dst_width, height);
-#endif
+   const uint32_t hw = std::thread::hardware_concurrency();
+   const uint32_t num_workers = (hw >= 2) ? std::min(hw, COPY_POOL_MAX_THREADS) - 1u : 0u;
+
+   m_copy_shutdown = false;
+   for (uint32_t i = 0; i < num_workers; i++)
+   {
+      try
+      {
+         m_copy_workers.emplace_back(&shm_presenter::copy_pool_worker, this, i);
+      }
+      catch (const std::system_error &)
+      {
+         /* Carry on with however many workers were created (possibly none -> single-threaded copy). */
+         break;
+      }
+   }
+}
+
+void shm_presenter::shutdown_copy_pool()
+{
+   {
+      std::unique_lock<std::mutex> lock(m_copy_mutex);
+      m_copy_shutdown = true;
+      m_copy_cv.notify_all();
+   }
+   for (auto &worker : m_copy_workers)
+   {
+      if (worker.joinable())
+      {
+         worker.join();
+      }
+   }
+   m_copy_workers.clear();
 }
 
 void shm_presenter::copy_pixels_optimized(const uint32_t *src_pixels, uint32_t *dst_pixels, uint32_t src_stride_pixels,
                                           uint32_t dst_width, uint32_t height)
 {
-   if (src_stride_pixels == dst_width && m_scaling_lut.empty())
+   if (src_pixels == nullptr || dst_pixels == nullptr || dst_width == 0 || height == 0)
    {
-      const size_t copy_size = dst_width * height * sizeof(uint32_t);
-      std::memcpy(dst_pixels, src_pixels, copy_size);
       return;
    }
 
-   copy_pixels_threaded(src_pixels, dst_pixels, src_stride_pixels, dst_width, height);
+   const uint32_t total_pixels = dst_width * height;
+   const uint32_t num_chunks = (m_copy_workers.empty() || total_pixels < THREADING_PIXEL_THRESHOLD)
+                                  ? 1u
+                                  : static_cast<uint32_t>(m_copy_workers.size()) + 1u;
+
+   if (num_chunks <= 1)
+   {
+      copy_pixel_rows(src_pixels, dst_pixels, src_stride_pixels, dst_width, height);
+      return;
+   }
+
+   /* Hand chunks 0..num_chunks-2 to the worker pool, then copy the final (remainder) chunk here while
+    * they run, and wait for them. A persistent pool avoids per-frame thread creation, and a handful of
+    * cores streaming memcpy uses the memory bandwidth a single core leaves on the table. */
+   {
+      std::unique_lock<std::mutex> lock(m_copy_mutex);
+      m_copy_job = { src_pixels, dst_pixels, src_stride_pixels, dst_width, height, num_chunks };
+      m_copy_pending = num_chunks - 1;
+      m_copy_generation++;
+      m_copy_cv.notify_all();
+   }
+
+   const uint32_t rows_per_chunk = height / num_chunks;
+   const uint32_t start_row = (num_chunks - 1) * rows_per_chunk;
+   copy_pixel_rows(src_pixels + static_cast<size_t>(start_row) * src_stride_pixels,
+                   dst_pixels + static_cast<size_t>(start_row) * dst_width, src_stride_pixels, dst_width,
+                   height - start_row);
+
+   {
+      std::unique_lock<std::mutex> lock(m_copy_mutex);
+      m_copy_done_cv.wait(lock, [this] { return m_copy_pending == 0; });
+   }
 }
 
 void shm_presenter::start_async_sync()
@@ -637,6 +591,8 @@ VkResult shm_presenter::init(xcb_connection_t *connection, xcb_window_t window, 
    }
 
    init_fence_sync();
+
+   init_copy_pool();
 
    return VK_SUCCESS;
 }

@@ -41,6 +41,8 @@
 #include <chrono>
 #include <atomic>
 #include <mutex>
+#include <thread>
+#include <condition_variable>
 #include <xcb/sync.h>
 
 namespace wsi
@@ -91,25 +93,39 @@ private:
    std::chrono::microseconds m_frame_interval;
    double m_refresh_rate_hz;
 
-   std::atomic<bool> m_thread_error_occurred{ false };
-   std::mutex m_error_recovery_mutex;
+   /* Persistent worker pool for the per-frame pixel copy. */
+   struct copy_job
+   {
+      const uint32_t *src = nullptr;
+      uint32_t *dst = nullptr;
+      uint32_t src_stride = 0;
+      uint32_t dst_width = 0;
+      uint32_t height = 0;
+      uint32_t num_chunks = 1;
+   };
+
+   std::vector<std::thread> m_copy_workers;
+   std::mutex m_copy_mutex;
+   std::condition_variable m_copy_cv;      /* workers wait for a new copy job */
+   std::condition_variable m_copy_done_cv; /* dispatcher waits for chunk completion */
+   copy_job m_copy_job;
+   uint64_t m_copy_generation = 0;
+   uint32_t m_copy_pending = 0;
+   bool m_copy_shutdown = false;
 
 
    VkResult create_graphics_context();
 
    void precompute_scaling_lut(uint32_t gpu_width, uint32_t display_width);
+
+   /* Per-frame pixel copy, parallelised across the persistent worker pool. */
    void copy_pixels_optimized(const uint32_t *src_pixels, uint32_t *dst_pixels, uint32_t src_stride_pixels,
                               uint32_t dst_width, uint32_t height);
-   void copy_pixels_threaded(const uint32_t *src_pixels, uint32_t *dst_pixels, uint32_t src_stride_pixels,
-                             uint32_t dst_width, uint32_t height);
-   void copy_pixels_optimized_single_thread(const uint32_t *src_pixels, uint32_t *dst_pixels,
-                                            uint32_t src_stride_pixels, uint32_t dst_width, uint32_t height);
-#ifdef ENABLE_ARM_NEON
-   void copy_pixels_simd(const uint32_t *src_pixels, uint32_t *dst_pixels, uint32_t src_stride_pixels,
-                         uint32_t dst_width, uint32_t height);
-#endif
-   void copy_pixels_scalar(const uint32_t *src_pixels, uint32_t *dst_pixels, uint32_t src_stride_pixels,
-                           uint32_t dst_width, uint32_t height);
+   void copy_pixel_rows(const uint32_t *src, uint32_t *dst, uint32_t src_stride, uint32_t dst_width,
+                        uint32_t num_rows);
+   void init_copy_pool();
+   void shutdown_copy_pool();
+   void copy_pool_worker(uint32_t worker_index);
 
    void start_async_sync();
    bool check_pending_sync();
@@ -123,10 +139,6 @@ private:
    void cache_x11_formats();
    uint8_t get_bits_per_pixel_for_depth(int depth);
 
-   bool is_aligned(const void *ptr, size_t alignment);
-#ifdef ENABLE_ARM_NEON
-   bool are_pointers_neon_aligned(const void *src, void *dst);
-#endif
    void detect_refresh_rate();
    double get_window_refresh_rate();
 
