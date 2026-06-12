@@ -98,8 +98,10 @@ void surface_properties::populate_surface_capabilities(VkPhysicalDevice physical
    get_surface_capabilities_common(physical_device, pSurfaceCapabilities, &override_params, pNext);
 
    /* Composite alpha */
+   /* RK3588: advertise OPAQUE - emulated by dropping alpha at present time (ARGB->XRGB). */
    pSurfaceCapabilities->supportedCompositeAlpha = static_cast<VkCompositeAlphaFlagsKHR>(
-      VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR | VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR);
+      VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR | VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR |
+      VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR);
 }
 
 VkResult surface_properties::get_surface_capabilities(VkPhysicalDevice physical_device,
@@ -386,7 +388,8 @@ static bool check_wl_protocols(struct wl_display *display)
       return false;
    }
 
-   return (supported.dmabuf && supported.explicit_sync);
+   /* RK3588: don't require explicit sync; the layer falls back to implicit (CPU fence) sync. */
+   return (supported.dmabuf /* && supported.explicit_sync */);
 }
 
 VWL_VKAPI_CALL(VkBool32)
