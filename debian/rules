@@ -1,0 +1,17 @@
+#!/usr/bin/make -f
+
+# Current upstream needs Vulkan headers >= 1.4.335 (for VK_EXT_present_timing types, which it pulls
+# in unconditionally), newer than the distro's libvulkan-dev - and newer than the manifest's
+# advertised api_version (1.4.325), which is a separate thing. CI and
+# users can point the build at a newer Vulkan-Headers checkout via the VULKAN_CXX_INCLUDE environment
+# variable, forwarded through debuild with "debuild -e VULKAN_CXX_INCLUDE". All backend/allocator
+# options match the project's CMake defaults and are intentionally not repeated here.
+ifneq ($(VULKAN_CXX_INCLUDE),)
+VULKAN_HEADERS_ARG = -DVULKAN_CXX_INCLUDE=$(VULKAN_CXX_INCLUDE)
+endif
+
+%:
+	dh $@ --builddirectory=build/
+
+override_dh_auto_configure:
+	dh_auto_configure -- -DCMAKE_BUILD_TYPE=Release $(VULKAN_HEADERS_ARG)
