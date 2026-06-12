@@ -289,6 +289,8 @@ VkResult external_memory::find_host_visible_memory_type(const VkMemoryRequiremen
              (memory_props.memoryProperties.memoryTypes[i].propertyFlags & props) == props)
          {
             *memory_type_index = i;
+            m_host_coherent =
+               (memory_props.memoryProperties.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) != 0;
             return VK_SUCCESS;
          }
       }
@@ -366,6 +368,21 @@ void external_memory::unmap_host_memory()
       device_data.disp.UnmapMemory(m_device, m_host_memory);
       m_host_mapped_ptr = nullptr;
    }
+}
+
+void external_memory::invalidate_host_memory()
+{
+   if (m_host_coherent || m_host_memory == VK_NULL_HANDLE)
+   {
+      return;
+   }
+   auto &device_data = layer::device_private_data::get(m_device);
+   VkMappedMemoryRange range = {};
+   range.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+   range.memory = m_host_memory;
+   range.offset = 0;
+   range.size = VK_WHOLE_SIZE;
+   device_data.disp.InvalidateMappedMemoryRanges(m_device, 1, &range);
 }
 
 VkDeviceMemory external_memory::get_host_memory() const

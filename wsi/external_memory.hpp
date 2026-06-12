@@ -216,6 +216,10 @@ public:
    /** @brief Unmap previously mapped host memory. */
    void unmap_host_memory();
 
+   /** @brief Invalidate the CPU cache for the host memory (no-op if the memory is coherent), so a
+    *  subsequent CPU read sees the GPU's writes. Call after the GPU is done and before reading. */
+   void invalidate_host_memory();
+
    /** @brief Host-visible memory handle, or VK_NULL_HANDLE if not host-visible. */
    VkDeviceMemory get_host_memory() const;
 
@@ -277,6 +281,7 @@ private:
    VkSubresourceLayout m_host_layout{};
    VkMemoryPropertyFlags m_required_props{ 0 };
    VkMemoryPropertyFlags m_optimal_props{ 0 };
+   bool m_host_coherent{ true };
 
    const VkDevice &m_device;
    util::allocator m_allocator;

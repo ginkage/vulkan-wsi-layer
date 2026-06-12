@@ -413,6 +413,7 @@ private:
    EP(BindImageMemory, "", VK_API_VERSION_1_0, true, )                                                                      \
    EP(MapMemory, "", VK_API_VERSION_1_0, true, )                                                                            \
    EP(UnmapMemory, "", VK_API_VERSION_1_0, true, )                                                                          \
+   EP(InvalidateMappedMemoryRanges, "", VK_API_VERSION_1_0, true, )                                                         \
    EP(GetImageSubresourceLayout, "", VK_API_VERSION_1_0, true, )                                                           \
    EP(AllocateMemory, "", VK_API_VERSION_1_0, true, )                                                                       \
    EP(FreeMemory, "", VK_API_VERSION_1_0, true, )                                                                           \

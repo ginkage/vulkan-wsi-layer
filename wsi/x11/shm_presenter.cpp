@@ -257,35 +257,12 @@ void shm_presenter::copy_pixels_simd(const uint32_t *src_pixels, uint32_t *dst_p
 {
    if (m_scaling_lut.empty() || m_scaling_lut[dst_width - 1] == dst_width - 1)
    {
+      /* Each row is a contiguous strided->packed copy; memcpy (tuned LDP/STP + prefetch on AArch64)
+       * beats a hand-rolled 16-byte intrinsic loop. */
       for (uint32_t row = 0; row < height; row++)
       {
-         const uint32_t *src_row = src_pixels + (row * src_stride_pixels);
-         uint32_t *dst_row = dst_pixels + (row * dst_width);
-
-         uint32_t x = 0;
-         bool use_aligned_simd = are_pointers_neon_aligned(&src_row[0], &dst_row[0]);
-
-         if (use_aligned_simd)
-         {
-            for (; x + LOOP_UNROLL_BOUNDARY < dst_width; x += SIMD_VECTOR_SIZE)
-            {
-               uint32x4_t pixels = vld1q_u32(&src_row[x]);
-               vst1q_u32(&dst_row[x], pixels);
-            }
-         }
-         else
-         {
-            for (; x + LOOP_UNROLL_BOUNDARY < dst_width; x += SIMD_VECTOR_SIZE)
-            {
-               uint8x16_t bytes = vld1q_u8(reinterpret_cast<const uint8_t *>(&src_row[x]));
-               vst1q_u8(reinterpret_cast<uint8_t *>(&dst_row[x]), bytes);
-            }
-         }
-
-         for (; x < dst_width; x++)
-         {
-            dst_row[x] = src_row[x];
-         }
+         std::memcpy(dst_pixels + (row * dst_width), src_pixels + (row * src_stride_pixels),
+                     static_cast<size_t>(dst_width) * sizeof(uint32_t));
       }
    }
    else
@@ -777,6 +754,9 @@ VkResult shm_presenter::present_image(x11_image_data *image_data, uint32_t /*ser
          void *mapped_memory = nullptr;
          if (image_data->external_mem.map_host_memory(&mapped_memory) == VK_SUCCESS && mapped_memory != nullptr)
          {
+            /* The GPU render is complete (the swapchain waited on the present fence); invalidate the
+             * CPU cache so the copy below sees the latest pixels when the memory is non-coherent. */
+            image_data->external_mem.invalidate_host_memory();
             const auto &vulkan_layout = image_data->external_mem.get_host_layout();
             size_t source_stride = vulkan_layout.rowPitch;
             size_t dest_stride = image_data->stride;

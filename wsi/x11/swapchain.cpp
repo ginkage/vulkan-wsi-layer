@@ -220,9 +220,11 @@ VkResult swapchain::allocate_and_bind_swapchain_image(swapchain_image &image)
    const auto image_create_info = get_image_factory().get_image_handle_creator().get_image_create_info();
 
    /* Allocate host-visible memory and bind it to the (linear) image created by the factory. */
-   const VkMemoryPropertyFlags optimal = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT |
-                                         VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
-   const VkMemoryPropertyFlags required = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+   /* Prefer HOST_CACHED so the per-frame CPU copy reads from cached (not write-combined) memory - the
+    * dominant cost of SHM present. The cached type may be non-coherent, so external_memory invalidates
+    * the cache before reading (see invalidate_host_memory). */
+   const VkMemoryPropertyFlags optimal = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
+   const VkMemoryPropertyFlags required = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
    TRY_LOG_CALL(image_data->external_mem.configure_for_host_visible(image_create_info, required, optimal));
    TRY_LOG_CALL(image_data->external_mem.allocate_and_bind_image(image.get_image(), image_create_info));
 
