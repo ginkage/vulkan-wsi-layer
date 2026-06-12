@@ -366,3 +366,9 @@ target_link_libraries(${PROJECT_NAME} ${LINK_WSI_LIBS})
 add_custom_target(manifest_json ALL COMMAND
    cp ${PROJECT_SOURCE_DIR}/layer/VkLayer_window_system_integration.json ${CMAKE_CURRENT_BINARY_DIR}
    ${JSON_COMMANDS})
+
+# Install the layer and its manifest into a Vulkan implicit layer directory. Upstream leaves this to
+# manual copying; the fork adds install rules so the Debian package picks up the .so and JSON.
+install(TARGETS ${PROJECT_NAME} DESTINATION share/vulkan/implicit_layer.d/)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/VkLayer_window_system_integration.json
+        DESTINATION share/vulkan/implicit_layer.d/)
