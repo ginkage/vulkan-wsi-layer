@@ -25,6 +25,7 @@
 #include <cassert>
 
 #include <wsi/wsi_factory.hpp>
+#include <wsi/surface.hpp>
 #include <util/helpers.hpp>
 
 #include "private_data.hpp"
@@ -223,7 +224,14 @@ wsi_layer_vkDestroySurfaceKHR(VkInstance instance, VkSurfaceKHR surface,
 {
    auto &instance_data = layer::instance_private_data::get(instance);
 
-   instance_data.disp.DestroySurfaceKHR(instance, surface, pAllocator);
+   /* Forward the destroy to the ICD only for surfaces whose handle was created by calling down the
+    * chain. The X11 backend fabricates its VkSurfaceKHR (the loader/ICD never saw it), so forwarding
+    * it would crash; surfaces the layer does not track were created below us and must be forwarded. */
+   auto *wsi_surface = instance_data.get_surface(surface);
+   if (wsi_surface == nullptr || wsi_surface->created_by_icd_calldown())
+   {
+      instance_data.disp.DestroySurfaceKHR(instance, surface, pAllocator);
+   }
 
    instance_data.remove_surface(
       surface, util::allocator{ instance_data.get_allocator(), VK_SYSTEM_ALLOCATION_SCOPE_OBJECT, pAllocator });
