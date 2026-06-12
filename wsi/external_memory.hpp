@@ -44,6 +44,14 @@ namespace wsi
 
 using util::MAX_PLANES;
 
+/* RK3588: the X11 SHM backend allocates host-visible (CPU-mappable) image memory rather than
+ * importing a dma-buf, so it can copy the rendered image into the X shared-memory segment. */
+enum class wsi_memory_type
+{
+   EXTERNAL_DMA_BUF, /* External file descriptors (dma-buf import; the default). */
+   HOST_VISIBLE,     /* Host-accessible memory, allocated and mapped by the layer. */
+};
+
 class external_memory
 {
 public:
@@ -184,6 +192,36 @@ public:
     */
    VkResult import_memory_and_bind_swapchain_image(const VkImage &image);
 
+   /* --- RK3588 host-visible memory (X11 SHM backend) --- */
+
+   /** @brief Configure this object to allocate host-visible memory for the image. */
+   VkResult configure_for_host_visible(const VkImageCreateInfo &image_info, VkMemoryPropertyFlags required_props,
+                                       VkMemoryPropertyFlags optimal_props);
+
+   /** @brief Whether this object has been configured (has memory requirements). */
+   bool is_valid() const;
+
+   /** @brief Whether this object is configured for host-visible memory. */
+   bool is_host_visible() const;
+
+   /** @brief The configured memory type. */
+   wsi_memory_type get_memory_type() const;
+
+   /** @brief Allocate and bind memory to @p image according to the configured memory type. */
+   VkResult allocate_and_bind_image(const VkImage &image, const VkImageCreateInfo &image_info);
+
+   /** @brief Map host-visible memory for CPU access. */
+   VkResult map_host_memory(void **mapped_ptr);
+
+   /** @brief Unmap previously mapped host memory. */
+   void unmap_host_memory();
+
+   /** @brief Host-visible memory handle, or VK_NULL_HANDLE if not host-visible. */
+   VkDeviceMemory get_host_memory() const;
+
+   /** @brief Host memory subresource layout (valid after allocate_and_bind_image for host-visible). */
+   const VkSubresourceLayout &get_host_layout() const;
+
    /**
     * @brief Fills out a list of VkSubresourceLayout for each plane using the stored planes layout data.
     *
@@ -219,6 +257,11 @@ private:
 
    VkResult import_plane_memory(int fd, VkDeviceMemory *memory);
 
+   /* Host-visible (X11 SHM) helpers. */
+   VkResult allocate_host_visible_and_bind(const VkImage &image, const VkImageCreateInfo &image_info);
+   VkResult find_host_visible_memory_type(const VkMemoryRequirements &mem_requirements, uint32_t *memory_type_index);
+   void cleanup_host_visible_memory();
+
    std::array<int, MAX_PLANES> m_buffer_fds{ -1, -1, -1, -1 };
    std::array<int, MAX_PLANES> m_strides{ 0, 0, 0, 0 };
    std::array<uint32_t, MAX_PLANES> m_offsets{ 0, 0, 0, 0 };
@@ -227,6 +270,14 @@ private:
    uint32_t m_num_planes{ 0 };
    uint32_t m_num_memories{ 0 };
    VkExternalMemoryHandleTypeFlagBits m_handle_type{ VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT };
+
+   wsi_memory_type m_memory_type{ wsi_memory_type::EXTERNAL_DMA_BUF };
+   VkDeviceMemory m_host_memory{ VK_NULL_HANDLE };
+   void *m_host_mapped_ptr{ nullptr };
+   VkSubresourceLayout m_host_layout{};
+   VkMemoryPropertyFlags m_required_props{ 0 };
+   VkMemoryPropertyFlags m_optimal_props{ 0 };
+
    const VkDevice &m_device;
    util::allocator m_allocator;
 };

@@ -78,6 +78,7 @@ endif()
 option(BUILD_WSI_HEADLESS "Build with support for VK_EXT_headless_surface" OFF)
 option(BUILD_WSI_WAYLAND "Build with support for VK_KHR_wayland_surface" ON)
 option(BUILD_WSI_DISPLAY "Build with support for VK_KHR_display" OFF)
+option(BUILD_WSI_X11 "Build with support for VK_KHR_xcb_surface / VK_KHR_xlib_surface" ON)
 
 set(SELECT_EXTERNAL_ALLOCATOR "dma_buf_heaps" CACHE STRING "Select an external system allocator (none, dma_buf_heaps)")
 set(EXTERNAL_WSIALLOC_LIBRARY "" CACHE STRING "External implementation of the wsialloc interface to use")
@@ -94,7 +95,7 @@ option(ENABLE_WAIT_FOR_QUERY_RESULT "Enable waiting for result while querying pr
 # VK_EXT_frame_boundary then the layer will not pass its own frame boundary events.
 option(ENABLE_INSTRUMENTATION "Pass frame boundary events by using VK_EXT_frame_boundary" OFF)
 
-if(BUILD_WSI_WAYLAND OR BUILD_WSI_DISPLAY)
+if(BUILD_WSI_WAYLAND OR BUILD_WSI_DISPLAY OR BUILD_WSI_X11)
    set(BUILD_DRM_UTILS true)
    set(BUILD_WSIALLOC_UTILS true)
    if(SELECT_EXTERNAL_ALLOCATOR STREQUAL "none")
@@ -246,8 +247,7 @@ if(BUILD_WSI_HEADLESS)
       wsi/headless/surface.cpp
       wsi/headless/swapchain.cpp
       wsi/headless/present_timing_handler.cpp
-      wsi/headless/present_wait_headless.cpp
-      wsi/image_backing_memory_device.cpp)
+      wsi/headless/present_wait_headless.cpp)
 
    target_include_directories(wsi_headless PRIVATE
       ${PROJECT_SOURCE_DIR}
@@ -296,6 +296,50 @@ if (BUILD_WSI_DISPLAY)
    list(APPEND LINK_WSI_LIBS wsi_display)
 else()
    list(APPEND JSON_COMMANDS COMMAND sed -i '/VK_KHR_display/d' ${CMAKE_CURRENT_BINARY_DIR}/VkLayer_window_system_integration.json)
+endif()
+
+# X11 (xcb/xlib) - presents via MIT-SHM, for ARM SBCs (RK3588) without working DRI3.
+if(BUILD_WSI_X11)
+   add_library(wsi_x11 STATIC
+      wsi/x11/drm_display.cpp
+      wsi/x11/surface_properties.cpp
+      wsi/x11/surface.cpp
+      wsi/x11/swapchain.cpp
+      wsi/x11/shm_presenter.cpp)
+
+   pkg_check_modules(LIBDRM REQUIRED libdrm)
+
+   target_include_directories(wsi_x11 PRIVATE
+      ${PROJECT_SOURCE_DIR}
+      ${VULKAN_CXX_INCLUDE}
+      ${CMAKE_CURRENT_BINARY_DIR})
+   target_include_directories(wsi_x11 PUBLIC ${LIBDRM_INCLUDE_DIRS})
+
+   target_compile_options(wsi_x11 INTERFACE "-DBUILD_WSI_X11=1")
+
+   if(CMAKE_SYSTEM_PROCESSOR MATCHES "arm" OR CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64")
+      option(ENABLE_ARM_NEON "Enable ARM NEON optimizations for X11 SHM" ON)
+      if(ENABLE_ARM_NEON)
+         target_compile_definitions(wsi_x11 PRIVATE "ENABLE_ARM_NEON=1")
+         target_compile_options(wsi_x11 PRIVATE "-march=armv8-a+simd")
+         message(STATUS "Enabled ARM NEON optimizations for X11 SHM presentation")
+      endif()
+   else()
+      message(STATUS "No SIMD optimizations available for architecture: ${CMAKE_SYSTEM_PROCESSOR}")
+   endif()
+
+   target_link_libraries(wsi_x11 ${LIBDRM_LDFLAGS} drm)
+   target_link_libraries(wsi_x11 drm_utils)
+   target_link_libraries(wsi_x11 wsi_utils)
+   if(NOT EXTERNAL_WSIALLOC_LIBRARY STREQUAL "")
+      target_link_libraries(wsi_x11 ${EXTERNAL_WSIALLOC_LIBRARY})
+   else()
+      target_link_libraries(wsi_x11 wsialloc)
+   endif()
+   list(APPEND LINK_WSI_LIBS wsi_x11 xcb xcb-shm xcb-sync X11-xcb X11 Xrandr)
+else()
+   list(APPEND JSON_COMMANDS COMMAND sed -i '/VK_KHR_xcb_surface/d' ${CMAKE_CURRENT_BINARY_DIR}/VkLayer_window_system_integration.json)
+   list(APPEND JSON_COMMANDS COMMAND sed -i '/VK_KHR_xlib_surface/d' ${CMAKE_CURRENT_BINARY_DIR}/VkLayer_window_system_integration.json)
 endif()
 
 # Layer
@@ -362,6 +406,13 @@ else()
    target_compile_definitions(${PROJECT_NAME} PRIVATE WAIT_FOR_QUERY_RESULT_ENABLED=0)
 endif()
 target_link_libraries(${PROJECT_NAME} ${LINK_WSI_LIBS})
+
+# image_backing_memory_device is shared by the headless and X11 backends. Compile it once into the
+# layer here rather than into each backend's static library, where it would otherwise produce a
+# duplicate-symbol error when both backends are enabled together.
+if(BUILD_WSI_HEADLESS OR BUILD_WSI_X11)
+   target_sources(${PROJECT_NAME} PRIVATE wsi/image_backing_memory_device.cpp)
+endif()
 
 add_custom_target(manifest_json ALL COMMAND
    cp ${PROJECT_SOURCE_DIR}/layer/VkLayer_window_system_integration.json ${CMAKE_CURRENT_BINARY_DIR}
