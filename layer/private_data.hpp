@@ -201,6 +201,16 @@ protected:
 
    /** @brief Vector that holds the entrypoints of the dispatch table */
    util::unique_ptr<entrypoint_list> m_entrypoints;
+
+   /**
+    * @brief Highest Vulkan API version usable on this instance/device, set during populate().
+    *
+    * Used to expose core-promoted entrypoints (e.g. the KHR-suffixed aliases of functions that
+    * became core in 1.1) whose introducing api_version is <= this, even when the application did
+    * not explicitly enable the (now-core) extension. Without this an application that resolves a
+    * promoted "...KHR" entrypoint by name on a 1.1+ instance would get a null pointer.
+    */
+   uint32_t m_api_version = VK_API_VERSION_1_0;
 };
 
 /* Represents the maximum possible Vulkan API version. */
