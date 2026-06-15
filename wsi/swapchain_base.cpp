@@ -405,6 +405,13 @@ VkResult swapchain_base::acquire_next_image(uint64_t timeout, VkSemaphore semaph
       return VK_ERROR_OUT_OF_HOST_MEMORY;
    }
 
+   /* If the swapchain has already faulted (e.g. device lost during a previous present), fail fast
+    * rather than blocking in wait_and_get_free_buffer waiting for an image that can never free. */
+   if (error_has_occured())
+   {
+      return get_error_state();
+   }
+
    TRY(wait_and_get_free_buffer(timeout));
    if (error_has_occured())
    {
@@ -581,6 +588,13 @@ VkResult swapchain_base::notify_presentation_engine(const pending_present_reques
 VkResult swapchain_base::queue_present(VkQueue queue, const VkPresentInfoKHR *present_info,
                                        const swapchain_presentation_parameters &submit_info)
 {
+   /* Once the swapchain has faulted (e.g. device lost), fast-return the error rather than re-attempting
+    * the doomed submit and re-logging it every frame for apps that keep presenting regardless. */
+   if (error_has_occured())
+   {
+      return get_error_state();
+   }
+
    if (m_present_mode == VK_PRESENT_MODE_SHARED_CONTINUOUS_REFRESH_KHR)
    {
       const util::unique_lock<util::recursive_mutex> image_status_lock(m_image_status_mutex);
@@ -669,8 +683,19 @@ VkResult swapchain_base::queue_present(VkQueue queue, const VkPresentInfoKHR *pr
       count_signal_semaphores,
    };
 
-   TRY_LOG_CALL(m_swapchain_images[submit_info.pending_present.image_index].set_present_payload(queue, semaphores,
-                                                                                                submission_pnext));
+   {
+      VkResult payload_result = m_swapchain_images[submit_info.pending_present.image_index].set_present_payload(
+         queue, semaphores, submission_pnext);
+      if (payload_result != VK_SUCCESS)
+      {
+         /* A failed present payload (e.g. VK_ERROR_DEVICE_LOST under heavy load) leaves the image
+          * acquired-but-unpresented; fault the swapchain so acquire/present return the error instead
+          * of the app stalling on acquire once every image is stuck. */
+         WSI_LOG_ERROR("set_present_payload failed (VkResult %d); faulting swapchain", payload_result);
+         set_error_state(payload_result);
+         return payload_result;
+      }
+   }
 
    if (submit_info.present_fence != VK_NULL_HANDLE)
    {
