@@ -115,6 +115,7 @@ VkResult fence_sync::set_payload(VkQueue queue, const queue_submit_semaphores &s
    VkResult result = dev->disp.ResetFences(dev->device, 1u, &fence);
    if (result != VK_SUCCESS)
    {
+      WSI_LOG_ERROR("present fence: ResetFences failed (VkResult %d)", result);
       return result;
    }
    has_payload = false;
@@ -124,6 +125,10 @@ VkResult fence_sync::set_payload(VkQueue queue, const queue_submit_semaphores &s
    {
       has_payload = true;
       payload_finished = false;
+   }
+   else
+   {
+      WSI_LOG_ERROR("present fence: sync_queue_submit failed (VkResult %d)", result);
    }
    return result;
 }
