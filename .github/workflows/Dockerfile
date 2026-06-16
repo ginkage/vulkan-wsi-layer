@@ -17,6 +17,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libx11-xcb-dev \
     libxcb1-dev \
     libxcb-dri3-dev \
+    libxcb-present-dev \
     libxcb-randr0-dev \
     libxcb-shm0-dev \
     libxcb-sync-dev \
