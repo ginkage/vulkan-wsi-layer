@@ -664,7 +664,8 @@ VkResult shm_presenter::init(xcb_connection_t *connection, xcb_window_t window, 
    return VK_SUCCESS;
 }
 
-VkResult shm_presenter::create_image_resources(x11_image_data *image_data, uint32_t width, uint32_t height, int depth)
+VkResult shm_presenter::create_image_resources(swapchain_image &, x11_image_data *image_data, uint32_t width,
+                                               uint32_t height, int depth)
 {
    image_data->width = width;
    image_data->height = height;
@@ -742,7 +743,7 @@ VkResult shm_presenter::create_image_resources(x11_image_data *image_data, uint3
 
 
 
-VkResult shm_presenter::present_image(x11_image_data *image_data, uint32_t /*serial*/)
+VkResult shm_presenter::present_image(x11_image_data *image_data, uint32_t /*serial*/, uint64_t /*target_msc*/)
 {
 
    if (m_fence_available && !m_first_frame)
