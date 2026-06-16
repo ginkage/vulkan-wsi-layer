@@ -43,6 +43,8 @@
 #include <mutex>
 #include <xcb/sync.h>
 
+#include "x11_presenter.hpp"
+
 namespace wsi
 {
 namespace x11
@@ -51,22 +53,23 @@ namespace x11
 class surface;
 struct x11_image_data;
 
-class shm_presenter
+class shm_presenter : public x11_presenter
 {
 public:
-   ~shm_presenter();
-
    shm_presenter();
 
-   VkResult init(xcb_connection_t *connection, xcb_window_t window, surface *wsi_surface);
+   ~shm_presenter() override;
 
-   VkResult create_image_resources(x11_image_data *image_data, uint32_t width, uint32_t height, int depth);
+   bool is_available(xcb_connection_t *connection, surface *wsi_surface) override;
 
-   VkResult present_image(x11_image_data *image_data, uint32_t serial);
+   VkResult init(xcb_connection_t *connection, xcb_window_t window, surface *wsi_surface) override;
 
-   void destroy_image_resources(x11_image_data *image_data);
+   VkResult create_image_resources(swapchain_image &image, x11_image_data *image_data, uint32_t width,
+                                   uint32_t height, int depth) override;
 
-   bool is_available(xcb_connection_t *connection, surface *wsi_surface);
+   VkResult present_image(x11_image_data *image_data, uint32_t serial, uint64_t target_msc) override;
+
+   void destroy_image_resources(x11_image_data *image_data) override;
 
 private:
    xcb_connection_t *m_connection = nullptr;

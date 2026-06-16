@@ -14,6 +14,9 @@ for mutual benefit.
 The project currently implements support for `VK_EXT_headless_surface` and
 its dependencies. Experimental support for `VK_KHR_wayland_surface` can be
 enabled via a build option [as explained below](#building-with-wayland-support).
+Support for X11 (`VK_KHR_xcb_surface` and `VK_KHR_xlib_surface`), presenting via
+DRI3 + Present or MIT-SHM, can likewise be enabled — see
+[Building with X11 support](#building-with-x11-support).
 
 ### Implemented Vulkan® extensions
 
@@ -159,6 +162,40 @@ thread implementation by including the build option `ENABLE_WAYLAND_FIFO_PRESENT
 along with the other build options mentioned in "Building with Wayland support"
 section.
 
+### Building with X11 support
+
+X11 support (`VK_KHR_xcb_surface` and `VK_KHR_xlib_surface`) is enabled with the
+`BUILD_WSI_X11` build option. Like the Wayland backend it uses a graphics memory
+allocator (`SELECT_EXTERNAL_ALLOCATOR=dma_buf_heaps`), and it requires the
+xcb/Xlib development packages (`libxcb`, `libxcb-shm`, `libxcb-sync`,
+`libxcb-dri3`, `libxcb-present`, `libxcb-randr`, `libx11`, `libx11-xcb`,
+`libxrandr`).
+
+```
+cmake . -Bbuild \
+        -DVULKAN_CXX_INCLUDE="path/to/vulkan-headers" \
+        -DBUILD_WSI_X11=1 \
+        -DSELECT_EXTERNAL_ALLOCATOR=dma_buf_heaps \
+        -DWSIALLOC_MEMORY_HEAP_NAME=system-uncached
+```
+
+The X11 backend presents through the X server (it does not page-flip directly).
+At swapchain creation it picks one of two paths:
+
+* **DRI3 + Present** — used when the X server advertises DRI3 and Present. The
+  rendered dma-buf is wrapped as an X pixmap (`xcb_dri3_pixmap_from_buffers`) and
+  presented with `xcb_present_pixmap`, with no CPU copy. The importable format
+  modifiers are obtained from the X server via DRI3 1.2
+  (`xcb_dri3_get_supported_modifiers`), so this path does not depend on the DRM
+  display topology.
+* **MIT-SHM** — fallback when DRI3/Present is unavailable, when DRI3 setup fails,
+  or when forced with `WSI_X11_FORCE_SHM`. The image is copied into an X
+  shared-memory segment and blitted.
+
+The default present path is **paced zero-copy** (FIFO). See
+[Environment variables](#environment-variables) to select the GPU-copy strategy
+or to allow non-FIFO (MAILBOX) present modes.
+
 ### Building with frame instrumentation support
 
 The layer can be built to pass frame boundary information down to other
@@ -193,6 +230,26 @@ The debug interface provides functions including:
 Copy the shared library `libVkLayer_window_system_integration.so` and JSON
 configuration `VkLayer_window_system_integration.json` into a Vulkan®
 [implicit layer directory](https://github.com/KhronosGroup/Vulkan-Loader/blob/main/docs/LoaderLayerInterface.md#linux-layer-discovery).
+
+## Environment variables
+
+The layer reads the following environment variables at runtime:
+
+| Variable | Effect |
+|----------|--------|
+| `DISABLE_WSI_LAYER=1` | Disable the layer for the process. As an implicit layer it is otherwise loaded for every Vulkan application. |
+| `VULKAN_WSI_DEBUG_LEVEL=<n>` | Log verbosity threshold: `1` = errors (default), `2` = + warnings, `3` = + info. |
+| `WSI_X11_FORCE_SHM=1` | X11: force the MIT-SHM present path instead of DRI3 + Present. |
+| `WSI_X11_DRI3_COPY=1` | X11 DRI3: present with GPU-copy (`XCB_PRESENT_OPTION_COPY`, the X server blits the pixmap) instead of the default zero-copy (`XCB_PRESENT_OPTION_NONE`). |
+| `WSI_ALLOW_NON_FIFO_PRESENT_MODE=1` | Honour the application's requested present mode instead of forcing FIFO. Required to reach MAILBOX / unpaced presentation; off by default because non-FIFO modes show visual artifacts on some stacks. |
+| `WSI_DISPLAY_DRI_DEV=<path>` | `display` backend only: the DRM device node to use (otherwise auto-detected). |
+
+On X11 the out-of-the-box behaviour is **paced zero-copy**: present mode is forced
+to FIFO and the strategy defaults to zero-copy. Pacing follows the present mode
+(FIFO → paced, MAILBOX → unpaced) once `WSI_ALLOW_NON_FIFO_PRESENT_MODE` is set,
+and the strategy is chosen with `WSI_X11_DRI3_COPY`, giving four combinations
+(paced/unpaced × zero-copy/GPU-copy). Note that some present modes other than
+FIFO can show visual artifacts, which is why FIFO is the default.
 
 ## Contributing
 

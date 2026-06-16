@@ -48,9 +48,17 @@
 #include "util/log.hpp"
 #include "util/macros.hpp"
 #include "wsi/external_memory.hpp"
+#include "wsi/image_backing_memory_external.hpp"
+#include "wsi/wsi_alloc_utils.hpp"
 #include "wsi/swapchain_base.hpp"
 #include "wsi/extensions/present_id.hpp"
+#include "wsi/extensions/external_memory_extension.hpp"
+#include "wsi/extensions/image_compression_control.hpp"
 #include "shm_presenter.hpp"
+#include "dri3_presenter.hpp"
+#include "util/drm/drm_utils.hpp"
+
+#include <drm_fourcc.h>
 
 namespace wsi
 {
@@ -58,6 +66,41 @@ namespace x11
 {
 
 #define X11_SWAPCHAIN_MAX_PENDING_COMPLETIONS 128
+
+/**
+ * @brief Build the importable format/modifier set for DRI3 by asking the X server.
+ *
+ * DRI3 presents through the X server (not KMS), so the correct, topology-independent source of
+ * supported formats is the server itself via DRI3 1.2 @c xcb_dri3_get_supported_modifiers - the
+ * analogue of how the Wayland backend sources formats from the compositor. Falls back to LINEAR +
+ * MOD_INVALID when the server is DRI3 < 1.2 or advertises nothing (MOD_INVALID is the path the
+ * patched Mali Xwayland handles).
+ */
+static void query_dri3_supported_formats(xcb_connection_t *connection, xcb_window_t window, uint32_t fourcc,
+                                         uint8_t depth, uint8_t bpp,
+                                         util::vector<util::drm::drm_format_pair> &out)
+{
+   xcb_dri3_get_supported_modifiers_cookie_t cookie =
+      xcb_dri3_get_supported_modifiers(connection, window, depth, bpp);
+   xcb_dri3_get_supported_modifiers_reply_t *reply =
+      xcb_dri3_get_supported_modifiers_reply(connection, cookie, nullptr);
+   if (reply != nullptr)
+   {
+      const uint64_t *mods = xcb_dri3_get_supported_modifiers_window_modifiers(reply);
+      const int count = xcb_dri3_get_supported_modifiers_window_modifiers_length(reply);
+      for (int i = 0; i < count; i++)
+      {
+         (void)out.try_push_back(util::drm::drm_format_pair{ fourcc, mods[i] });
+      }
+      free(reply);
+   }
+
+   if (out.size() == 0)
+   {
+      (void)out.try_push_back(util::drm::drm_format_pair{ fourcc, DRM_FORMAT_MOD_LINEAR });
+      (void)out.try_push_back(util::drm::drm_format_pair{ fourcc, DRM_FORMAT_MOD_INVALID });
+   }
+}
 
 swapchain::swapchain(layer::device_private_data &dev_data, const VkAllocationCallbacks *pAllocator,
                      surface &wsi_surface)
@@ -68,6 +111,7 @@ swapchain::swapchain(layer::device_private_data &dev_data, const VkAllocationCal
    , m_image_factory(m_allocator, m_device_data)
    , m_send_sbc(0)
    , m_target_msc(0)
+   , m_last_present_msc(0)
    , m_present_event_thread_run(false)
    , m_thread_status_lock()
    , m_thread_status_cond()
@@ -96,14 +140,14 @@ swapchain::~swapchain()
 
    /* Release the per-image SHM resources while the presenter (and its xcb connection) is still alive.
     * The host-visible image memory is freed by each x11_image_data's external_memory during teardown. */
-   if (m_shm_presenter)
+   if (m_presenter)
    {
       for (auto &image : m_swapchain_images)
       {
          auto *data = image.get_data<x11_image_data>();
          if (data != nullptr)
          {
-            m_shm_presenter->destroy_image_resources(data);
+            m_presenter->destroy_image_resources(data);
          }
       }
    }
@@ -123,31 +167,123 @@ VkResult swapchain::init_platform(VkDevice device, const VkSwapchainCreateInfoKH
       return VK_ERROR_INITIALIZATION_FAILED;
    }
 
-   TRY_LOG_CALL(init_image_factory(*swapchain_create_info));
-
+   /* Prefer DRI3 + Present (zero-copy); fall back to MIT-SHM when the X server lacks DRI3/Present. */
    try
    {
-      m_shm_presenter = std::make_unique<shm_presenter>();
-
-      if (!m_shm_presenter->is_available(m_connection, m_wsi_surface))
+      /* WSI_X11_FORCE_SHM forces the MIT-SHM path (CPU copy) - useful for A/B comparison against DRI3
+       * and as an escape hatch for workloads that misbehave on DRI3. */
+      const bool force_shm = (getenv("WSI_X11_FORCE_SHM") != nullptr);
+      /* DRI3 strategy: default is true zero-copy (OPTION_NONE); set WSI_X11_DRI3_COPY to select
+       * GPU-copy (OPTION_COPY) - the server blits the pixmap, trading a blit for deterministic
+       * recycling. Pacing is separate (present mode), so the default is paced zero-copy (FIFO). */
+      const bool dri3_copy = (getenv("WSI_X11_DRI3_COPY") != nullptr);
+      auto dri3 = force_shm ? std::unique_ptr<dri3_presenter>() : std::make_unique<dri3_presenter>();
+      if (dri3 != nullptr && dri3->is_available(m_connection, m_wsi_surface))
       {
-         WSI_LOG_ERROR("SHM presenter is not available");
-         return VK_ERROR_INITIALIZATION_FAILED;
+         dri3->set_copy_mode(dri3_copy);
+         m_presenter = std::move(dri3);
+         m_use_dri3 = true;
+         m_dri3_copy_mode = dri3_copy;
       }
-
-      VkResult init_result = m_shm_presenter->init(m_connection, m_window, m_wsi_surface);
-      if (init_result != VK_SUCCESS)
+      else
       {
-         WSI_LOG_ERROR("Failed to initialize SHM presenter");
-         return init_result;
+         auto shm = std::make_unique<shm_presenter>();
+         if (!shm->is_available(m_connection, m_wsi_surface))
+         {
+            WSI_LOG_ERROR("Neither DRI3 nor SHM presentation is available");
+            return VK_ERROR_INITIALIZATION_FAILED;
+         }
+         m_presenter = std::move(shm);
+         m_use_dri3 = false;
       }
    }
    catch (const std::exception &e)
    {
       WSI_LOG_ERROR("Exception creating presentation strategy: %s", e.what());
-
       return VK_ERROR_INITIALIZATION_FAILED;
    }
+
+   /* DRI3 presents GPU-local dma-buf images, so it needs the wsialloc allocator and a dma-buf image
+    * factory. If that setup fails (e.g. the X server can't supply usable DRI3 formats), fall back to
+    * the always-available SHM path rather than failing swapchain creation outright. */
+   if (m_use_dri3)
+   {
+      VkResult dri3_result = VK_ERROR_INITIALIZATION_FAILED;
+      auto wsi_allocator = swapchain_wsialloc_allocator::create();
+      if (wsi_allocator.has_value())
+      {
+         m_wsi_allocator = m_allocator.make_unique<swapchain_wsialloc_allocator>(std::move(wsi_allocator.value()));
+         if (m_wsi_allocator != nullptr)
+         {
+            dri3_result = init_image_factory(*swapchain_create_info);
+         }
+      }
+
+      if (dri3_result != VK_SUCCESS)
+      {
+         WSI_LOG_WARNING("DRI3 setup failed (%d); falling back to SHM presentation", dri3_result);
+         m_presenter.reset();
+         m_wsi_allocator.reset();
+         m_use_dri3 = false;
+         m_dri3_copy_mode = false;
+
+         try
+         {
+            auto shm = std::make_unique<shm_presenter>();
+            if (shm == nullptr || !shm->is_available(m_connection, m_wsi_surface))
+            {
+               WSI_LOG_ERROR("SHM presentation unavailable after DRI3 fallback");
+               return VK_ERROR_INITIALIZATION_FAILED;
+            }
+            m_presenter = std::move(shm);
+         }
+         catch (const std::exception &e)
+         {
+            WSI_LOG_ERROR("Exception creating SHM fallback presenter: %s", e.what());
+            return VK_ERROR_INITIALIZATION_FAILED;
+         }
+      }
+   }
+
+   if (!m_use_dri3)
+   {
+      TRY_LOG_CALL(init_image_factory(*swapchain_create_info));
+   }
+
+   /* Pacing follows the present mode (FIFO/FIFO_RELAXED -> paced). GPU-copy + unpaced is the only cell
+    * that needs the fixed deferred-release pipeline (buffers must free immediately so the app can run
+    * ahead); every other cell recycles via PresentIdleNotify. Computed after the final strategy is
+    * known (it may have fallen back to SHM above). */
+   const bool paced = (m_present_mode == VK_PRESENT_MODE_FIFO_KHR ||
+                       m_present_mode == VK_PRESENT_MODE_FIFO_RELAXED_KHR);
+   m_dri3_deferred_release = m_dri3_copy_mode && !paced;
+
+   /* Log the chosen cell once per process: per-swapchain state but constant in practice, and logging
+    * it on every swapchain creation floods the log for apps that recreate them often. */
+   static bool logged_presentation = false;
+   if (!logged_presentation)
+   {
+      logged_presentation = true;
+      if (m_use_dri3)
+      {
+         WSI_LOG_INFO("X11 swapchain using DRI3 presentation (%s, %s)",
+                      m_dri3_copy_mode ? "GPU-copy" : "zero-copy", paced ? "paced" : "unpaced");
+      }
+      else
+      {
+         WSI_LOG_INFO("X11 swapchain using SHM presentation");
+      }
+   }
+
+   VkResult init_result = m_presenter->init(m_connection, m_window, m_wsi_surface);
+   if (init_result != VK_SUCCESS)
+   {
+      WSI_LOG_ERROR("Failed to initialize presentation strategy");
+      return init_result;
+   }
+
+   /* DRI3 drives image recycling from Present events on this queue; null for SHM. */
+   m_present_special_event = m_presenter->get_present_special_event();
 
    try
    {
@@ -180,7 +316,59 @@ VkResult swapchain::init_image_factory(const VkSwapchainCreateInfoKHR &swapchain
       return VK_ERROR_OUT_OF_HOST_MEMORY;
    }
 
-   /* The X11 SHM presenter reads the rendered image on the CPU, so the images must be linearly tiled. */
+   if (m_use_dri3)
+   {
+      /* DRI3 presents through the X server, so the importable format/modifier set comes from the
+       * server (DRI3 1.2), not from KMS - this works regardless of the DRM topology (e.g. CIX, where
+       * the display connector is not on card0). Mirrors how the Wayland backend sources formats from
+       * the compositor. */
+      uint32_t width = 0;
+      uint32_t height = 0;
+      int depth = 24;
+      m_wsi_surface->get_size_and_depth(&width, &height, &depth);
+      const uint8_t bpp = static_cast<uint8_t>((depth == 24) ? 32 : depth);
+      const uint32_t fourcc = util::drm::vk_to_drm_format(swapchain_create_info.imageFormat);
+
+      util::vector<util::drm::drm_format_pair> supported_formats{ m_allocator };
+      query_dri3_supported_formats(m_connection, m_window, fourcc, static_cast<uint8_t>(depth), bpp,
+                                   supported_formats);
+      if (supported_formats.size() == 0)
+      {
+         WSI_LOG_ERROR("No DRI3 formats available for image allocation");
+         return VK_ERROR_INITIALIZATION_FAILED;
+      }
+
+      auto compression_control = image_create_compression_control::create(m_device, &swapchain_create_info);
+      auto sc_img_create_ext_mem_result = swapchain_image_create_external_memory::create(
+         image_handle_creator->get_image_create_info(), compression_control, *m_wsi_allocator,
+         supported_formats, m_device_data.physical_device, m_allocator);
+      if (auto error = std::get_if<VkResult>(&sc_img_create_ext_mem_result))
+      {
+         return *error;
+      }
+      auto sc_img_create_ext_mem =
+         std::get<util::unique_ptr<swapchain_image_create_external_memory>>(std::move(sc_img_create_ext_mem_result));
+
+      auto external_image_create_info = sc_img_create_ext_mem->get_external_image_create_info();
+      TRY_LOG_CALL(image_handle_creator->add_extension(std::move(sc_img_create_ext_mem)));
+
+      wsialloc_create_info_args wsialloc_args = { external_image_create_info.selected_format,
+                                                  external_image_create_info.flags, external_image_create_info.extent,
+                                                  external_image_create_info.explicit_compression };
+      auto backing_memory_creator =
+         m_allocator.make_unique<external_image_backing_memory_creator>(m_device_data, *m_wsi_allocator, wsialloc_args);
+      if (backing_memory_creator == nullptr)
+      {
+         return VK_ERROR_OUT_OF_HOST_MEMORY;
+      }
+
+      /* X11 DRI3 is implicit-sync (no surface sync interface): non-exportable fence, CPU-wait the
+       * present fence so the server never samples a half-rendered buffer. */
+      m_image_factory.init(std::move(image_handle_creator), std::move(backing_memory_creator), false, true);
+      return VK_SUCCESS;
+   }
+
+   /* SHM: host-visible, linearly-tiled images the CPU reads. */
    auto linear_ext = m_allocator.make_unique<linear_tiling_extension>();
    if (linear_ext == nullptr)
    {
@@ -219,14 +407,6 @@ VkResult swapchain::allocate_and_bind_swapchain_image(swapchain_image &image)
 
    const auto image_create_info = get_image_factory().get_image_handle_creator().get_image_create_info();
 
-   /* Allocate host-visible memory and bind it to the (linear) image created by the factory. */
-   const VkMemoryPropertyFlags optimal = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT |
-                                         VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
-   const VkMemoryPropertyFlags required = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-   TRY_LOG_CALL(image_data->external_mem.configure_for_host_visible(image_create_info, required, optimal));
-   TRY_LOG_CALL(image_data->external_mem.allocate_and_bind_image(image.get_image(), image_create_info));
-
-   /* Set up the X11 shared-memory resources for this image. */
    uint32_t width = image_create_info.extent.width;
    uint32_t height = image_create_info.extent.height;
    int depth = 24;
@@ -236,8 +416,28 @@ VkResult swapchain::allocate_and_bind_swapchain_image(swapchain_image &image)
    {
       WSI_LOG_WARNING("Could not get surface depth, using default: %d", depth);
    }
-   TRY_LOG(m_shm_presenter->create_image_resources(image_data, width, height, depth),
-           "Failed to create presentation image resources");
+
+   if (m_use_dri3)
+   {
+      /* DRI3: allocate the GPU-local dma-buf, wrap it as an X pixmap (before the Vulkan import, so
+       * the fds are still ours to duplicate), then import and bind. */
+      auto &backing = swapchain_image_factory::get_backing_memory_from_image<image_backing_memory_external>(image);
+      TRY_LOG_CALL(backing.allocate());
+      TRY_LOG(m_presenter->create_image_resources(image, image_data, width, height, depth),
+              "Failed to create DRI3 pixmap resources");
+      TRY_LOG_CALL(backing.import_and_bind(image.get_image()));
+   }
+   else
+   {
+      /* SHM: allocate host-visible memory, bind it to the (linear) image, set up the SHM segments. */
+      const VkMemoryPropertyFlags optimal = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                                            VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
+      const VkMemoryPropertyFlags required = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+      TRY_LOG_CALL(image_data->external_mem.configure_for_host_visible(image_create_info, required, optimal));
+      TRY_LOG_CALL(image_data->external_mem.allocate_and_bind_image(image.get_image(), image_create_info));
+      TRY_LOG(m_presenter->create_image_resources(image, image_data, width, height, depth),
+              "Failed to create SHM image resources");
+   }
 
    image.set_data(std::move(image_data_ptr));
    image.set_status(swapchain_image::FREE);
@@ -248,6 +448,59 @@ void swapchain::present_event_thread()
 {
    auto thread_status_lock = std::unique_lock<std::mutex>(m_thread_status_lock);
    m_present_event_thread_run = true;
+
+   if (m_use_dri3)
+   {
+      /* DRI3: drain Present events. A PresentIdleNotify means the server is done reading that pixmap,
+       * so the image can be recycled - hand the pixmap to free_image_found via the free-buffer pool. */
+      while (m_present_event_thread_run)
+      {
+         thread_status_lock.unlock();
+         xcb_generic_event_t *event = xcb_poll_for_special_event(m_connection, m_present_special_event);
+         thread_status_lock.lock();
+
+         if (event != nullptr)
+         {
+            auto *generic = reinterpret_cast<xcb_present_generic_event_t *>(event);
+            if (generic->evtype == XCB_PRESENT_IDLE_NOTIFY)
+            {
+               /* The unpaced-GPU-copy cell recycles via the fixed deferred-release pipeline in
+                * present_image, so just drain the idle event there; every other cell hands the pixmap
+                * back through the free-buffer pool. */
+               if (!m_dri3_deferred_release)
+               {
+                  auto *idle = reinterpret_cast<xcb_present_idle_notify_event_t *>(event);
+                  if (!m_free_buffer_pool.push_back(idle->pixmap))
+                  {
+                     WSI_LOG_ERROR("DRI3: free buffer pool full, dropping idle pixmap");
+                  }
+                  m_thread_status_cond.notify_all();
+               }
+            }
+            else if (generic->evtype == XCB_PRESENT_COMPLETE_NOTIFY)
+            {
+               /* Track the vsync count so present_image can pace the next frame (FIFO target_msc). */
+               auto *complete = reinterpret_cast<xcb_present_complete_notify_event_t *>(event);
+               m_last_present_msc = complete->msc;
+               m_thread_status_cond.notify_all();
+            }
+            free(event);
+            continue;
+         }
+
+         if (xcb_connection_has_error(m_connection))
+         {
+            break;
+         }
+
+         /* No event ready: brief wait (also bounds shutdown latency - the destructor notifies us). */
+         m_thread_status_cond.wait_for(thread_status_lock, std::chrono::milliseconds(2));
+      }
+
+      m_present_event_thread_run = false;
+      m_thread_status_cond.notify_all();
+      return;
+   }
 
    while (m_present_event_thread_run)
    {
@@ -294,24 +547,25 @@ void swapchain::present_image(const pending_present_request &pending_present)
    auto image_data = m_swapchain_images[pending_present.image_index].get_data<x11_image_data>();
    auto thread_status_lock = std::unique_lock<std::mutex>(m_thread_status_lock);
 
-   while (image_data->pending_completions.size() == X11_SWAPCHAIN_MAX_PENDING_COMPLETIONS)
-   {
-      if (!m_present_event_thread_run)
-      {
-         if (m_device_data.is_present_id_enabled())
-         {
-            auto *ext = get_swapchain_extension<wsi_ext_present_id>(true);
-            ext->mark_delivered(pending_present.present_id);
-         }
-         return unpresent_image(pending_present.image_index);
-      }
-      m_thread_status_cond.wait(thread_status_lock);
-   }
-
    m_send_sbc++;
    uint32_t serial = static_cast<uint32_t>(m_send_sbc);
 
-   VkResult present_result = m_shm_presenter->present_image(image_data, serial);
+   /* FIFO: schedule each frame one vsync past the last completed present (strictly increasing) so the
+    * server paces presents to the display refresh instead of releasing them in bursts. Other present
+    * modes present as soon as possible (target_msc 0). If no Complete events arrive, m_last_present_msc
+    * stays 0 and the targets fall in the past, degrading gracefully to as-soon-as-possible. */
+   uint64_t target_msc = 0;
+   if (m_present_mode == VK_PRESENT_MODE_FIFO_KHR || m_present_mode == VK_PRESENT_MODE_FIFO_RELAXED_KHR)
+   {
+      m_target_msc = m_target_msc + 1;
+      if (m_last_present_msc + 1 > m_target_msc)
+      {
+         m_target_msc = m_last_present_msc + 1;
+      }
+      target_msc = m_target_msc;
+   }
+
+   VkResult present_result = m_presenter->present_image(image_data, serial, target_msc);
    if (present_result != VK_SUCCESS)
    {
       WSI_LOG_ERROR("Failed to present image using presentation strategy: %d", present_result);
@@ -325,9 +579,30 @@ void swapchain::present_image(const pending_present_request &pending_present)
 
    m_thread_status_cond.notify_all();
 
-   thread_status_lock.unlock();
-
-   unpresent_image(pending_present.image_index);
+   if (m_dri3_deferred_release)
+   {
+      /* Unpaced GPU-copy: the server has copied the pixmap (OPTION_COPY), so recycle on a fixed
+       * pipeline - free image N-DRI3_DEFER_FRAMES now - instead of waiting for PresentIdleNotify,
+       * whose latency is bimodal (fast when the compositor composites, ~a frame when it flips). This
+       * frees buffers immediately so the app runs ahead (MAILBOX). unpresent_image under the lock
+       * matches free_image_found; notify so a waiting acquire re-checks. */
+      int oldest = m_dri3_deferred[m_dri3_defer_head];
+      m_dri3_deferred[m_dri3_defer_head] = static_cast<int>(pending_present.image_index);
+      m_dri3_defer_head = (m_dri3_defer_head + 1) % DRI3_DEFER_FRAMES;
+      if (oldest >= 0)
+      {
+         unpresent_image(static_cast<uint32_t>(oldest));
+         m_thread_status_cond.notify_all();
+      }
+   }
+   else if (!m_use_dri3)
+   {
+      /* SHM completes synchronously inside present_image, so the image is free to reuse now. DRI3
+       * leaves it presented until its PresentIdleNotify recycles it (present_event_thread ->
+       * m_free_buffer_pool -> free_image_found). */
+      thread_status_lock.unlock();
+      unpresent_image(pending_present.image_index);
+   }
 }
 
 bool swapchain::free_image_found()

@@ -56,8 +56,12 @@ extern "C" {
 #include "wsi/swapchain_image_factory.hpp"
 #include "wsi/vulkan_image_handle_creator.hpp"
 #include "wsi/image_backing_memory_device.hpp"
+#include "wsi/image_backing_memory_external.hpp"
+#include "wsi/wsi_alloc_utils.hpp"
 #include "wsi/extensions/image_create_info_extension.hpp"
 #include "shm_presenter.hpp"
+#include "dri3_presenter.hpp"
+#include "x11_presenter.hpp"
 
 namespace wsi
 {
@@ -194,9 +198,34 @@ private:
    surface *m_wsi_surface;
 
    /**
-    * @brief Presentation strategy for this swapchain.
+    * @brief Presentation strategy for this swapchain (DRI3 zero-copy, or SHM fallback).
     */
-   std::unique_ptr<shm_presenter> m_shm_presenter;
+   std::unique_ptr<x11_presenter> m_presenter;
+
+   /** @brief True when @ref m_presenter is the DRI3 strategy (dma-buf images); false for SHM. */
+   bool m_use_dri3 = false;
+
+   /** @brief DRI3 GPU-copy strategy (WSI_X11_DRI3_COPY): present with XCB_PRESENT_OPTION_COPY so the
+    *  X server blits the pixmap into the window. Default is true zero-copy (OPTION_NONE). Independent
+    *  of pacing, which is driven by the present mode. */
+   bool m_dri3_copy_mode = false;
+
+   /** @brief Recycle images on a fixed N-frame pipeline (free image N-DRI3_DEFER_FRAMES in
+    *  present_image) instead of waiting for PresentIdleNotify. Used only for the unpaced GPU-copy
+    *  cell, where buffers must free immediately for the app to run ahead; every other cell recycles
+    *  via IdleNotify. */
+   bool m_dri3_deferred_release = false;
+
+   /** @brief Fixed-latency recycle pipeline depth (see @ref m_dri3_deferred_release). */
+   static constexpr int DRI3_DEFER_FRAMES = 2;
+   int m_dri3_deferred[DRI3_DEFER_FRAMES] = { -1, -1 };
+   int m_dri3_defer_head = 0;
+
+   /** @brief wsialloc allocator backing the DRI3 dma-buf images (null in SHM mode). */
+   util::unique_ptr<swapchain_wsialloc_allocator> m_wsi_allocator;
+
+   /** @brief DRI3 Present special-event queue (owned by m_presenter); null in SHM mode. */
+   xcb_special_event_t *m_present_special_event = nullptr;
 
    /**
     * @brief Factory producing the swapchain's (linear, host-visible) images.
@@ -206,11 +235,14 @@ private:
    uint64_t m_send_sbc;
    uint64_t m_target_msc;
 
+   /** @brief Most recent vsync count from PresentCompleteNotify, for FIFO target_msc pacing. */
+   uint64_t m_last_present_msc;
+
    bool m_present_event_thread_run;
    std::thread m_present_event_thread;
    std::mutex m_thread_status_lock;
    std::condition_variable m_thread_status_cond;
-   util::ring_buffer<xcb_pixmap_t, 6> m_free_buffer_pool;
+   util::ring_buffer<xcb_pixmap_t, 16> m_free_buffer_pool;
 };
 
 } /* namespace x11 */
