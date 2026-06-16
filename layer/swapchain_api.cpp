@@ -65,10 +65,18 @@ wsi_layer_vkCreateSwapchainKHR(VkDevice device, const VkSwapchainCreateInfoKHR *
       return VK_ERROR_OUT_OF_HOST_MEMORY;
    }
 
-   /* RK3588: force FIFO present mode regardless of what the application requested. */
-   VkSwapchainCreateInfoKHR fifo_create_info = *pSwapchainCreateInfo;
-   fifo_create_info.presentMode = VK_PRESENT_MODE_FIFO_KHR;
-   TRY_LOG(sc->init(device, &fifo_create_info), "Failed to initialise swapchain");
+   /* RK3588: force FIFO present mode to avoid visual artifacts seen in other present modes. Set
+    * WSI_ALLOW_NON_FIFO_PRESENT_MODE to honour the application's requested mode instead - this lets
+    * the backends run unpaced/MAILBOX, primarily for testing and benchmarking the present paths. */
+   const VkSwapchainCreateInfoKHR *create_info = pSwapchainCreateInfo;
+   VkSwapchainCreateInfoKHR fifo_create_info;
+   if (getenv("WSI_ALLOW_NON_FIFO_PRESENT_MODE") == nullptr)
+   {
+      fifo_create_info = *pSwapchainCreateInfo;
+      fifo_create_info.presentMode = VK_PRESENT_MODE_FIFO_KHR;
+      create_info = &fifo_create_info;
+   }
+   TRY_LOG(sc->init(device, create_info), "Failed to initialise swapchain");
 
    TRY_LOG(device_data.add_layer_swapchain(reinterpret_cast<VkSwapchainKHR>(sc.get())),
            "Failed to associate swapchain with the layer");

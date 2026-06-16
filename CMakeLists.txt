@@ -78,8 +78,8 @@ endif()
 
 # Build Configuration options
 
-# Backend support - defaults tuned for the RK3588 target (Wayland on, headless off).
-option(BUILD_WSI_HEADLESS "Build with support for VK_EXT_headless_surface" OFF)
+# Backend support
+option(BUILD_WSI_HEADLESS "Build with support for VK_EXT_headless_surface" ON)
 option(BUILD_WSI_WAYLAND "Build with support for VK_KHR_wayland_surface" ON)
 option(BUILD_WSI_DISPLAY "Build with support for VK_KHR_display" OFF)
 option(BUILD_WSI_X11 "Build with support for VK_KHR_xcb_surface / VK_KHR_xlib_surface" ON)
@@ -301,13 +301,14 @@ else()
    list(APPEND JSON_COMMANDS COMMAND sed -i '/VK_KHR_display/d' ${CMAKE_CURRENT_BINARY_DIR}/VkLayer_window_system_integration.json)
 endif()
 
-# X11 (xcb/xlib) - presents via MIT-SHM, for ARM SBCs (RK3588) without working DRI3.
+# X11 (xcb/xlib) - presents via DRI3+Present (zero-copy) when available, else MIT-SHM (ARM SBCs).
 if(BUILD_WSI_X11)
    add_library(wsi_x11 STATIC
       wsi/x11/surface_properties.cpp
       wsi/x11/surface.cpp
       wsi/x11/swapchain.cpp
-      wsi/x11/shm_presenter.cpp)
+      wsi/x11/shm_presenter.cpp
+      wsi/x11/dri3_presenter.cpp)
 
    pkg_check_modules(LIBDRM REQUIRED libdrm)
 
@@ -338,7 +339,7 @@ if(BUILD_WSI_X11)
    else()
       target_link_libraries(wsi_x11 wsialloc)
    endif()
-   list(APPEND LINK_WSI_LIBS wsi_x11 xcb xcb-shm xcb-sync X11-xcb X11 Xrandr)
+   list(APPEND LINK_WSI_LIBS wsi_x11 xcb xcb-shm xcb-sync xcb-dri3 xcb-present X11-xcb X11 Xrandr)
 else()
    list(APPEND JSON_COMMANDS COMMAND sed -i '/VK_KHR_xcb_surface/d' ${CMAKE_CURRENT_BINARY_DIR}/VkLayer_window_system_integration.json)
    list(APPEND JSON_COMMANDS COMMAND sed -i '/VK_KHR_xlib_surface/d' ${CMAKE_CURRENT_BINARY_DIR}/VkLayer_window_system_integration.json)
