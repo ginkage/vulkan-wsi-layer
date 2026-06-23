@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2025 Arm Limited.
+ * Copyright (c) 2019-2026 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -293,18 +293,17 @@ void set_swapchain_maintenance1_state(VkPhysicalDevice physicalDevice,
 {
    if (swapchain_maintenance1_features != nullptr)
    {
-      if (swapchain_maintenance1_features->swapchainMaintenance1)
+      auto &instance = layer::instance_private_data::get(physicalDevice);
+      if (instance.is_instance_extension_enabled(VK_KHR_DISPLAY_EXTENSION_NAME))
       {
-         auto &instance = layer::instance_private_data::get(physicalDevice);
-         if (instance.is_instance_extension_enabled(VK_KHR_DISPLAY_EXTENSION_NAME))
-         {
-            swapchain_maintenance1_features->swapchainMaintenance1 = false;
-         }
+         /* Display WSI does not support swapchain maintenance1. */
+         swapchain_maintenance1_features->swapchainMaintenance1 = false;
+         return;
       }
-      else
+
+      if (!swapchain_maintenance1_features->swapchainMaintenance1)
       {
-         swapchain_maintenance1_features->swapchainMaintenance1 =
-            layer::instance_private_data::get(physicalDevice).get_maintainance1_support();
+         swapchain_maintenance1_features->swapchainMaintenance1 = instance.get_maintainance1_support();
       }
    }
 }

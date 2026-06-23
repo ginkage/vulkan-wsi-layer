@@ -254,6 +254,8 @@ CreateDisplayPlaneSurfaceKHR(VkInstance instance, const VkDisplaySurfaceCreateIn
       auto wsi_surface = allocator.make_unique<surface>(display_mode, pCreateInfo->imageExtent);
       if (wsi_surface == nullptr)
       {
+         instance_data.disp.DestroySurfaceKHR(instance, *pSurface, pAllocator);
+         *pSurface = VK_NULL_HANDLE;
          return VK_ERROR_OUT_OF_HOST_MEMORY;
       }
 
@@ -262,6 +264,7 @@ CreateDisplayPlaneSurfaceKHR(VkInstance instance, const VkDisplaySurfaceCreateIn
       if (res != VK_SUCCESS)
       {
          instance_data.disp.DestroySurfaceKHR(instance, *pSurface, pAllocator);
+         *pSurface = VK_NULL_HANDLE;
       }
    }
    return res;
@@ -587,9 +590,11 @@ surface_properties &surface_properties::get_instance()
 void surface_properties::get_surface_present_scaling_and_gravity(
    VkSurfacePresentScalingCapabilitiesEXT *scaling_capabilities)
 {
-   scaling_capabilities->supportedPresentScaling = VK_PRESENT_SCALING_ONE_TO_ONE_BIT_EXT;
-   scaling_capabilities->supportedPresentGravityX = VK_PRESENT_GRAVITY_MIN_BIT_EXT;
-   scaling_capabilities->supportedPresentGravityY = VK_PRESENT_GRAVITY_MIN_BIT_EXT;
+   /* This backend presents by page-flipping a KMS framebuffer for each swapchain image. It does not implement
+    * VK_EXT_surface_maintenance1 presentation scaling/gravity. */
+   scaling_capabilities->supportedPresentScaling = 0;
+   scaling_capabilities->supportedPresentGravityX = 0;
+   scaling_capabilities->supportedPresentGravityY = 0;
 }
 
 bool surface_properties::is_compatible_present_modes(VkPresentModeKHR present_mode_a, VkPresentModeKHR present_mode_b)
