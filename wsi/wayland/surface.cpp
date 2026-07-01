@@ -33,6 +33,8 @@
 #include "wl_helpers.hpp"
 #include "util/log.hpp"
 
+#include <drm_fourcc.h>
+
 namespace wsi
 {
 namespace wayland
@@ -74,6 +76,11 @@ zwp_linux_dmabuf_v1_modifier_impl(void *data, struct zwp_linux_dmabuf_v1 *dma_bu
 
    if (!drm_supported_formats->is_out_of_memory)
    {
+      /* wlroots-based compositors advertise DRM_FORMAT_MOD_INVALID when they effectively only support
+       * INVALID + LINEAR, but the Mali stack cannot allocate against a target modifier of INVALID on
+       * this path, so substitute LINEAR (universally allocatable and importable). */
+      format.modifier =
+         (format.modifier == DRM_FORMAT_MOD_INVALID) ? DRM_FORMAT_MOD_LINEAR : format.modifier;
       drm_supported_formats->is_out_of_memory = !drm_supported_formats->formats->try_push_back(format);
    }
 }
