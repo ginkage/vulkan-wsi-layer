@@ -49,16 +49,18 @@ namespace x11
 
 void surface_properties::populate_present_mode_compatibilities()
 {
-   std::array<present_mode_compatibility, 2> compatible_present_modes_list = {
+   std::array<present_mode_compatibility, 3> compatible_present_modes_list = {
       present_mode_compatibility{ VK_PRESENT_MODE_FIFO_KHR, 1, { VK_PRESENT_MODE_FIFO_KHR } },
-      present_mode_compatibility{ VK_PRESENT_MODE_MAILBOX_KHR, 1, { VK_PRESENT_MODE_MAILBOX_KHR } }
+      present_mode_compatibility{ VK_PRESENT_MODE_MAILBOX_KHR, 1, { VK_PRESENT_MODE_MAILBOX_KHR } },
+      present_mode_compatibility{ VK_PRESENT_MODE_IMMEDIATE_KHR, 1, { VK_PRESENT_MODE_IMMEDIATE_KHR } }
    };
-   m_compatible_present_modes = compatible_present_modes<2>(compatible_present_modes_list);
+   m_compatible_present_modes =
+      compatible_present_modes<compatible_present_modes_list.size()>(compatible_present_modes_list);
 }
 
 surface_properties::surface_properties(surface *wsi_surface, const util::allocator &allocator)
    : specific_surface(wsi_surface)
-   , m_supported_modes({ VK_PRESENT_MODE_FIFO_KHR, VK_PRESENT_MODE_MAILBOX_KHR })
+   , m_supported_modes({ VK_PRESENT_MODE_FIFO_KHR, VK_PRESENT_MODE_MAILBOX_KHR, VK_PRESENT_MODE_IMMEDIATE_KHR })
 {
    UNUSED(allocator);
    populate_present_mode_compatibilities();

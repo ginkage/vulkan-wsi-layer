@@ -181,6 +181,7 @@ VkResult swapchain::init_platform(VkDevice device, const VkSwapchainCreateInfoKH
       if (dri3 != nullptr && dri3->is_available(m_connection, m_wsi_surface))
       {
          dri3->set_copy_mode(dri3_copy);
+         dri3->set_immediate_mode(m_present_mode == VK_PRESENT_MODE_IMMEDIATE_KHR);
          m_presenter = std::move(dri3);
          m_use_dri3 = true;
          m_dri3_copy_mode = dri3_copy;
@@ -303,7 +304,8 @@ VkResult swapchain::init_platform(VkDevice device, const VkSwapchainCreateInfoKH
     * initialize the page flip thread so the present_image function can be called
     * during vkQueuePresent.
     */
-   use_presentation_thread = (m_present_mode != VK_PRESENT_MODE_MAILBOX_KHR);
+   use_presentation_thread =
+      (m_present_mode != VK_PRESENT_MODE_MAILBOX_KHR && m_present_mode != VK_PRESENT_MODE_IMMEDIATE_KHR);
 
    return VK_SUCCESS;
 }

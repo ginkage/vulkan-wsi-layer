@@ -222,7 +222,12 @@ VkResult dri3_presenter::present_image(x11_image_data *image_data, uint32_t seri
     * our buffer onto the display; the buffer is then released promptly regardless of whether the
     * compositor would have flipped or composited, letting the swapchain recycle on a fixed schedule
     * (see swapchain::present_image). The default OPTION_NONE is truly zero-copy. */
-   const uint32_t options = m_copy_mode ? XCB_PRESENT_OPTION_COPY : XCB_PRESENT_OPTION_NONE;
+   uint32_t options = m_copy_mode ? XCB_PRESENT_OPTION_COPY : XCB_PRESENT_OPTION_NONE;
+   if (m_immediate_mode)
+   {
+      /* IMMEDIATE: present as soon as possible without waiting for vblank (tearing permitted). */
+      options |= XCB_PRESENT_OPTION_ASYNC;
+   }
    xcb_present_pixmap(m_connection, m_window, image_data->pixmap, serial, XCB_NONE /* valid */,
                       XCB_NONE /* update */, 0 /* x_off */, 0 /* y_off */, XCB_NONE /* target_crtc */,
                       XCB_NONE /* wait_fence */, XCB_NONE /* idle_fence */, options, target_msc,
