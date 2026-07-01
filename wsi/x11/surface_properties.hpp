@@ -74,10 +74,10 @@ private:
    surface *specific_surface;
 
    /* List of supported presentation modes */
-   std::array<VkPresentModeKHR, 2> m_supported_modes;
+   std::array<VkPresentModeKHR, 3> m_supported_modes;
 
    /* Stores compatible presentation modes */
-   compatible_present_modes<2> m_compatible_present_modes;
+   compatible_present_modes<3> m_compatible_present_modes;
 
    void populate_present_mode_compatibilities() override;
 

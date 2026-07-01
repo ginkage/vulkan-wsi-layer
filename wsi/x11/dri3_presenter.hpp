@@ -95,6 +95,17 @@ public:
       m_copy_mode = enable;
    }
 
+   /**
+    * @brief Enable IMMEDIATE present mode.
+    *
+    * Adds XCB_PRESENT_OPTION_ASYNC so the X server presents as soon as possible without waiting for
+    * vblank (tearing permitted). Set when the swapchain's present mode is VK_PRESENT_MODE_IMMEDIATE_KHR.
+    */
+   void set_immediate_mode(bool enable)
+   {
+      m_immediate_mode = enable;
+   }
+
 private:
    xcb_connection_t *m_connection = nullptr;
    xcb_window_t m_window = 0;
@@ -108,6 +119,9 @@ private:
 
    /** When true, present with XCB_PRESENT_OPTION_COPY instead of OPTION_NONE (see set_copy_mode). */
    bool m_copy_mode = false;
+
+   /** When true, OR in XCB_PRESENT_OPTION_ASYNC for immediate/tearing present (see set_immediate_mode). */
+   bool m_immediate_mode = false;
 };
 
 } /* namespace x11 */
