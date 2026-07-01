@@ -173,6 +173,10 @@ private:
     * @brief Image factory that is used to create swapchain images.
     */
    swapchain_image_factory m_image_factory;
+
+   /** @brief True when the application requested a premultiplied-alpha surface; the alpha channel is
+    *  then kept rather than dropped (ARGB->XRGB) for the OPAQUE emulation. */
+   bool m_has_alpha = false;
 };
 
 } // namespace wayland

@@ -213,6 +213,10 @@ VkResult swapchain::init_platform(VkDevice device, const VkSwapchainCreateInfoKH
                              (m_present_mode != VK_PRESENT_MODE_FIFO_LATEST_READY_EXT) &&
                              (m_present_mode != VK_PRESENT_MODE_MAILBOX_KHR);
 
+   /* Keep the alpha channel only when the app asked for a premultiplied-alpha surface; otherwise the
+    * OPAQUE emulation in create_wl_buffer drops it (ARGB->XRGB). */
+   m_has_alpha = (swapchain_create_info->compositeAlpha == VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR);
+
    auto present_wait = get_swapchain_extension<wsi_ext_present_wait_wayland>();
    if (present_wait)
    {
@@ -345,14 +349,18 @@ wayland_owner<wl_buffer> swapchain::create_wl_buffer(image_backing_memory_extern
    }
 
    auto fourcc = util::drm::vk_to_drm_format(image_create_info.format);
-   /* RK3588: emulate OPAQUE composite alpha by presenting through an alpha-less format. */
-   if (fourcc == DRM_FORMAT_ARGB8888)
+   /* Emulate OPAQUE composite alpha by presenting through an alpha-less format - unless the app
+    * requested a premultiplied-alpha surface, in which case keep the alpha channel. */
+   if (!m_has_alpha)
    {
-      fourcc = DRM_FORMAT_XRGB8888;
-   }
-   if (fourcc == DRM_FORMAT_ABGR8888)
-   {
-      fourcc = DRM_FORMAT_XBGR8888;
+      if (fourcc == DRM_FORMAT_ARGB8888)
+      {
+         fourcc = DRM_FORMAT_XRGB8888;
+      }
+      if (fourcc == DRM_FORMAT_ABGR8888)
+      {
+         fourcc = DRM_FORMAT_XBGR8888;
+      }
    }
    auto buffer = zwp_linux_buffer_params_v1_create_immed(params, image_create_info.extent.width,
                                                          image_create_info.extent.height, fourcc, 0);
