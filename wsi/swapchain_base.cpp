@@ -455,7 +455,8 @@ VkResult swapchain_base::acquire_next_image(uint64_t timeout, VkSemaphore semaph
          (semaphore != VK_NULL_HANDLE) ? &semaphore : nullptr,
          (semaphore != VK_NULL_HANDLE) ? 1u : 0,
       };
-      return sync_queue_submit(m_device_data, m_queue, fence, semaphores);
+      TRY(sync_queue_submit(m_device_data, m_queue, fence, semaphores));
+      return success_or_suboptimal();
    }
 
    /* Try to signal fences/semaphores with a sync FD for optimal performance. */
@@ -491,7 +492,7 @@ VkResult swapchain_base::acquire_next_image(uint64_t timeout, VkSemaphore semaph
       semaphore = VK_NULL_HANDLE;
    }
 
-   return VK_SUCCESS;
+   return success_or_suboptimal();
 }
 
 VkResult swapchain_base::get_swapchain_images(uint32_t *swapchain_image_count, VkImage *swapchain_images)
@@ -716,7 +717,7 @@ VkResult swapchain_base::queue_present(VkQueue queue, const VkPresentInfoKHR *pr
    }
    TRY(notify_presentation_engine(submit_info.pending_present));
 
-   return VK_SUCCESS;
+   return success_or_suboptimal();
 }
 
 void swapchain_base::deprecate(VkSwapchainKHR descendant)

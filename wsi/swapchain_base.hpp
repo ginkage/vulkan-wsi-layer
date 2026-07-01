@@ -562,12 +562,23 @@ protected:
     */
    bool error_has_occured() const
    {
-      return m_error_state != VK_SUCCESS;
+      /* VK_SUBOPTIMAL_KHR is a success code, not an error: the swapchain can still acquire and present
+       * while reporting suboptimal, so it must not short-circuit those paths. */
+      return m_error_state != VK_SUCCESS && m_error_state != VK_SUBOPTIMAL_KHR;
    }
 
    VkResult get_error_state() const
    {
       return m_error_state;
+   }
+
+   /**
+    * @brief Return VK_SUBOPTIMAL_KHR in place of VK_SUCCESS when the swapchain is suboptimal, so the
+    * application gets the recreate hint from acquire/present without the operation being skipped.
+    */
+   VkResult success_or_suboptimal() const
+   {
+      return m_error_state == VK_SUBOPTIMAL_KHR ? VK_SUBOPTIMAL_KHR : VK_SUCCESS;
    }
 
    /*
