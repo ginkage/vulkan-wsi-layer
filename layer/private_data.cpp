@@ -668,7 +668,7 @@ bool device_private_data::layer_owns_all_swapchains(const VkSwapchainKHR *swapch
 
    for (uint32_t i = 0; i < swapchain_count; i++)
    {
-      if (swapchains.find(swapchain[i]) == swapchains.end())
+      if (!swapchains.contains(swapchain[i]))
       {
          return false;
       }

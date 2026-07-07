@@ -335,13 +335,15 @@ wayland_owner<wl_buffer> swapchain::create_wl_buffer(image_backing_memory_extern
    const auto modifier_low = static_cast<uint32_t>(modifier & 0xFFFFFFFF);
    for (uint32_t plane = 0; plane < ext_memory.get_num_planes(); plane++)
    {
+      assert(ext_memory.get_strides()[plane] > 0);
       zwp_linux_buffer_params_v1_add(params, ext_memory.get_buffer_fds()[plane], plane, ext_memory.get_offsets()[plane],
-                                     ext_memory.get_strides()[plane], modifier_hi, modifier_low);
+                                     static_cast<uint32_t>(ext_memory.get_strides()[plane]), modifier_hi, modifier_low);
    }
 
    const auto fourcc = util::drm::vk_to_drm_format(image_create_info.format);
-   auto buffer = zwp_linux_buffer_params_v1_create_immed(params, image_create_info.extent.width,
-                                                         image_create_info.extent.height, fourcc, 0);
+   auto buffer =
+      zwp_linux_buffer_params_v1_create_immed(params, static_cast<int32_t>(image_create_info.extent.width),
+                                              static_cast<int32_t>(image_create_info.extent.height), fourcc, 0);
    zwp_linux_buffer_params_v1_destroy(params);
 
    wl_proxy_set_queue(reinterpret_cast<wl_proxy *>(buffer), m_buffer_queue);
