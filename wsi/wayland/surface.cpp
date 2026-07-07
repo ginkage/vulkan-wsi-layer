@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, 2024-2025 Arm Limited.
+ * Copyright (c) 2021, 2024-2026 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -86,7 +86,7 @@ wp_presentation_clock_id_impl(void *data, struct wp_presentation *wp_presentatio
    UNUSED(wp_presentation);
 
    clockid_t *clockid = static_cast<clockid_t *>(data);
-   *clockid = compositor_clockid;
+   *clockid = static_cast<clockid_t>(compositor_clockid);
 }
 
 } // namespace
