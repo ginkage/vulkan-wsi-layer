@@ -23,6 +23,10 @@
 cmake_minimum_required(VERSION 3.4.3...4.0)
 project(VkLayer_window_system_integration)
 
+# This project does not use C++20 modules. Disable CMake's module dependency
+# scanning so newer CMake/Ninja toolchains do not require clang-scan-deps.
+set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
+
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(VULKAN_PKG_CONFIG vulkan)
 
