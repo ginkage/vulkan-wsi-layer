@@ -89,6 +89,12 @@ public:
    presentation_feedback *insert_into_pending_present_feedback_list(uint32_t image_index,
                                                                     struct wp_presentation_feedback *feedback_obj,
                                                                     uint64_t id);
+
+   /**
+    * @brief Clear pending presentation feedback objects.
+    */
+   void clear_pending_present_feedback_list();
+
    /*
     * @brief Copies the pixel out timestamp from the internal array to the present timing queue.
     *

@@ -102,5 +102,20 @@ void wsi_ext_present_id_wayland::remove_from_pending_present_feedback_list(uint6
    }
 }
 
+void wsi_ext_present_id_wayland::clear_pending_present_feedback_list()
+{
+   util::unique_lock<util::mutex> lock(m_pending_presents_lock);
+   if (!lock)
+   {
+      WSI_LOG_ERROR("Failed to acquire pending presents lock in clear_pending_present_feedback_list.\n");
+      abort();
+   }
+
+   while (m_pending_presents.size() > 0)
+   {
+      m_pending_presents.pop_front();
+   }
+}
+
 } // namespace wayland
 } // namespace wsi

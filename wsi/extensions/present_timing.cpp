@@ -27,6 +27,7 @@
  *
  * @brief Contains the implentation for the VK_EXT_present_timing extension.
  */
+#include <algorithm>
 #include <array>
 #include <cassert>
 #include <wsi/swapchain_base.hpp>
@@ -52,13 +53,13 @@ wsi_ext_present_timing::wsi_ext_present_timing(const util::allocator &allocator,
    , m_time_domains(allocator)
    , m_device(layer::device_private_data::get(device))
    , m_queue(allocator)
-   , m_device_timestamp_cached(allocator)
    , m_queue_mutex()
    , m_scheduled_present_targets(allocator)
    , m_num_images(num_images)
    , m_present_semaphore(allocator)
    , m_timestamp_period(0.f)
-   , m_queue_family_resources(allocator, m_device)
+   , m_queue_family_resources(allocator)
+   , m_active_queue_family_resources(nullptr)
 {
    assert(m_device.is_device_extension_enabled(VK_KHR_PRESENT_ID_2_EXTENSION_NAME));
    VkPhysicalDeviceProperties2KHR physical_device_properties{};
@@ -70,6 +71,11 @@ wsi_ext_present_timing::wsi_ext_present_timing(const util::allocator &allocator,
 
 wsi_ext_present_timing::~wsi_ext_present_timing()
 {
+   for (auto &resources : m_queue_family_resources)
+   {
+      (void)resources->wait_for_pending_submissions();
+   }
+
    for (const auto &semaphore : m_present_semaphore)
    {
       if (semaphore != VK_NULL_HANDLE)
@@ -107,7 +113,7 @@ VkResult wsi_ext_present_timing::init(util::unique_ptr<wsi::vulkan_time_domain> 
             return VK_ERROR_OUT_OF_HOST_MEMORY;
          }
       }
-      TRY_LOG_CALL(m_queue_family_resources.init(m_device.get_best_queue_family_index(), m_num_images));
+      TRY_LOG_CALL(create_queue_family_resources(m_num_images, &m_active_queue_family_resources));
    }
 
    if (!m_scheduled_present_targets.try_resize(m_num_images))
@@ -163,27 +169,33 @@ VkResult wsi_ext_present_timing::write_pending_results()
    {
       if (slot.is_pending(VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT))
       {
-         /* Resize cached device timestamp records to the number of images. */
-         if (!m_device_timestamp_cached.try_resize(m_num_images, 0ULL))
+         assert(slot.m_queue_end_resources != nullptr);
+         auto *resources = slot.m_queue_end_resources;
+         VkFence fence = resources->m_fence[slot.m_queue_end_query_slot];
+         VkResult fence_res = m_device.disp.WaitForFences(m_device.device, 1u, &fence, VK_TRUE, uint64_t{ 0 });
+         if (fence_res == VK_TIMEOUT)
          {
-            return VK_ERROR_OUT_OF_HOST_MEMORY;
+            continue;
          }
+         if (fence_res != VK_SUCCESS)
+         {
+            return fence_res;
+         }
+         resources->mark_fence_idle(slot.m_queue_end_query_slot);
 
          uint64_t timestamp;
-         VkQueryResultFlags wait_for_result = WAIT_FOR_QUERY_RESULT_ENABLED ? VK_QUERY_RESULT_WAIT_BIT : 0;
          VkResult res = m_device.disp.GetQueryPoolResults(
-            m_device.device, m_queue_family_resources.m_query_pool, slot.m_image_index, 1u, sizeof(timestamp),
-            &timestamp, static_cast<VkDeviceSize>(0),
-            static_cast<VkQueryResultFlags>(VK_QUERY_RESULT_64_BIT | wait_for_result));
+            m_device.device, resources->m_query_pool, slot.m_queue_end_query_slot, 1u, sizeof(timestamp), &timestamp,
+            static_cast<VkDeviceSize>(0), static_cast<VkQueryResultFlags>(VK_QUERY_RESULT_64_BIT));
          if (res != VK_SUCCESS && res != VK_NOT_READY)
          {
             return res;
          }
-         if (res == VK_SUCCESS && m_device_timestamp_cached[slot.m_image_index] != timestamp)
+         if (res == VK_SUCCESS)
          {
-            m_device_timestamp_cached[slot.m_image_index] = timestamp;
             slot.set_stage_timing(VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT,
                                   ticks_to_ns(timestamp, m_timestamp_period));
+            slot.m_queue_end_resources = nullptr;
          }
       }
       if (slot.is_pending(VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_OUT_BIT_EXT))
@@ -192,6 +204,7 @@ VkResult wsi_ext_present_timing::write_pending_results()
             slot.m_image_index, slot.get_stage_timing(VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_OUT_BIT_EXT)));
       }
    }
+   remove_unused_queue_family_resources();
    return VK_SUCCESS;
 }
 
@@ -202,13 +215,13 @@ VkResult wsi_ext_present_timing::present_timing_queue_set_size(size_t queue_size
    {
       return VK_ERROR_UNKNOWN;
    }
-   if (m_queue.size() > queue_size)
+   const size_t num_outstanding_results = present_timing_get_num_outstanding_results();
+   if (num_outstanding_results > queue_size)
    {
       return VK_NOT_READY;
    }
-   /* A  vector is reserved with the updated size and the outstanding entries
-    * are copied over. A vector resize is not used since the outstanding entries
-    * are not sequential.
+   /* A vector is reserved with the updated size and the outstanding entries
+    * are copied over.
     */
    util::vector<swapchain_presentation_entry> presentation_timing(
       util::allocator(m_allocator, VK_SYSTEM_ALLOCATION_SCOPE_OBJECT));
@@ -216,19 +229,20 @@ VkResult wsi_ext_present_timing::present_timing_queue_set_size(size_t queue_size
    {
       return VK_ERROR_OUT_OF_HOST_MEMORY;
    }
+   if (is_present_stage_supported(VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT))
+   {
+      TRY_LOG_CALL(ensure_active_queue_family_resources(static_cast<uint32_t>(queue_size)));
+   }
    for (auto &slot : m_queue)
    {
-      if (slot.has_outstanding_stages())
-      {
-         /* The memory is already reserved for the new vector
-          * and there are no possibilities for an exception
-          * at this point. An exception at this point will
-          * cause bad state as the vector has partially copied.
-          */
-         bool res = presentation_timing.try_push_back(std::move(slot));
-         assert(res);
-         UNUSED(res);
-      }
+      /* The memory is already reserved for the new vector
+       * and there are no possibilities for an exception
+       * at this point. An exception at this point will
+       * cause bad state as the vector has partially copied.
+       */
+      bool res = presentation_timing.try_push_back(std::move(slot));
+      assert(res);
+      UNUSED(res);
    }
    m_queue.swap(presentation_timing);
    return VK_SUCCESS;
@@ -236,23 +250,15 @@ VkResult wsi_ext_present_timing::present_timing_queue_set_size(size_t queue_size
 
 size_t wsi_ext_present_timing::present_timing_get_num_outstanding_results()
 {
-   size_t num_outstanding = 0;
-
-   for (auto &slot : m_queue)
-   {
-      if (slot.has_outstanding_stages())
-      {
-         num_outstanding++;
-      }
-   }
-   return num_outstanding;
+   return m_queue.size();
 }
 
 VkResult wsi_ext_present_timing::queue_submit_queue_end_timing(const layer::device_private_data &device, VkQueue queue,
-                                                               uint32_t image_index)
+                                                               queue_family_resources &resources, uint32_t image_index,
+                                                               uint32_t query_slot)
 {
-   assert(image_index < m_queue_family_resources.m_command_buffer.size());
-   command_buffer_data command_buffer_data(&m_queue_family_resources.m_command_buffer[image_index], 1);
+   assert(query_slot < resources.m_command_buffer.size());
+   command_buffer_data command_buffer_data(&resources.m_command_buffer[query_slot], 1);
    VkSemaphore present_timing_semaphore = get_image_present_semaphore(image_index);
    queue_submit_semaphores present_timing_semaphores = {
       &present_timing_semaphore,
@@ -260,8 +266,90 @@ VkResult wsi_ext_present_timing::queue_submit_queue_end_timing(const layer::devi
       nullptr,
       0,
    };
-   TRY_LOG_CALL(sync_queue_submit(device, queue, VK_NULL_HANDLE, present_timing_semaphores, command_buffer_data));
+   VkFence fence = resources.m_fence[query_slot];
+   TRY_LOG_CALL(m_device.disp.ResetFences(m_device.device, 1u, &fence));
+   TRY_LOG_CALL(sync_queue_submit(device, queue, fence, present_timing_semaphores, command_buffer_data));
+   resources.mark_fence_submitted(query_slot);
    return VK_SUCCESS;
+}
+
+std::optional<uint32_t> wsi_ext_present_timing::find_available_queue_end_query_slot(queue_family_resources &resources)
+{
+   for (uint32_t query_slot = 0; query_slot < resources.get_query_count(); query_slot++)
+   {
+      auto query_slot_entry = std::find_if(m_queue.begin(), m_queue.end(), [&resources, query_slot](auto &slot) {
+         return slot.m_queue_end_resources == &resources && slot.m_queue_end_query_slot == query_slot &&
+                slot.is_pending(VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT);
+      });
+      if (query_slot_entry == m_queue.end())
+      {
+         return query_slot;
+      }
+   }
+
+   return std::nullopt;
+}
+
+bool wsi_ext_present_timing::has_pending_queue_end_query(queue_family_resources *resources)
+{
+   return std::any_of(m_queue.begin(), m_queue.end(), [resources](auto &slot) {
+      return (resources == nullptr || slot.m_queue_end_resources == resources) &&
+             slot.is_pending(VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT);
+   });
+}
+
+VkResult wsi_ext_present_timing::create_queue_family_resources(uint32_t query_count, queue_family_resources **resources)
+{
+   auto new_resources = m_allocator.make_unique<queue_family_resources>(m_allocator, m_device);
+   if (new_resources == nullptr)
+   {
+      return VK_ERROR_OUT_OF_HOST_MEMORY;
+   }
+   TRY_LOG_CALL(new_resources->init(m_device.get_best_queue_family_index(), query_count));
+
+   *resources = new_resources.get();
+   if (!m_queue_family_resources.try_push_back(std::move(new_resources)))
+   {
+      *resources = nullptr;
+      return VK_ERROR_OUT_OF_HOST_MEMORY;
+   }
+   return VK_SUCCESS;
+}
+
+VkResult wsi_ext_present_timing::ensure_active_queue_family_resources(uint32_t query_count)
+{
+   if (query_count == 0)
+   {
+      return VK_SUCCESS;
+   }
+   if (m_active_queue_family_resources != nullptr && query_count <= m_active_queue_family_resources->get_query_count())
+   {
+      return VK_SUCCESS;
+   }
+
+   queue_family_resources *resources = nullptr;
+   /* Pending entries may still use older query resources, so create a new active set
+    * instead of replacing resources in place.
+    */
+   TRY_LOG_CALL(create_queue_family_resources(query_count, &resources));
+   m_active_queue_family_resources = resources;
+   remove_unused_queue_family_resources();
+   return VK_SUCCESS;
+}
+
+void wsi_ext_present_timing::remove_unused_queue_family_resources()
+{
+   for (auto resources = m_queue_family_resources.begin(); resources != m_queue_family_resources.end();)
+   {
+      if (resources->get() == m_active_queue_family_resources || has_pending_queue_end_query(resources->get()))
+      {
+         resources++;
+      }
+      else
+      {
+         resources = m_queue_family_resources.erase(resources);
+      }
+   }
 }
 
 VkResult wsi_ext_present_timing::add_presentation_query_entry(VkQueue queue, uint64_t present_id, uint32_t image_index,
@@ -280,8 +368,26 @@ VkResult wsi_ext_present_timing::add_presentation_query_entry(VkQueue queue, uin
    {
       return VK_ERROR_PRESENT_TIMING_QUEUE_FULL_EXT;
    }
+   uint32_t queue_end_query_slot = swapchain_presentation_entry::INVALID_QUERY_SLOT;
+   queue_family_resources *queue_end_resources = nullptr;
+   if ((present_stage_queries & VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT) &&
+       is_present_stage_supported(VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT))
+   {
+      assert(m_active_queue_family_resources != nullptr);
+      assert(m_queue.capacity() <= m_active_queue_family_resources->get_query_count());
+
+      auto available_query_slot = find_available_queue_end_query_slot(*m_active_queue_family_resources);
+      if (!available_query_slot.has_value())
+      {
+         return VK_ERROR_PRESENT_TIMING_QUEUE_FULL_EXT;
+      }
+      queue_end_query_slot = available_query_slot.value();
+      queue_end_resources = m_active_queue_family_resources;
+   }
+
    wsi::swapchain_presentation_entry presentation_entry(target_time, present_stage_queries, present_id, image_index,
-                                                        m_device.get_best_queue_family_index(), stages_supported());
+                                                        m_device.get_best_queue_family_index(), queue_end_query_slot,
+                                                        queue_end_resources, stages_supported());
    if (!m_queue.try_push_back(std::move(presentation_entry)))
    {
       return VK_ERROR_OUT_OF_HOST_MEMORY;
@@ -289,7 +395,13 @@ VkResult wsi_ext_present_timing::add_presentation_query_entry(VkQueue queue, uin
    if ((present_stage_queries & VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT) &&
        is_present_stage_supported(VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT))
    {
-      TRY_LOG_CALL(queue_submit_queue_end_timing(m_device, queue, image_index));
+      VkResult res =
+         queue_submit_queue_end_timing(m_device, queue, *queue_end_resources, image_index, queue_end_query_slot);
+      if (res != VK_SUCCESS)
+      {
+         m_queue.pop_back();
+         return res;
+      }
    }
 
    return VK_SUCCESS;
@@ -461,12 +573,15 @@ VkResult wsi_ext_present_timing::physical_device_has_supported_queue_family(VkPh
 swapchain_presentation_entry::swapchain_presentation_entry(uint64_t target_time,
                                                            VkPresentStageFlagsEXT present_stage_queries,
                                                            uint64_t present_id, uint32_t image_index,
-                                                           uint32_t queue_family,
+                                                           uint32_t queue_family, uint32_t queue_end_query_slot,
+                                                           queue_family_resources *queue_end_resources,
                                                            VkPresentStageFlagsEXT stages_supported)
    : m_target_time(target_time)
    , m_target_stages(0)
    , m_present_id(present_id)
    , m_image_index(image_index)
+   , m_queue_end_query_slot(queue_end_query_slot)
+   , m_queue_end_resources(queue_end_resources)
    , m_num_present_stages(0)
    , m_queue_family(queue_family)
 {

@@ -41,6 +41,7 @@
 #include <cassert>
 #include <variant>
 #include <cmath>
+#include <utility>
 
 #include <layer/private_data.hpp>
 #include <layer/present_timing_api.hpp>
@@ -102,6 +103,8 @@ struct swapchain_presentation_timing
    }
 };
 
+class queue_family_resources;
+
 /**
  * @brief Swapchain presentation entry
  *
@@ -110,6 +113,8 @@ struct swapchain_presentation_timing
  */
 struct swapchain_presentation_entry
 {
+   static constexpr uint32_t INVALID_QUERY_SLOT = UINT32_MAX;
+
    /**
     * Target time used in the present request.
     */
@@ -129,6 +134,16 @@ struct swapchain_presentation_entry
     * The image index of the entry in the swapchain.
     */
    uint32_t m_image_index{ 0 };
+
+   /**
+    * The query slot used to store VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT timing.
+    */
+   uint32_t m_queue_end_query_slot{ INVALID_QUERY_SLOT };
+
+   /**
+    * The query resources used by a pending VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT timing.
+    */
+   queue_family_resources *m_queue_end_resources{ nullptr };
 
    /**
     * The number of requested stages for this entry.
@@ -156,7 +171,8 @@ struct swapchain_presentation_entry
    std::optional<swapchain_presentation_timing> m_first_pixel_visible_timing;
 
    swapchain_presentation_entry(uint64_t target_time, VkPresentStageFlagsEXT present_stage_queries, uint64_t present_id,
-                                uint32_t image_index, uint32_t queue_family, VkPresentStageFlagsEXT stages_supported);
+                                uint32_t image_index, uint32_t queue_family, uint32_t queue_end_query_slot,
+                                queue_family_resources *queue_end_resources, VkPresentStageFlagsEXT stages_supported);
    swapchain_presentation_entry(swapchain_presentation_entry &&) noexcept = default;
    swapchain_presentation_entry &operator=(swapchain_presentation_entry &&) noexcept = default;
 
@@ -323,6 +339,8 @@ public:
    queue_family_resources(util::allocator allocator, layer::device_private_data &device)
       : m_command_pool(VK_NULL_HANDLE)
       , m_command_buffer(allocator)
+      , m_fence(allocator)
+      , m_fence_in_flight(allocator)
       , m_query_pool(VK_NULL_HANDLE)
       , m_allocator(allocator)
       , m_device(device)
@@ -330,6 +348,146 @@ public:
    }
 
    ~queue_family_resources()
+   {
+      destroy();
+   }
+
+   VkResult init(uint32_t queue_family_index, uint32_t query_count)
+   {
+      assert(m_command_pool == VK_NULL_HANDLE);
+      assert(m_query_pool == VK_NULL_HANDLE);
+      assert(m_command_buffer.empty());
+      assert(m_fence.empty());
+      assert(m_fence_in_flight.empty());
+
+      if (query_count == 0)
+      {
+         return VK_SUCCESS;
+      }
+
+      /* Resize the command buffer to the number of query slots. */
+      if (!m_command_buffer.try_resize(query_count))
+      {
+         return VK_ERROR_OUT_OF_HOST_MEMORY;
+      }
+      for (auto &command_buffer : m_command_buffer)
+      {
+         command_buffer = VK_NULL_HANDLE;
+      }
+      /* Allocate the command pool and query pool. */
+      VkQueryPoolCreateInfo query_pool_info = { VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
+                                                nullptr,
+                                                VK_QUERY_POOL_CREATE_RESET_BIT_KHR,
+                                                VK_QUERY_TYPE_TIMESTAMP,
+                                                query_count,
+                                                0 };
+      TRY_LOG_CALL(m_device.disp.CreateQueryPool(m_device.device, &query_pool_info,
+                                                 m_allocator.get_original_callbacks(), &m_query_pool));
+      VkCommandPoolCreateInfo command_pool_info{ VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO, nullptr,
+                                                 VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT, queue_family_index };
+      TRY_LOG_CALL(m_device.disp.CreateCommandPool(m_device.device, &command_pool_info,
+                                                   m_allocator.get_original_callbacks(), &m_command_pool));
+      /* Allocate and write the command buffer. */
+      VkCommandBufferAllocateInfo command_buffer_info = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO, nullptr,
+                                                          m_command_pool, VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+                                                          query_count };
+      TRY_LOG_CALL(
+         m_device.disp.AllocateCommandBuffers(m_device.device, &command_buffer_info, m_command_buffer.data()));
+      VkCommandBufferBeginInfo begin_info = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, nullptr, 0, nullptr };
+      for (uint32_t query_slot = 0; query_slot < query_count; query_slot++)
+      {
+         TRY_LOG_CALL(m_device.disp.BeginCommandBuffer(m_command_buffer[query_slot], &begin_info));
+         m_device.disp.CmdResetQueryPool(m_command_buffer[query_slot], m_query_pool, query_slot, 1u);
+         m_device.disp.CmdWriteTimestamp(m_command_buffer[query_slot], VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+                                         m_query_pool, query_slot);
+         TRY_LOG_CALL(m_device.disp.EndCommandBuffer(m_command_buffer[query_slot]));
+      }
+
+      VkFenceCreateInfo fence_info = { VK_STRUCTURE_TYPE_FENCE_CREATE_INFO, nullptr, VK_FENCE_CREATE_SIGNALED_BIT };
+      if (!m_fence.try_resize(query_count))
+      {
+         return VK_ERROR_OUT_OF_HOST_MEMORY;
+      }
+      if (!m_fence_in_flight.try_resize(query_count))
+      {
+         return VK_ERROR_OUT_OF_HOST_MEMORY;
+      }
+      for (auto &fence : m_fence)
+      {
+         fence = VK_NULL_HANDLE;
+      }
+      for (auto &in_flight : m_fence_in_flight)
+      {
+         in_flight = VK_FALSE;
+      }
+      for (auto &fence : m_fence)
+      {
+         TRY_LOG_CALL(
+            m_device.disp.CreateFence(m_device.device, &fence_info, m_allocator.get_original_callbacks(), &fence));
+      }
+
+      return VK_SUCCESS;
+   }
+
+   uint32_t get_query_count() const
+   {
+      return static_cast<uint32_t>(m_command_buffer.size());
+   }
+
+   VkResult wait_for_pending_submissions()
+   {
+      for (size_t i = 0; i < m_fence.size(); i++)
+      {
+         auto fence = m_fence[i];
+         if (fence != VK_NULL_HANDLE && m_fence_in_flight[i] == VK_TRUE)
+         {
+            TRY_LOG_CALL(m_device.disp.WaitForFences(m_device.device, 1u, &fence, VK_TRUE, UINT64_MAX));
+            m_fence_in_flight[i] = VK_FALSE;
+         }
+      }
+
+      return VK_SUCCESS;
+   }
+
+   void mark_fence_submitted(uint32_t query_slot)
+   {
+      assert(query_slot < m_fence_in_flight.size());
+      m_fence_in_flight[query_slot] = VK_TRUE;
+   }
+
+   void mark_fence_idle(uint32_t query_slot)
+   {
+      assert(query_slot < m_fence_in_flight.size());
+      m_fence_in_flight[query_slot] = VK_FALSE;
+   }
+
+   /**
+    * @brief The command pool for allocating the buffers for the present stage timings.
+    */
+   VkCommandPool m_command_pool;
+
+   /**
+    * @brief The command buffer for the present stage timings.
+    */
+   util::vector<VkCommandBuffer> m_command_buffer;
+
+   /**
+    * @brief Fences for queue-end timing submissions.
+    */
+   util::vector<VkFence> m_fence;
+
+   /**
+    * @brief Tracks fences that have a submitted queue-end timing command.
+    */
+   util::vector<VkBool32> m_fence_in_flight;
+
+   /**
+    * @brief Query pool to allocate for present stage timing queries.
+    */
+   VkQueryPool m_query_pool;
+
+private:
+   void destroy()
    {
       if (m_command_pool != VK_NULL_HANDLE)
       {
@@ -344,66 +502,18 @@ public:
          m_device.disp.DestroyQueryPool(m_device.device, m_query_pool, m_allocator.get_original_callbacks());
          m_query_pool = VK_NULL_HANDLE;
       }
+      for (auto fence : m_fence)
+      {
+         if (fence != VK_NULL_HANDLE)
+         {
+            m_device.disp.DestroyFence(m_device.device, fence, m_allocator.get_original_callbacks());
+         }
+      }
+      m_command_buffer.clear();
+      m_fence.clear();
+      m_fence_in_flight.clear();
    }
 
-   VkResult init(uint32_t queue_family_index, uint32_t num_images)
-   {
-      /* Resize the command buffer to the number of images. */
-      if (!m_command_buffer.try_resize(num_images))
-      {
-         return VK_ERROR_OUT_OF_HOST_MEMORY;
-      }
-      for (auto &command_buffer : m_command_buffer)
-      {
-         command_buffer = VK_NULL_HANDLE;
-      }
-      /* Allocate the command pool and query pool. */
-      VkQueryPoolCreateInfo query_pool_info = { VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
-                                                nullptr,
-                                                VK_QUERY_POOL_CREATE_RESET_BIT_KHR,
-                                                VK_QUERY_TYPE_TIMESTAMP,
-                                                num_images,
-                                                0 };
-      TRY_LOG_CALL(m_device.disp.CreateQueryPool(m_device.device, &query_pool_info,
-                                                 m_allocator.get_original_callbacks(), &m_query_pool));
-      VkCommandPoolCreateInfo command_pool_info{ VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO, nullptr,
-                                                 VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT, queue_family_index };
-      TRY_LOG_CALL(m_device.disp.CreateCommandPool(m_device.device, &command_pool_info,
-                                                   m_allocator.get_original_callbacks(), &m_command_pool));
-      /* Allocate and write the command buffer. */
-      VkCommandBufferAllocateInfo command_buffer_info = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO, nullptr,
-                                                          m_command_pool, VK_COMMAND_BUFFER_LEVEL_PRIMARY, num_images };
-      TRY_LOG_CALL(
-         m_device.disp.AllocateCommandBuffers(m_device.device, &command_buffer_info, m_command_buffer.data()));
-      VkCommandBufferBeginInfo begin_info = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, nullptr, 0, nullptr };
-      for (uint32_t image_index = 0; image_index < num_images; image_index++)
-      {
-         TRY_LOG_CALL(m_device.disp.BeginCommandBuffer(m_command_buffer[image_index], &begin_info));
-         m_device.disp.CmdResetQueryPool(m_command_buffer[image_index], m_query_pool, image_index, 1u);
-         m_device.disp.CmdWriteTimestamp(m_command_buffer[image_index], VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-                                         m_query_pool, image_index);
-         TRY_LOG_CALL(m_device.disp.EndCommandBuffer(m_command_buffer[image_index]));
-      }
-
-      return VK_SUCCESS;
-   }
-
-   /**
-    * @brief The command pool for allocating the buffers for the present stage timings.
-    */
-   VkCommandPool m_command_pool;
-
-   /**
-    * @brief The command buffer for the present stage timings.
-    */
-   util::vector<VkCommandBuffer> m_command_buffer;
-
-   /**
-    * @brief Query pool to allocate for present stage timing queries.
-    */
-   VkQueryPool m_query_pool;
-
-private:
    util::allocator m_allocator;
    layer::device_private_data &m_device;
 };
@@ -667,13 +777,6 @@ private:
    util::vector<swapchain_presentation_entry> m_queue;
 
    /**
-    * @brief Stores the device timestamp recorded from the previous
-    * VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT stage for each image
-    * index of the swapchain.
-    */
-   util::vector<uint64_t> m_device_timestamp_cached;
-
-   /**
     * @brief Mutex guarding the internal presentation-timing queue.
     *
     * Public methods lock this mutex before accessing the queue.
@@ -703,21 +806,78 @@ private:
    float m_timestamp_period;
 
    /**
-    * @brief Resources associated with the 'best' queue family.
+    * @brief Query resource sets associated with the 'best' queue family.
+    *
+    * Old sets may stay alive after a resize while pending entries still reference them.
     */
-   queue_family_resources m_queue_family_resources;
+   util::vector<util::unique_ptr<queue_family_resources>> m_queue_family_resources;
+
+   /**
+    * @brief Query resources used for new queue-end timing entries.
+    */
+   queue_family_resources *m_active_queue_family_resources;
 
    /**
     * @brief Perform a queue submission for getting the queue end timing.
     *
     * @param device      The device private data.
     * @param queue       The Vulkan queue used to submit synchronization commands.
+    * @param resources   The query resources used for this presentation entry.
     * @param image_index The index of the image in the swapchain.
+    * @param query_slot  The query slot used for this presentation entry.
     *
     * @return VK_SUCCESS when the submission is successful and error otherwise.
     */
    VkResult queue_submit_queue_end_timing(const layer::device_private_data &device, VkQueue queue,
-                                          uint32_t image_index);
+                                          queue_family_resources &resources, uint32_t image_index, uint32_t query_slot);
+
+   /**
+    * @brief Find an available query slot for a queue-end timing entry.
+    *
+    * @param resources The query resources to search.
+    *
+    * @return Query slot index if one is available, std::nullopt otherwise.
+    */
+   std::optional<uint32_t> find_available_queue_end_query_slot(queue_family_resources &resources);
+
+   /**
+    * @pre Caller must hold m_queue_mutex
+    *
+    * @brief Check whether any queue-end timing query is still pending.
+    *
+    * @param resources Query resources to check, or nullptr to check all resources.
+    *
+    * @return true if an outstanding presentation is still using matching query resources.
+    */
+   bool has_pending_queue_end_query(queue_family_resources *resources = nullptr);
+
+   /**
+    * @brief Create query resources for queue-end timing.
+    *
+    * @param query_count Number of query slots to create.
+    * @param resources Output pointer to the created resources.
+    *
+    * @return VK_SUCCESS when the resources were created successfully, error otherwise.
+    */
+   VkResult create_queue_family_resources(uint32_t query_count, queue_family_resources **resources);
+
+   /**
+    * @pre Caller must hold m_queue_mutex
+    *
+    * @brief Ensure new queue-end timing entries have at least @p query_count query slots.
+    *
+    * @param query_count Number of query slots required.
+    *
+    * @return VK_SUCCESS when the active resources have enough slots, error otherwise.
+    */
+   VkResult ensure_active_queue_family_resources(uint32_t query_count);
+
+   /**
+    * @pre Caller must hold m_queue_mutex
+    *
+    * @brief Destroy inactive query resource sets that no pending entry still uses.
+    */
+   void remove_unused_queue_family_resources();
 
    /**
     * @brief Initialize the present timing extension.
@@ -737,9 +897,9 @@ private:
     *
     * @brief Search for a pending presentation entry and access its timing info.
     *
-    * For an image index, there can only be one entry in the queue with pending stages.
-    * This does not take a present ID because zero is a valid, nonunique value and thus cannot uniquely identify an
-    * entry.
+    * There may be multiple entries with the same image index in the queue.
+    * This returns the first matching pending entry, and does not take a present ID because zero is a valid,
+    * nonunique value and thus cannot uniquely identify an entry.
     *
     * @param image_index The index of the image in the present queue.
     * @param stage The present stage to get the entry for.
@@ -753,9 +913,9 @@ private:
     *
     * @brief Search for a pending presentation entry.
     *
-    * For an image index, there can only be one entry in the queue with pending stages.
-    * This does not take a present ID because zero is a valid, nonunique value and thus cannot uniquely identify an
-    * entry.
+    * There may be multiple entries with the same image index in the queue.
+    * This returns the first matching pending entry, and does not take a present ID because zero is a valid,
+    * nonunique value and thus cannot uniquely identify an entry.
     *
     * @param image_index The index of the image in the present queue.
     * @param stage The present stage to get the entry for.
