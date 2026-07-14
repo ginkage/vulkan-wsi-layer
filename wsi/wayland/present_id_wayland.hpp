@@ -68,6 +68,11 @@ public:
     */
    void mark_buffer_release(uint32_t image_index);
 
+   /**
+    * @brief Clear pending presentation feedback objects.
+    */
+   void clear_pending_present_feedback_list();
+
 private:
    /**
     * @brief Remove a present id from the pending present id list.

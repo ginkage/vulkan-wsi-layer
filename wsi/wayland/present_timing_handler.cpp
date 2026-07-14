@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Arm Limited.
+ * Copyright (c) 2025-2026 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -152,6 +152,21 @@ bool wsi_ext_present_timing_wayland::remove_from_pending_present_feedback_list(u
    const bool has_entry = m_pending_presents[image_index].has_value();
    m_pending_presents[image_index].reset();
    return has_entry;
+}
+
+void wsi_ext_present_timing_wayland::clear_pending_present_feedback_list()
+{
+   util::unique_lock<util::mutex> lock(m_pending_presents_lock);
+   if (!lock)
+   {
+      WSI_LOG_ERROR("Failed to acquire pending presents lock in clear_pending_present_feedback_list.\n");
+      abort();
+   }
+
+   for (auto &pending_present : m_pending_presents)
+   {
+      pending_present.reset();
+   }
 }
 
 void wsi_ext_present_timing_wayland::pixelout_callback(uint32_t image_index, uint64_t time)

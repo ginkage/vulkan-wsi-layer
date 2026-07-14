@@ -102,6 +102,16 @@ swapchain::~swapchain()
 
    if (m_buffer_queue != nullptr)
    {
+      if (auto *present_timing_ext = get_swapchain_extension<wsi_ext_present_timing_wayland>())
+      {
+         present_timing_ext->clear_pending_present_feedback_list();
+      }
+
+      if (auto *present_id_ext = get_swapchain_extension<wsi_ext_present_id_wayland>())
+      {
+         present_id_ext->clear_pending_present_feedback_list();
+      }
+
       for (auto &img : m_swapchain_images)
       {
          auto data = img.get_data<wayland_image_data>();
