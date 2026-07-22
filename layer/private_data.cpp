@@ -423,7 +423,7 @@ bool instance_private_data::has_image_compression_support(VkPhysicalDevice phys_
 bool instance_private_data::has_frame_boundary_support(VkPhysicalDevice phys_dev)
 {
    VkPhysicalDeviceFrameBoundaryFeaturesEXT frame_boundary = {
-      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_COMPRESSION_CONTROL_FEATURES_EXT, nullptr, VK_FALSE
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAME_BOUNDARY_FEATURES_EXT, nullptr, VK_FALSE
    };
    VkPhysicalDeviceFeatures2KHR features = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2_KHR, &frame_boundary, {} };
 
