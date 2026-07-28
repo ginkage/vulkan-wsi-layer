@@ -49,6 +49,341 @@
 
 namespace layer
 {
+struct features
+{
+   struct writable_layer_feature
+   {
+      VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT *swapchain_maintenance1 = nullptr;
+      VkPhysicalDevicePresentWaitFeaturesKHR *present_wait = nullptr;
+      VkPhysicalDevicePresentWait2FeaturesKHR *present_wait2 = nullptr;
+      VkPhysicalDeviceImageCompressionControlSwapchainFeaturesEXT *swapchain_compression = nullptr;
+      VkPhysicalDevicePresentIdFeaturesKHR *present_id = nullptr;
+      VkPhysicalDevicePresentId2FeaturesKHR *present_id2 = nullptr;
+      VkPhysicalDevicePresentTimingFeaturesEXT *present_timing = nullptr;
+      VkPhysicalDevicePresentModeFifoLatestReadyFeaturesEXT *fifo_latest_ready = nullptr;
+
+      writable_layer_feature() = default;
+
+      writable_layer_feature(void *p_next)
+      {
+         swapchain_maintenance1 = util::find_extension<VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT>(
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_EXT, p_next);
+         present_wait = util::find_extension<VkPhysicalDevicePresentWaitFeaturesKHR>(
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_WAIT_FEATURES_KHR, p_next);
+         present_wait2 = util::find_extension<VkPhysicalDevicePresentWait2FeaturesKHR>(
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_WAIT_2_FEATURES_KHR, p_next);
+         swapchain_compression = util::find_extension<VkPhysicalDeviceImageCompressionControlSwapchainFeaturesEXT>(
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_COMPRESSION_CONTROL_SWAPCHAIN_FEATURES_EXT, p_next);
+         present_id = util::find_extension<VkPhysicalDevicePresentIdFeaturesKHR>(
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_ID_FEATURES_KHR, p_next);
+         present_id2 = util::find_extension<VkPhysicalDevicePresentId2FeaturesKHR>(
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_ID_2_FEATURES_KHR, p_next);
+         present_timing = util::find_extension<VkPhysicalDevicePresentTimingFeaturesEXT>(
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_TIMING_FEATURES_EXT, p_next);
+         fifo_latest_ready = util::find_extension<VkPhysicalDevicePresentModeFifoLatestReadyFeaturesEXT>(
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_MODE_FIFO_LATEST_READY_FEATURES_EXT, p_next);
+
+         /* We only need to initialize swapchain_maintenance1 and present_wait because these values are
+          * used in the post_query after the ICD call to derive the final value.
+          */
+         if (swapchain_maintenance1 != nullptr)
+         {
+            swapchain_maintenance1->swapchainMaintenance1 = VK_FALSE;
+         }
+
+         if (present_wait != nullptr)
+         {
+            present_wait->presentWait = VK_FALSE;
+         }
+      }
+   };
+
+   struct storage
+   {
+      VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT swapchain_maintenance1 = {};
+      VkPhysicalDevicePresentWaitFeaturesKHR present_wait = {};
+      VkPhysicalDevicePresentWait2FeaturesKHR present_wait2 = {};
+      VkPhysicalDeviceImageCompressionControlSwapchainFeaturesEXT swapchain_compression = {};
+      VkPhysicalDevicePresentIdFeaturesKHR present_id = {};
+      VkPhysicalDevicePresentId2FeaturesKHR present_id2 = {};
+      VkPhysicalDevicePresentTimingFeaturesEXT present_timing = {};
+      VkPhysicalDevicePresentModeFifoLatestReadyFeaturesEXT fifo_latest_ready = {};
+
+      storage() noexcept
+      {
+         swapchain_maintenance1.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_EXT;
+         present_wait.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_WAIT_FEATURES_KHR;
+         present_wait2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_WAIT_2_FEATURES_KHR;
+         swapchain_compression.sType =
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_COMPRESSION_CONTROL_SWAPCHAIN_FEATURES_EXT;
+         present_id.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_ID_FEATURES_KHR;
+         present_id2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_ID_2_FEATURES_KHR;
+         present_timing.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_TIMING_FEATURES_EXT;
+         fifo_latest_ready.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_MODE_FIFO_LATEST_READY_FEATURES_EXT;
+      }
+   };
+
+   writable_layer_feature writable_layer_features = {};
+
+   features() = default;
+
+   features(void *pNext)
+      : writable_layer_features{ pNext }
+   {
+   }
+
+   static VkBaseOutStructure *make_query_chain(const void *requested_features, storage &storage)
+   {
+      VkBaseOutStructure *supported_feature_chain = nullptr;
+#define APPEND_IF_REQUESTED(ext, type, p_next, writable_struct, feature_chain)              \
+   do                                                                                       \
+   {                                                                                        \
+      const auto *requested_feature = util::find_extension<ext>(type, p_next);              \
+      if (requested_feature != nullptr)                                                     \
+      {                                                                                     \
+         append_requested_feature_query(feature_chain, requested_feature, writable_struct); \
+      }                                                                                     \
+   } while (false)
+
+      APPEND_IF_REQUESTED(VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT,
+                          VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_EXT, requested_features,
+                          storage.swapchain_maintenance1, supported_feature_chain);
+      APPEND_IF_REQUESTED(VkPhysicalDevicePresentWaitFeaturesKHR,
+                          VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_WAIT_FEATURES_KHR, requested_features,
+                          storage.present_wait, supported_feature_chain);
+      APPEND_IF_REQUESTED(VkPhysicalDevicePresentWait2FeaturesKHR,
+                          VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_WAIT_2_FEATURES_KHR, requested_features,
+                          storage.present_wait2, supported_feature_chain);
+      APPEND_IF_REQUESTED(VkPhysicalDeviceImageCompressionControlSwapchainFeaturesEXT,
+                          VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_COMPRESSION_CONTROL_SWAPCHAIN_FEATURES_EXT,
+                          requested_features, storage.swapchain_compression, supported_feature_chain);
+      APPEND_IF_REQUESTED(VkPhysicalDevicePresentIdFeaturesKHR,
+                          VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_ID_FEATURES_KHR, requested_features,
+                          storage.present_id, supported_feature_chain);
+      APPEND_IF_REQUESTED(VkPhysicalDevicePresentId2FeaturesKHR,
+                          VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_ID_2_FEATURES_KHR, requested_features,
+                          storage.present_id2, supported_feature_chain);
+      APPEND_IF_REQUESTED(VkPhysicalDevicePresentTimingFeaturesEXT,
+                          VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_TIMING_FEATURES_EXT, requested_features,
+                          storage.present_timing, supported_feature_chain);
+      APPEND_IF_REQUESTED(VkPhysicalDevicePresentModeFifoLatestReadyFeaturesEXT,
+                          VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_MODE_FIFO_LATEST_READY_FEATURES_EXT,
+                          requested_features, storage.fifo_latest_ready, supported_feature_chain);
+
+#undef APPEND_IF_REQUESTED
+
+      return supported_feature_chain;
+   }
+
+   void post_query(VkPhysicalDevice physical_device) noexcept
+   {
+      auto &instance = instance_private_data::get(physical_device);
+
+      if (writable_layer_features.present_wait2 != nullptr)
+      {
+         writable_layer_features.present_wait2->presentWait2 = !instance.is_unsupported_surface_extension_enabled();
+      }
+
+      if (writable_layer_features.swapchain_compression != nullptr)
+      {
+         writable_layer_features.swapchain_compression->imageCompressionControlSwapchain =
+            instance.has_image_compression_support(physical_device);
+      }
+
+      if (writable_layer_features.present_id != nullptr)
+      {
+         writable_layer_features.present_id->presentId = VK_TRUE;
+      }
+
+      if (writable_layer_features.present_id2 != nullptr)
+      {
+         writable_layer_features.present_id2->presentId2 = VK_TRUE;
+      }
+
+      if (writable_layer_features.swapchain_maintenance1 != nullptr)
+      {
+         if (instance.is_instance_extension_enabled(VK_KHR_DISPLAY_EXTENSION_NAME))
+         {
+            writable_layer_features.swapchain_maintenance1->swapchainMaintenance1 = VK_FALSE;
+         }
+         else if (!writable_layer_features.swapchain_maintenance1->swapchainMaintenance1)
+         {
+            writable_layer_features.swapchain_maintenance1->swapchainMaintenance1 =
+               instance.get_maintainance1_support();
+         }
+      }
+
+      if (writable_layer_features.present_wait != nullptr)
+      {
+         writable_layer_features.present_wait->presentWait =
+            writable_layer_features.present_wait->presentWait || !instance.is_unsupported_surface_extension_enabled();
+      }
+
+      if (writable_layer_features.present_timing != nullptr)
+      {
+         bool support;
+         if (wsi::wsi_ext_present_timing::physical_device_has_supported_queue_family(physical_device, support) !=
+             VK_SUCCESS)
+         {
+            WSI_LOG_ERROR("Failed to query physical device for present timing support");
+            support = false;
+         }
+
+         writable_layer_features.present_timing->presentTiming = support ? VK_TRUE : VK_FALSE;
+         writable_layer_features.present_timing->presentAtAbsoluteTime = VK_TRUE;
+         writable_layer_features.present_timing->presentAtRelativeTime = VK_TRUE;
+      }
+
+      if (writable_layer_features.fifo_latest_ready != nullptr)
+      {
+         writable_layer_features.fifo_latest_ready->presentModeFifoLatestReady = VK_TRUE;
+      }
+   }
+
+   bool compare_all(const void *requested_features) const noexcept
+   {
+      return compare(writable_layer_features.swapchain_maintenance1,
+                     util::find_extension<VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT>(
+                        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_EXT, requested_features)) &&
+             compare(writable_layer_features.present_wait,
+                     util::find_extension<VkPhysicalDevicePresentWaitFeaturesKHR>(
+                        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_WAIT_FEATURES_KHR, requested_features)) &&
+             compare(writable_layer_features.present_wait2,
+                     util::find_extension<VkPhysicalDevicePresentWait2FeaturesKHR>(
+                        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_WAIT_2_FEATURES_KHR, requested_features)) &&
+             compare(writable_layer_features.swapchain_compression,
+                     util::find_extension<VkPhysicalDeviceImageCompressionControlSwapchainFeaturesEXT>(
+                        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_COMPRESSION_CONTROL_SWAPCHAIN_FEATURES_EXT,
+                        requested_features)) &&
+             compare(writable_layer_features.present_id,
+                     util::find_extension<VkPhysicalDevicePresentIdFeaturesKHR>(
+                        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_ID_FEATURES_KHR, requested_features)) &&
+             compare(writable_layer_features.present_id2,
+                     util::find_extension<VkPhysicalDevicePresentId2FeaturesKHR>(
+                        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_ID_2_FEATURES_KHR, requested_features)) &&
+             compare(writable_layer_features.present_timing,
+                     util::find_extension<VkPhysicalDevicePresentTimingFeaturesEXT>(
+                        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_TIMING_FEATURES_EXT, requested_features)) &&
+             compare(
+                writable_layer_features.fifo_latest_ready,
+                util::find_extension<VkPhysicalDevicePresentModeFifoLatestReadyFeaturesEXT>(
+                   VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_MODE_FIFO_LATEST_READY_FEATURES_EXT, requested_features));
+   }
+
+private:
+   template <typename T>
+   static void append_requested_feature_query(VkBaseOutStructure *&supported_feature_chain, const T *requested_features,
+                                              T &supported_features) noexcept
+   {
+      if (requested_features == nullptr)
+      {
+         return;
+      }
+
+      auto *supported_feature_base = reinterpret_cast<VkBaseOutStructure *>(&supported_features);
+      supported_feature_base->pNext = supported_feature_chain;
+      supported_feature_chain = supported_feature_base;
+   }
+
+   static bool compare(VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT *supported_features,
+                       const VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT *requested_features) noexcept
+   {
+      return requested_features == nullptr || requested_features->swapchainMaintenance1 == VK_FALSE ||
+             supported_features->swapchainMaintenance1 == VK_TRUE;
+   }
+
+   static bool compare(VkPhysicalDevicePresentWaitFeaturesKHR *supported_features,
+                       const VkPhysicalDevicePresentWaitFeaturesKHR *requested_features) noexcept
+   {
+      return requested_features == nullptr || requested_features->presentWait == VK_FALSE ||
+             supported_features->presentWait == VK_TRUE;
+   }
+
+   static bool compare(VkPhysicalDevicePresentWait2FeaturesKHR *supported_features,
+                       const VkPhysicalDevicePresentWait2FeaturesKHR *requested_features) noexcept
+   {
+      return requested_features == nullptr || requested_features->presentWait2 == VK_FALSE ||
+             supported_features->presentWait2 == VK_TRUE;
+   }
+
+   static bool compare(VkPhysicalDeviceImageCompressionControlSwapchainFeaturesEXT *supported_features,
+                       const VkPhysicalDeviceImageCompressionControlSwapchainFeaturesEXT *requested_features) noexcept
+   {
+      return requested_features == nullptr || requested_features->imageCompressionControlSwapchain == VK_FALSE ||
+             supported_features->imageCompressionControlSwapchain == VK_TRUE;
+   }
+
+   static bool compare(VkPhysicalDevicePresentIdFeaturesKHR *supported_features,
+                       const VkPhysicalDevicePresentIdFeaturesKHR *requested_features) noexcept
+   {
+      return requested_features == nullptr || requested_features->presentId == VK_FALSE ||
+             supported_features->presentId == VK_TRUE;
+   }
+
+   static bool compare(VkPhysicalDevicePresentId2FeaturesKHR *supported_features,
+                       const VkPhysicalDevicePresentId2FeaturesKHR *requested_features) noexcept
+   {
+      return requested_features == nullptr || requested_features->presentId2 == VK_FALSE ||
+             supported_features->presentId2 == VK_TRUE;
+   }
+
+   static bool compare(VkPhysicalDevicePresentTimingFeaturesEXT *supported_features,
+                       const VkPhysicalDevicePresentTimingFeaturesEXT *requested_features) noexcept
+   {
+      return (requested_features == nullptr || requested_features->presentTiming == VK_FALSE ||
+              supported_features->presentTiming == VK_TRUE) &&
+             (requested_features == nullptr || requested_features->presentAtAbsoluteTime == VK_FALSE ||
+              supported_features->presentAtAbsoluteTime == VK_TRUE) &&
+             (requested_features == nullptr || requested_features->presentAtRelativeTime == VK_FALSE ||
+              supported_features->presentAtRelativeTime == VK_TRUE);
+   }
+
+   static bool compare(VkPhysicalDevicePresentModeFifoLatestReadyFeaturesEXT *supported_features,
+                       const VkPhysicalDevicePresentModeFifoLatestReadyFeaturesEXT *requested_features) noexcept
+   {
+      return requested_features == nullptr || requested_features->presentModeFifoLatestReady == VK_FALSE ||
+             supported_features->presentModeFifoLatestReady == VK_TRUE;
+   }
+};
+
+void populate_supported_layer_features(VkPhysicalDevice physical_device, VkPhysicalDeviceFeatures2 &supported_features)
+{
+   auto &instance = layer::instance_private_data::get(physical_device);
+   auto supported_layer_features = features{ supported_features.pNext };
+
+   auto get_physical_device_features2 =
+      instance.disp.get_fn<PFN_vkGetPhysicalDeviceFeatures2KHR>("vkGetPhysicalDeviceFeatures2KHR");
+   if (get_physical_device_features2.has_value())
+   {
+      (*get_physical_device_features2)(physical_device, &supported_features);
+   }
+
+   supported_layer_features.post_query(physical_device);
+}
+
+VkResult validate_requested_layer_features(VkPhysicalDevice physical_device, const VkDeviceCreateInfo *pCreateInfo)
+{
+   features::storage supported_feature_storage;
+   auto *supported_feature_chain = features::make_query_chain(pCreateInfo->pNext, supported_feature_storage);
+   if (supported_feature_chain == nullptr)
+   {
+      return VK_SUCCESS;
+   }
+
+   features supported_features{ supported_feature_chain };
+   VkPhysicalDeviceFeatures2 supported_device_features = {
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+      supported_feature_chain,
+      {},
+   };
+   populate_supported_layer_features(physical_device, supported_device_features);
+   if (!supported_features.compare_all(pCreateInfo->pNext))
+   {
+      return VK_ERROR_FEATURE_NOT_PRESENT;
+   }
+
+   return VK_SUCCESS;
+}
 
 VKAPI_ATTR VkLayerInstanceCreateInfo *get_chain_info(const VkInstanceCreateInfo *pCreateInfo, VkLayerFunction func)
 {
@@ -246,6 +581,8 @@ VKAPI_ATTR VkResult create_device(VkPhysicalDevice physicalDevice, const VkDevic
    util::vector<const char *> modified_enabled_extensions{ allocator };
    util::extension_list enabled_extensions{ allocator };
 
+   TRY(validate_requested_layer_features(physicalDevice, pCreateInfo));
+
    VkPhysicalDeviceMaintenance9FeaturesKHR maintenance9_features = {};
    const util::wsi_platform_set &enabled_platforms = inst_data.get_enabled_platforms();
    if (!enabled_platforms.empty())
@@ -414,13 +751,11 @@ VKAPI_ATTR VkResult create_device(VkPhysicalDevice physicalDevice, const VkDevic
          present_mode_fifo_latest_ready_features->presentModeFifoLatestReady);
    }
 
-   auto *physical_device_swapchain_maintenance1_features =
-      util::find_extension<VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT>(
-         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_EXT, pCreateInfo->pNext);
-   if (physical_device_swapchain_maintenance1_features != nullptr)
+   const auto *swapchain_maintenance1_features = util::find_extension<VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT>(
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_EXT, pCreateInfo->pNext);
+   if (swapchain_maintenance1_features != nullptr)
    {
-      device_data.set_swapchain_maintenance1_enabled(
-         physical_device_swapchain_maintenance1_features->swapchainMaintenance1);
+      device_data.set_swapchain_maintenance1_enabled(swapchain_maintenance1_features->swapchainMaintenance1);
    }
 
    auto *present_wait_features = util::find_extension<VkPhysicalDevicePresentWaitFeaturesKHR>(
@@ -527,97 +862,7 @@ VWL_VKAPI_CALL(void)
 wsi_layer_vkGetPhysicalDeviceFeatures2(VkPhysicalDevice physical_device,
                                        VkPhysicalDeviceFeatures2 *pFeatures) VWL_API_POST
 {
-   auto &instance = layer::instance_private_data::get(physical_device);
-
-   auto *swapchain_maintenance1_features = util::find_extension<VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT>(
-      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_EXT, pFeatures->pNext);
-   if (swapchain_maintenance1_features != nullptr)
-   {
-      swapchain_maintenance1_features->swapchainMaintenance1 = VK_FALSE;
-   }
-
-   auto *present_wait_features = util::find_extension<VkPhysicalDevicePresentWaitFeaturesKHR>(
-      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_WAIT_FEATURES_KHR, pFeatures->pNext);
-   if (present_wait_features != nullptr)
-   {
-      present_wait_features->presentWait = VK_FALSE;
-   }
-
-   instance.disp.GetPhysicalDeviceFeatures2KHR(physical_device, pFeatures);
-
-   auto *present_wait2_features = util::find_extension<VkPhysicalDevicePresentWait2FeaturesKHR>(
-      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_WAIT_2_FEATURES_KHR, pFeatures->pNext);
-   if (present_wait2_features != nullptr)
-   {
-      present_wait2_features->presentWait2 = VK_FALSE;
-   }
-
-   auto *image_compression_control_swapchain_features =
-      util::find_extension<VkPhysicalDeviceImageCompressionControlSwapchainFeaturesEXT>(
-         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_COMPRESSION_CONTROL_SWAPCHAIN_FEATURES_EXT, pFeatures->pNext);
-   if (image_compression_control_swapchain_features != nullptr)
-   {
-      image_compression_control_swapchain_features->imageCompressionControlSwapchain =
-         instance.has_image_compression_support(physical_device);
-   }
-
-   auto *present_id_features = util::find_extension<VkPhysicalDevicePresentIdFeaturesKHR>(
-      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_ID_FEATURES_KHR, pFeatures->pNext);
-   if (present_id_features != nullptr)
-   {
-      present_id_features->presentId = VK_TRUE;
-   }
-
-   auto *present_id2_features = util::find_extension<VkPhysicalDevicePresentId2FeaturesKHR>(
-      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_ID_2_FEATURES_KHR, pFeatures->pNext);
-   if (present_id2_features != nullptr)
-   {
-      present_id2_features->presentId2 = VK_TRUE;
-   }
-   wsi::set_swapchain_maintenance1_state(physical_device, swapchain_maintenance1_features);
-
-   if (present_wait_features != nullptr)
-   {
-      /* If there is a surface extension in use that is unsupported by the layer, defer to the ICD */
-      if (!instance.is_unsupported_surface_extension_enabled())
-      {
-         present_wait_features->presentWait = VK_TRUE;
-      }
-   }
-
-   if (present_wait2_features != nullptr)
-   {
-      /* If there is a surface extension in use that is unsupported by the layer, defer to the ICD */
-      if (!instance.is_unsupported_surface_extension_enabled())
-      {
-         present_wait2_features->presentWait2 = VK_TRUE;
-      }
-   }
-
-   auto *present_timing_features = util::find_extension<VkPhysicalDevicePresentTimingFeaturesEXT>(
-      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_TIMING_FEATURES_EXT, pFeatures->pNext);
-   if (present_timing_features != nullptr)
-   {
-      bool support;
-      if (wsi::wsi_ext_present_timing::physical_device_has_supported_queue_family(physical_device, support) !=
-          VK_SUCCESS)
-      {
-         WSI_LOG_ERROR("Failed to query physical device for present timing support");
-         support = false;
-      }
-
-      present_timing_features->presentTiming = support ? VK_TRUE : VK_FALSE;
-      present_timing_features->presentAtAbsoluteTime = VK_TRUE;
-      present_timing_features->presentAtRelativeTime = VK_TRUE;
-   }
-
-   auto *present_mode_fifo_latest_ready_features =
-      util::find_extension<VkPhysicalDevicePresentModeFifoLatestReadyFeaturesEXT>(
-         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_MODE_FIFO_LATEST_READY_FEATURES_EXT, pFeatures->pNext);
-   if (present_mode_fifo_latest_ready_features != nullptr)
-   {
-      present_mode_fifo_latest_ready_features->presentModeFifoLatestReady = VK_TRUE;
-   }
+   layer::populate_supported_layer_features(physical_device, *pFeatures);
 }
 
 #define GET_PROC_ADDR(func)      \

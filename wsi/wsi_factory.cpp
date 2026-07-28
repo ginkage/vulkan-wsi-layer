@@ -288,23 +288,4 @@ PFN_vkVoidFunction get_proc_addr(const char *name, const layer::instance_private
    return nullptr;
 }
 
-void set_swapchain_maintenance1_state(VkPhysicalDevice physicalDevice,
-                                      VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT *swapchain_maintenance1_features)
-{
-   if (swapchain_maintenance1_features != nullptr)
-   {
-      auto &instance = layer::instance_private_data::get(physicalDevice);
-      if (instance.is_instance_extension_enabled(VK_KHR_DISPLAY_EXTENSION_NAME))
-      {
-         /* Display WSI does not support swapchain maintenance1. */
-         swapchain_maintenance1_features->swapchainMaintenance1 = false;
-         return;
-      }
-
-      if (!swapchain_maintenance1_features->swapchainMaintenance1)
-      {
-         swapchain_maintenance1_features->swapchainMaintenance1 = instance.get_maintainance1_support();
-      }
-   }
-}
 } // namespace wsi
