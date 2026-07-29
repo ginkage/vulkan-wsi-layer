@@ -119,11 +119,16 @@ VkResult wsi_ext_present_timing_headless::get_swapchain_timing_properties(
     */
    const uint64_t fixed_refresh_duration_ns = 1;
 
-   timing_properties_counter = 1;
+   timing_properties_counter = get_timing_properties_counter();
    timing_properties.refreshDuration = fixed_refresh_duration_ns;
    timing_properties.refreshInterval = fixed_refresh_duration_ns;
 
    return VK_SUCCESS;
+}
+
+uint64_t wsi_ext_present_timing_headless::get_timing_properties_counter() const
+{
+   return 1;
 }
 
 std::optional<uint64_t> wsi_ext_present_timing_headless::get_current_clock_time_ns() const
