@@ -47,6 +47,8 @@ public:
    VkResult get_swapchain_timing_properties(uint64_t &timing_properties_counter,
                                             VkSwapchainTimingPropertiesEXT &timing_properties) override;
 
+   uint64_t get_timing_properties_counter() const override;
+
    /**
     * @brief Get a monotonic time domain supported by the driver.
     *

@@ -492,6 +492,12 @@ VkResult wsi_ext_present_timing::get_past_presentation_results(
    assert(past_present_timing_properties != nullptr);
    /* Get any outstanding timings to the internal queue. */
    TRY_LOG_CALL(write_pending_results());
+
+   const uint64_t timing_properties_counter = get_timing_properties_counter();
+   const uint64_t time_domains_counter = swapchain_time_domains::get_time_domains_counter();
+   past_present_timing_properties->timingPropertiesCounter = timing_properties_counter;
+   past_present_timing_properties->timeDomainsCounter = time_domains_counter;
+
    if (past_present_timing_properties->pPresentationTimings == nullptr)
    {
       past_present_timing_properties->presentationTimingCount = get_num_available_results(flags);
@@ -761,6 +767,11 @@ bool swapchain_time_domains::add_time_domain(util::unique_ptr<swapchain_time_dom
    return false;
 }
 
+uint64_t swapchain_time_domains::get_time_domains_counter()
+{
+   return 1;
+}
+
 VkResult swapchain_time_domains::get_swapchain_time_domain_properties(
    VkSwapchainTimeDomainPropertiesEXT *pSwapchainTimeDomainProperties, uint64_t *pTimeDomainsCounter)
 {
@@ -770,7 +781,7 @@ VkResult swapchain_time_domains::get_swapchain_time_domain_properties(
 
    if (pTimeDomainsCounter != nullptr)
    {
-      *pTimeDomainsCounter = 1;
+      *pTimeDomainsCounter = get_time_domains_counter();
    }
 
    if (pSwapchainTimeDomainProperties->pTimeDomains == nullptr &&

@@ -59,6 +59,8 @@ public:
    VkResult get_swapchain_timing_properties(uint64_t &timing_properties_counter,
                                             VkSwapchainTimingPropertiesEXT &timing_properties) override;
 
+   uint64_t get_timing_properties_counter() const override;
+
    /**
     * @brief Marks the given present ID delivered (i.e. its image has been displayed).
     *

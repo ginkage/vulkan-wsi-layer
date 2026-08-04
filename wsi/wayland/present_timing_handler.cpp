@@ -99,11 +99,16 @@ util::unique_ptr<wsi_ext_present_timing_wayland> wsi_ext_present_timing_wayland:
 VkResult wsi_ext_present_timing_wayland::get_swapchain_timing_properties(
    uint64_t &timing_properties_counter, VkSwapchainTimingPropertiesEXT &timing_properties)
 {
-   timing_properties_counter = 0;
+   timing_properties_counter = get_timing_properties_counter();
    timing_properties.refreshDuration = 0;
    timing_properties.refreshInterval = 0;
 
    return VK_SUCCESS;
+}
+
+uint64_t wsi_ext_present_timing_wayland::get_timing_properties_counter() const
+{
+   return 0;
 }
 
 void wsi_ext_present_timing_wayland::mark_delivered(uint32_t image_index, uint64_t time)

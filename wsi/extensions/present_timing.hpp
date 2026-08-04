@@ -316,6 +316,13 @@ public:
    VkResult calibrate(VkPresentStageFlagBitsEXT present_stage, swapchain_calibrated_time *calibrated_time);
 
    /**
+    * @brief Get the current time domains counter.
+    *
+    * @return Current time domains counter.
+    */
+   static uint64_t get_time_domains_counter();
+
+   /**
     * @brief Get swapchain time domain properties.
     *
     * @param pSwapchainTimeDomainProperties time domain struct to be set
@@ -716,6 +723,14 @@ public:
     */
    virtual VkResult get_swapchain_timing_properties(uint64_t &timing_properties_counter,
                                                     VkSwapchainTimingPropertiesEXT &timing_properties) = 0;
+
+   /**
+    * @brief Get the current timing properties counter.
+    *
+    * @return Current timing properties counter.
+    */
+   virtual uint64_t get_timing_properties_counter() const = 0;
+
    /**
     * @brief This function will get called to update the first visible pixel timing in the internal queue.
     * Backends could optionally override the API to implement backend specific update for the stage.
