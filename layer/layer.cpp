@@ -385,6 +385,12 @@ VkResult validate_requested_layer_features(VkPhysicalDevice physical_device, con
    return VK_SUCCESS;
 }
 
+static bool is_swapchain_maintenance1(const VkExtensionProperties &property)
+{
+   return strcmp(property.extensionName, VK_EXT_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME) == 0 ||
+          strcmp(property.extensionName, VK_KHR_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME) == 0;
+}
+
 VKAPI_ATTR VkLayerInstanceCreateInfo *get_chain_info(const VkInstanceCreateInfo *pCreateInfo, VkLayerFunction func)
 {
    auto *chain_info = reinterpret_cast<const VkLayerInstanceCreateInfo *>(pCreateInfo->pNext);
@@ -838,6 +844,83 @@ wsi_layer_vkCreateDevice(VkPhysicalDevice physicalDevice, const VkDeviceCreateIn
 }
 
 VWL_VKAPI_CALL(VkResult)
+VWL_VKAPI_EXPORT wsi_layer_vkEnumerateDeviceExtensionProperties(VkPhysicalDevice physicalDevice, const char *pLayerName,
+                                                                uint32_t *pPropertyCount,
+                                                                VkExtensionProperties *pProperties) VWL_API_POST
+{
+   assert(physicalDevice);
+   assert(pPropertyCount);
+
+   auto &instance = layer::instance_private_data::get(physicalDevice);
+#if BUILD_WSI_DISPLAY
+   const bool filter =
+      instance.is_instance_extension_enabled(VK_KHR_DISPLAY_EXTENSION_NAME) &&
+      (pLayerName == nullptr || pLayerName[0] == '\0' || strcmp(pLayerName, "VK_LAYER_window_system_integration") == 0);
+#else
+   const bool filter = false;
+#endif
+
+   if (!filter)
+   {
+      return instance.disp.EnumerateDeviceExtensionProperties(physicalDevice, pLayerName, pPropertyCount, pProperties);
+   }
+
+   util::allocator allocator{ instance.get_allocator(), VK_SYSTEM_ALLOCATION_SCOPE_COMMAND };
+   util::vector<VkExtensionProperties> properties{ allocator };
+   uint32_t property_count = 0;
+
+   VkResult result =
+      instance.disp.EnumerateDeviceExtensionProperties(physicalDevice, pLayerName, &property_count, nullptr);
+   if (result != VK_SUCCESS)
+   {
+      return result;
+   }
+
+   if (property_count > 0)
+   {
+      if (!properties.try_resize(property_count))
+      {
+         return VK_ERROR_OUT_OF_HOST_MEMORY;
+      }
+
+      result = instance.disp.EnumerateDeviceExtensionProperties(physicalDevice, pLayerName, &property_count,
+                                                                properties.data());
+      if (result != VK_SUCCESS)
+      {
+         return result;
+      }
+   }
+
+   uint32_t filtered_count = 0;
+   for (uint32_t i = 0; i < property_count; ++i)
+   {
+      if (!layer::is_swapchain_maintenance1(properties[i]))
+      {
+         ++filtered_count;
+      }
+   }
+
+   if (pProperties == nullptr)
+   {
+      *pPropertyCount = filtered_count;
+      return VK_SUCCESS;
+   }
+
+   const uint32_t capacity = *pPropertyCount;
+   uint32_t copied_count = 0;
+   for (uint32_t i = 0; i < property_count && copied_count < capacity; ++i)
+   {
+      if (!layer::is_swapchain_maintenance1(properties[i]))
+      {
+         pProperties[copied_count++] = properties[i];
+      }
+   }
+
+   *pPropertyCount = copied_count;
+   return copied_count < filtered_count ? VK_INCOMPLETE : VK_SUCCESS;
+}
+
+VWL_VKAPI_CALL(VkResult)
 VWL_VKAPI_EXPORT wsi_layer_vkNegotiateLoaderLayerInterfaceVersion(VkNegotiateLayerInterface *pVersionStruct)
    VWL_API_POST
 {
@@ -1009,6 +1092,8 @@ wsi_layer_vkGetInstanceProcAddr(VkInstance instance, const char *funcName) VWL_A
    }
 
    auto &instance_data = layer::instance_private_data::get(instance);
+   GET_PROC_ADDR(vkEnumerateDeviceExtensionProperties);
+
    const bool core_1_1 = instance_data.api_version >= VK_API_VERSION_1_1;
    if ((instance_data.is_instance_extension_enabled(VK_KHR_DEVICE_GROUP_EXTENSION_NAME) &&
         instance_data.is_instance_extension_enabled(VK_KHR_SURFACE_EXTENSION_NAME)) ||
