@@ -197,7 +197,7 @@ typedef struct wsialloc_allocate_result
  *
  * Each row in the buffer may be larger than @p info::width to account for buffer alignment requirements in the
  * underlying window system. @p result::average_row_strides must be examined to determine the number of bytes between
- * subsequent rows in each of the buffer's planes. Only positive average_row_strides are allowed.
+ * subsequent rows in each of the buffer's planes. Zero average_row_strides indicate modifier-specific implicit strides.
  *
  * The client may free the buffer's planes by invoking close() on some or all of the elements of @p result::buffer_fds
  *

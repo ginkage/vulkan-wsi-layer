@@ -25,6 +25,8 @@
 #include "drm_utils.hpp"
 #include "format_table.h"
 
+#include <drm_fourcc.h>
+
 namespace util
 {
 namespace drm
@@ -75,6 +77,17 @@ VkFormat drm_to_vk_srgb_format(uint32_t drm_format)
    }
 
    return VK_FORMAT_UNDEFINED;
+}
+
+bool drm_modifier_has_implicit_stride(uint64_t modifier)
+{
+   constexpr uint64_t drm_format_modifier_vendor_shift = 56;
+   constexpr uint64_t drm_format_modifier_arm_type_shift = 52;
+   constexpr uint64_t drm_format_modifier_arm_type_mask = 0xf;
+
+   return (modifier >> drm_format_modifier_vendor_shift) == DRM_FORMAT_MOD_VENDOR_ARM &&
+          ((modifier >> drm_format_modifier_arm_type_shift) & drm_format_modifier_arm_type_mask) ==
+             DRM_FORMAT_MOD_ARM_TYPE_AFBC;
 }
 
 /* Returns the number of planes represented by a fourcc format. */
