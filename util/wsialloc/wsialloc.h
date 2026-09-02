@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2024 Arm Limited.
+ * Copyright (c) 2017-2024, 2026 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -158,18 +158,18 @@ enum wsialloc_allocate_flag
 
 typedef struct wsialloc_format
 {
-   uint32_t fourcc; /**< The DRM_FORMAT_<...> code */
+   uint32_t fourcc;   /**< The DRM_FORMAT_<...> code */
    uint64_t modifier; /**< DRM modifier applied to all planes. */
-   uint64_t flags; /**< Set of @r wsialloc_format_flag format flags. */
+   uint64_t flags;    /**< Set of @r wsialloc_format_flag format flags. */
 } wsialloc_format;
 
 typedef struct wsialloc_allocate_info
 {
    wsialloc_format *formats; /** List of formats to select from for the allocation. */
-   unsigned format_count; /** Number of elements in formats array. */
-   uint32_t width; /** The number of pixel columns required in the buffer. */
-   uint32_t height; /** The number of pixel rows required in the buffer. */
-   uint64_t flags; /** Set of @r wsialloc_allocate_flag allocation flags. */
+   unsigned format_count;    /** Number of elements in formats array. */
+   uint32_t width;           /** The number of pixel columns required in the buffer. */
+   uint32_t height;          /** The number of pixel rows required in the buffer. */
+   uint64_t flags;           /** Set of @r wsialloc_allocate_flag allocation flags. */
 } wsialloc_allocate_info;
 
 typedef struct wsialloc_allocate_result
@@ -180,7 +180,7 @@ typedef struct wsialloc_allocate_result
    /** Per plane offset into the file descriptor for the start of the plane. */
    uint32_t offsets[WSIALLOC_MAX_PLANES];
    int buffer_fds[WSIALLOC_MAX_PLANES]; /** Per plane file descriptor for the buffer. */
-   bool is_disjoint; /** Whether different fds will be used for each plane. */
+   bool is_disjoint;                    /** Whether different fds will be used for each plane. */
 } wsialloc_allocate_result;
 
 /**
