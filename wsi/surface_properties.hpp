@@ -47,6 +47,7 @@ struct surface_properties_override_params
    uint32_t min_swapchain_image_count = 0;
    uint32_t max_swapchain_image_count = 0;
 };
+
 /**
  * @brief The base surface property query interface.
  */
@@ -289,6 +290,19 @@ VkResult check_surface_present_mode_query_is_supported(const VkPhysicalDeviceSur
  */
 void get_surface_capabilities_common(VkPhysicalDevice physical_device, VkSurfaceCapabilitiesKHR *surface_capabilities,
                                      const surface_properties_override_params *override_params = nullptr);
+
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+/**
+ * @brief Populate VkSwapchainFlagsSurfaceCapabilitiesEXT::swapchainSupportedFlags.
+ *
+ * Assigns the common and backend-specific swapchain creation flags and adds
+ * VK_SWAPCHAIN_CREATE_MULTISAMPLED_RENDER_TO_SINGLE_SAMPLED_BIT_EXT when the physical device supports
+ * multisampledRenderToSingleSampled.
+ */
+void populate_swapchain_supported_flags(VkPhysicalDevice physical_device,
+                                        VkSurfaceCapabilities2KHR *surface_capabilities,
+                                        VkSwapchainCreateFlagsKHR backend_specific_flags);
+#endif
 
 /**
  * @brief Common function for the get_surface_present_modes.

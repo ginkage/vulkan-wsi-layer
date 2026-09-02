@@ -130,6 +130,13 @@ VkResult surface_properties::get_surface_capabilities(VkPhysicalDevice physical_
       present_wait2_surface_cap->presentWait2Supported = VK_TRUE;
    }
 
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+   populate_swapchain_supported_flags(physical_device, pSurfaceCapabilities,
+                                      VK_SWAPCHAIN_CREATE_MUTABLE_FORMAT_BIT_KHR |
+                                         VK_SWAPCHAIN_CREATE_DEFERRED_MEMORY_ALLOCATION_BIT_KHR |
+                                         VK_SWAPCHAIN_CREATE_PRESENT_TIMING_BIT_EXT);
+#endif
+
    return VK_SUCCESS;
 }
 

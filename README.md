@@ -65,7 +65,7 @@ The ICDs installed in the system are required to support the following extension
 
 ### Vulkan Header Version
 
-The Vulkan WSI Layer has been validated against Vulkan header version 1.4.325.
+The Vulkan WSI Layer has been validated against Vulkan header version 1.4.356.
 
 If you are using a Vulkan header version newer than this, a warning will appear during compilation.
 

@@ -29,6 +29,47 @@
 namespace wsi
 {
 
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+void populate_swapchain_supported_flags(VkPhysicalDevice physical_device,
+                                        VkSurfaceCapabilities2KHR *surface_capabilities,
+                                        VkSwapchainCreateFlagsKHR backend_specific_flags)
+{
+   constexpr VkSwapchainCreateFlagsKHR common_supported_flags =
+      VK_SWAPCHAIN_CREATE_PRESENT_ID_2_BIT_KHR | VK_SWAPCHAIN_CREATE_PRESENT_WAIT_2_BIT_KHR;
+
+   auto *swapchain_flags = util::find_extension<VkSwapchainFlagsSurfaceCapabilitiesEXT>(
+      VK_STRUCTURE_TYPE_SWAPCHAIN_FLAGS_SURFACE_CAPABILITIES_EXT, surface_capabilities->pNext);
+   if (swapchain_flags == nullptr)
+   {
+      return;
+   }
+
+   VkPhysicalDeviceMultisampledRenderToSingleSampledFeaturesEXT multisampled_render_to_single_sampled = {
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTISAMPLED_RENDER_TO_SINGLE_SAMPLED_FEATURES_EXT,
+      nullptr,
+      VK_FALSE,
+   };
+   VkPhysicalDeviceFeatures2 features = {
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+      &multisampled_render_to_single_sampled,
+      {},
+   };
+   auto &instance = layer::instance_private_data::get(physical_device);
+   auto get_physical_device_features2 =
+      instance.disp.get_fn<PFN_vkGetPhysicalDeviceFeatures2KHR>("vkGetPhysicalDeviceFeatures2KHR");
+   if (get_physical_device_features2.has_value())
+   {
+      (*get_physical_device_features2)(physical_device, &features);
+   }
+
+   swapchain_flags->swapchainSupportedFlags = common_supported_flags | backend_specific_flags;
+   if (multisampled_render_to_single_sampled.multisampledRenderToSingleSampled == VK_TRUE)
+   {
+      swapchain_flags->swapchainSupportedFlags |= VK_SWAPCHAIN_CREATE_MULTISAMPLED_RENDER_TO_SINGLE_SAMPLED_BIT_EXT;
+   }
+}
+#endif
+
 VkResult surface_format_properties::check_device_support(VkPhysicalDevice phys_dev,
                                                          VkPhysicalDeviceImageFormatInfo2KHR image_format_info)
 {
