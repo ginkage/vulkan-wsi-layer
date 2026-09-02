@@ -79,14 +79,6 @@ VkFormat drm_to_vk_srgb_format(uint32_t drm_format)
    return VK_FORMAT_UNDEFINED;
 }
 
-/* AFBC buffers may report row stride as 0 because the modifier describes
- * the layout. This checks that the modifier is in the AFBC range.
- */
-bool drm_modifier_is_afbc(uint64_t modifier)
-{
-   return modifier >= DRM_FORMAT_MOD_ARM_AFBC(0) && modifier < DRM_FORMAT_MOD_ARM_CODE(DRM_FORMAT_MOD_ARM_TYPE_MISC, 0);
-}
-
 /* Returns the number of planes represented by a fourcc format. */
 uint32_t drm_fourcc_format_get_num_planes(uint32_t format)
 {

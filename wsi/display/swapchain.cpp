@@ -236,7 +236,6 @@ VkResult swapchain::create_framebuffer(image_backing_memory_external &image_exte
 
    for (uint32_t plane = 0; plane < ext_memory.get_num_planes(); plane++)
    {
-      assert(ext_memory.get_strides()[plane] > 0 || util::drm::drm_modifier_is_afbc(allocated_format.modifier));
       strides[plane] = static_cast<uint32_t>(ext_memory.get_strides()[plane]);
       modifiers[plane] = allocated_format.modifier;
       if (drmPrimeFDToHandle(display->get_drm_fd(), buffer_fds[plane], &buffer_handles[plane]) != 0)

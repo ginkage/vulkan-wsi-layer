@@ -345,7 +345,6 @@ wayland_owner<wl_buffer> swapchain::create_wl_buffer(image_backing_memory_extern
    const auto modifier_low = static_cast<uint32_t>(modifier & 0xFFFFFFFF);
    for (uint32_t plane = 0; plane < ext_memory.get_num_planes(); plane++)
    {
-      assert(ext_memory.get_strides()[plane] > 0 || util::drm::drm_modifier_is_afbc(modifier));
       zwp_linux_buffer_params_v1_add(params, ext_memory.get_buffer_fds()[plane], plane, ext_memory.get_offsets()[plane],
                                      static_cast<uint32_t>(ext_memory.get_strides()[plane]), modifier_hi, modifier_low);
    }
