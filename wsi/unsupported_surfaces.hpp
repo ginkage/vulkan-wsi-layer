@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024-2025 Arm Limited.
+ * Copyright (c) 2024-2026 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -26,7 +26,7 @@
 #include <vulkan/vulkan.h>
 #include <array>
 /* Define the patch version directly as macros */
-#define WSI_LAYER_VK_PATCH 325
+#define WSI_LAYER_VK_PATCH 356
 
 /* Convert macros to string */
 #define STRINGIFY(x) #x

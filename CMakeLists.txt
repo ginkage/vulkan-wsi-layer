@@ -337,6 +337,7 @@ add_library(${PROJECT_NAME} SHARED
 if (VULKAN_WSI_LAYER_EXPERIMENTAL)
    add_definitions("-DVULKAN_WSI_LAYER_EXPERIMENTAL=1")
 else()
+   list(APPEND JSON_COMMANDS COMMAND sed -Ei '/VK_EXT_multisampled_render_to_swapchain/d' ${CMAKE_CURRENT_BINARY_DIR}/VkLayer_window_system_integration.json)
    add_definitions("-DVULKAN_WSI_LAYER_EXPERIMENTAL=0")
 endif()
 

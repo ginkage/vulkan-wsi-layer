@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Arm Limited.
+ * Copyright (c) 2025-2026 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -50,6 +50,12 @@ vulkan_image_handle_creator::vulkan_image_handle_creator(util::allocator allocat
    m_image_create_info.tiling = VK_IMAGE_TILING_OPTIMAL;
    m_image_create_info.usage = swapchain_create_info.imageUsage;
    m_image_create_info.flags = 0;
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+   if ((swapchain_create_info.flags & VK_SWAPCHAIN_CREATE_MULTISAMPLED_RENDER_TO_SINGLE_SAMPLED_BIT_EXT) != 0)
+   {
+      m_image_create_info.flags |= VK_IMAGE_CREATE_MULTISAMPLED_RENDER_TO_SINGLE_SAMPLED_BIT_EXT;
+   }
+#endif
    m_image_create_info.sharingMode = swapchain_create_info.imageSharingMode;
    m_image_create_info.queueFamilyIndexCount = swapchain_create_info.queueFamilyIndexCount;
    m_image_create_info.pQueueFamilyIndices = swapchain_create_info.pQueueFamilyIndices;
