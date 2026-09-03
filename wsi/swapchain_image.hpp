@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Arm Limited.
+ * Copyright (c) 2025-2026 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -47,6 +47,7 @@ namespace wsi
 {
 
 class swapchain_image_factory;
+class swapchain_base;
 
 /**
  * @brief Base class describing swapchain image memory allocator/binder
@@ -256,8 +257,9 @@ public:
    }
 
 private:
-   /* Only allow swapchain image factory to create this class and acquire backing memory from it */
+   /* Only allow swapchain internals to create or destroy image resources. */
    friend swapchain_image_factory;
+   friend swapchain_base;
 
    /**
     * @brief Construct a new swapchain image object
