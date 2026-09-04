@@ -95,7 +95,8 @@ clang_tidy:
     - set +e
     - set -o pipefail
     - |
-      run-clang-tidy -p build -j "$(nproc)" -quiet -header-filter="$(pwd)/.*" \
+      run-clang-tidy -p build -j "$(nproc)" -quiet \
+      -extra-arg=-Wnewline-eof -header-filter="$(pwd)/.*" \
       -checks='*,
       -bugprone-easily-swappable-parameters,
       -bugprone-exception-escape,
