@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, 2023-2024 Arm Limited.
+ * Copyright (c) 2021, 2023-2024, 2026 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
