@@ -37,7 +37,6 @@
 #include <wsi/swapchain_base.hpp>
 
 #include "swapchain.hpp"
-#include "util/drm/drm_utils.hpp"
 #include "present_wait_display.hpp"
 
 namespace wsi
