@@ -257,7 +257,9 @@ public:
    }
 
 private:
-   /* Only allow swapchain internals to create or destroy image resources. */
+   /* Allow the factory to construct images and swapchain_base to destroy
+    * unused image resources during swapchain retirement.
+    */
    friend swapchain_image_factory;
    friend swapchain_base;
 
