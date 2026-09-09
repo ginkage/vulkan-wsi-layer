@@ -64,7 +64,7 @@ stages: [lint, build]
 
 pre-commit:
   stage: lint
-  image: python:3.10.6
+  image: python:3.10-bookworm
   rules:
     - if: $CI_MERGE_REQUEST_DIFF_BASE_SHA
   before_script:

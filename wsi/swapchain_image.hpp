@@ -47,6 +47,7 @@ namespace wsi
 {
 
 class swapchain_image_factory;
+class swapchain_base;
 
 /**
  * @brief Base class describing swapchain image memory allocator/binder
@@ -256,8 +257,11 @@ public:
    }
 
 private:
-   /* Only allow swapchain image factory to create this class and acquire backing memory from it */
+   /* Allow the factory to construct images and swapchain_base to destroy
+    * unused image resources during swapchain retirement.
+    */
    friend swapchain_image_factory;
+   friend swapchain_base;
 
    /**
     * @brief Construct a new swapchain image object

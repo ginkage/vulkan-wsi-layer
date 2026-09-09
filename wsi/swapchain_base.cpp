@@ -37,7 +37,6 @@
 #include <cstdio>
 #include <cstdlib>
 #include <system_error>
-#include <algorithm>
 
 #include <unistd.h>
 #include <vulkan/vulkan.h>
@@ -696,10 +695,21 @@ VkResult swapchain_base::queue_present(VkQueue queue, const VkPresentInfoKHR *pr
 
 void swapchain_base::deprecate(VkSwapchainKHR descendant)
 {
-   /* Remove any images that have not been acquried or presented */
-   m_swapchain_images.erase(std::remove_if(m_swapchain_images.begin(), m_swapchain_images.end(),
-                                           [](auto &image) { return image.get_status() == swapchain_image::FREE; }),
-                            m_swapchain_images.end());
+   util::unique_lock<util::recursive_mutex> image_status_lock(m_image_status_mutex);
+   if (!image_status_lock)
+   {
+      WSI_LOG_ERROR("Failed to acquire mutex lock in deprecate.\n");
+      abort();
+   }
+
+   /* Release unused resources without changing Vulkan-visible image indexes. */
+   for (auto &image : m_swapchain_images)
+   {
+      if (image.get_status() == swapchain_image::FREE)
+      {
+         image.destroy();
+      }
+   }
 
    /* Set its descendant. */
    m_descendant = descendant;
@@ -724,9 +734,10 @@ void swapchain_base::wait_for_pending_buffers()
        * and then subsequent calls might block if the semaphore value
        * has reached to zero.
        */
-      if ((img.get_status() == swapchain_image::ACQUIRED) || (img.get_status() == swapchain_image::FREE))
+      if ((img.get_status() == swapchain_image::ACQUIRED) || (img.get_status() == swapchain_image::FREE) ||
+          (img.get_status() == swapchain_image::UNALLOCATED))
       {
-         /* If the image is acquired or free, it is not pending. */
+         /* If the image is acquired, free, or unallocated, it is not pending. */
          non_pending_images++;
       }
    }
