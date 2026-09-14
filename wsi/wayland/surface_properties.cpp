@@ -85,15 +85,21 @@ surface_properties &surface_properties::get_instance()
 VkResult surface_properties::get_surface_capabilities(VkPhysicalDevice physical_device,
                                                       VkSurfaceCapabilitiesKHR *pSurfaceCapabilities)
 {
+   populate_surface_capabilities(physical_device, pSurfaceCapabilities, nullptr);
+   return VK_SUCCESS;
+}
+
+void surface_properties::populate_surface_capabilities(VkPhysicalDevice physical_device,
+                                                       VkSurfaceCapabilitiesKHR *pSurfaceCapabilities, void *pNext)
+{
 
    /* Image count limits */
    surface_properties_override_params override_params = { 2, 0 };
-   get_surface_capabilities_common(physical_device, pSurfaceCapabilities, &override_params);
+   get_surface_capabilities_common(physical_device, pSurfaceCapabilities, &override_params, pNext);
 
    /* Composite alpha */
    pSurfaceCapabilities->supportedCompositeAlpha = static_cast<VkCompositeAlphaFlagsKHR>(
       VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR | VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR);
-   return VK_SUCCESS;
 }
 
 VkResult surface_properties::get_surface_capabilities(VkPhysicalDevice physical_device,
@@ -103,7 +109,8 @@ VkResult surface_properties::get_surface_capabilities(VkPhysicalDevice physical_
    TRY(check_surface_present_mode_query_is_supported(pSurfaceInfo, m_supported_modes));
 
    /* Image count limits */
-   get_surface_capabilities(physical_device, &pSurfaceCapabilities->surfaceCapabilities);
+   populate_surface_capabilities(physical_device, &pSurfaceCapabilities->surfaceCapabilities,
+                                 pSurfaceCapabilities->pNext);
 
    m_compatible_present_modes.get_surface_present_mode_compatibility_common(pSurfaceInfo, pSurfaceCapabilities);
 

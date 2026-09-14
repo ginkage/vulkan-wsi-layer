@@ -137,7 +137,7 @@ void surface_format_properties::fill_format_properties(VkSurfaceFormat2KHR &surf
 }
 
 void get_surface_capabilities_common(VkPhysicalDevice physical_device, VkSurfaceCapabilitiesKHR *surface_capabilities,
-                                     const surface_properties_override_params *override_params)
+                                     const surface_properties_override_params *override_params, void *pNext)
 {
    /* Image count limits */
    surface_capabilities->minImageCount = 1;
@@ -180,6 +180,13 @@ void get_surface_capabilities_common(VkPhysicalDevice physical_device, VkSurface
    surface_capabilities->supportedUsageFlags =
       VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT |
       VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
+
+   auto *image_usage_flags_2_create_info = util::find_extension<VkImageUsageFlags2CreateInfoKHR>(
+      VK_STRUCTURE_TYPE_IMAGE_USAGE_FLAGS_2_CREATE_INFO_KHR, pNext);
+   if (image_usage_flags_2_create_info != nullptr)
+   {
+      image_usage_flags_2_create_info->usage = surface_capabilities->supportedUsageFlags;
+   }
 }
 
 /**

@@ -36,6 +36,7 @@ namespace wsi
 vulkan_image_handle_creator::vulkan_image_handle_creator(util::allocator allocator,
                                                          const VkSwapchainCreateInfoKHR &swapchain_create_info)
    : m_image_create_info()
+   , m_image_usage_flags_2_create_info()
    , m_extensions(allocator)
 {
    m_image_create_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -60,6 +61,13 @@ vulkan_image_handle_creator::vulkan_image_handle_creator(util::allocator allocat
    m_image_create_info.queueFamilyIndexCount = swapchain_create_info.queueFamilyIndexCount;
    m_image_create_info.pQueueFamilyIndices = swapchain_create_info.pQueueFamilyIndices;
    m_image_create_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+   const auto *image_usage_flags_2_create_info = find_image_usage_flags_2_create_info(swapchain_create_info.pNext);
+   if (image_usage_flags_2_create_info != nullptr)
+   {
+      prepend_image_usage_flags_2_create_info(m_image_usage_flags_2_create_info, image_usage_flags_2_create_info->usage,
+                                              m_image_create_info.pNext);
+   }
 }
 
 VkResult vulkan_image_handle_creator::create_image(layer::device_private_data &device_data,

@@ -98,7 +98,8 @@ VkResult surface_properties::get_surface_capabilities(VkPhysicalDevice physical_
    {
       override_params = { 1, 1 };
    }
-   get_surface_capabilities_common(physical_device, &surface_capabilities->surfaceCapabilities, &override_params);
+   get_surface_capabilities_common(physical_device, &surface_capabilities->surfaceCapabilities, &override_params,
+                                   surface_capabilities->pNext);
    m_compatible_present_modes.get_surface_present_mode_compatibility_common(surface_info, surface_capabilities);
 
    auto surface_scaling_capabilities = util::find_extension<VkSurfacePresentScalingCapabilitiesEXT>(

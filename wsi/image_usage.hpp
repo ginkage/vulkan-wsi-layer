@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024-2026 Arm Limited.
+ * Copyright (c) 2026 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -23,13 +23,34 @@
  */
 
 /**
- * @file wsi_layer_experimental.hpp
+ * @file image_usage.hpp
  *
- * @brief Contains the declarations of the structures and entry point APIs of experimental extensions.
- *
+ * @brief Helpers for VkImageUsageFlags2CreateInfoKHR compatibility.
  */
 
 #pragma once
 
 #include <vulkan/vulkan.h>
-#include "util/macros.hpp"
+
+#include "layer/wsi_layer_experimental.hpp"
+#include "util/helpers.hpp"
+
+namespace wsi
+{
+
+inline const VkImageUsageFlags2CreateInfoKHR *find_image_usage_flags_2_create_info(const void *pNext)
+{
+   return util::find_extension<VkImageUsageFlags2CreateInfoKHR>(VK_STRUCTURE_TYPE_IMAGE_USAGE_FLAGS_2_CREATE_INFO_KHR,
+                                                                pNext);
+}
+
+inline void prepend_image_usage_flags_2_create_info(VkImageUsageFlags2CreateInfoKHR &image_usage_flags_2_create_info,
+                                                    VkImageUsageFlags2KHR usage, const void *&pNext)
+{
+   image_usage_flags_2_create_info.sType = VK_STRUCTURE_TYPE_IMAGE_USAGE_FLAGS_2_CREATE_INFO_KHR;
+   image_usage_flags_2_create_info.pNext = const_cast<void *>(pNext);
+   image_usage_flags_2_create_info.usage = usage;
+   pNext = &image_usage_flags_2_create_info;
+}
+
+} /* namespace wsi */

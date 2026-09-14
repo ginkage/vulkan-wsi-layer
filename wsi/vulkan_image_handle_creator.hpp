@@ -30,7 +30,9 @@
 
 #include <vulkan/vulkan.h>
 #include <util/custom_allocator.hpp>
+#include "util/macros.hpp"
 #include <wsi/extensions/image_create_info_extension.hpp>
+#include <wsi/image_usage.hpp>
 
 #include "swapchain_image.hpp"
 
@@ -82,6 +84,11 @@ private:
     * @brief Image create info used for all swapchain images.
     */
    VkImageCreateInfo m_image_create_info;
+
+   /**
+    * @brief Image usage flags2 info used when the swapchain was created with extended usage flags.
+    */
+   VkImageUsageFlags2CreateInfoKHR m_image_usage_flags_2_create_info;
 
    /**
     * @brief Swapchain image extensions needed for extending image create info.

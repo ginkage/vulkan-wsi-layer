@@ -126,12 +126,25 @@ wsi_layer_vkGetPhysicalDeviceSurfaceCapabilities2KHR(VkPhysicalDevice physicalDe
          TRY_LOG_CALL(props->get_present_timing_surface_caps(physicalDevice, surf_caps_ext));
       }
 
-      auto shared_present_surface_cap_struct = util::find_extension<VkSharedPresentSurfaceCapabilitiesKHR>(
-         VK_STRUCTURE_TYPE_SHARED_PRESENT_SURFACE_CAPABILITIES_KHR, pSurfaceCapabilities);
-      if (shared_present_surface_cap_struct != nullptr)
+      bool shared_present_surface_capabilities2_found = false;
+      auto shared_present_surface_cap_struct2 = util::find_extension<VkSharedPresentSurfaceCapabilities2KHR>(
+         VK_STRUCTURE_TYPE_SHARED_PRESENT_SURFACE_CAPABILITIES_2_KHR, pSurfaceCapabilities);
+      if (shared_present_surface_cap_struct2 != nullptr)
       {
-         shared_present_surface_cap_struct->sharedPresentSupportedUsageFlags = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+         shared_present_surface_cap_struct2->sharedPresentSupportedUsageFlags =
+            VK_IMAGE_USAGE_2_COLOR_ATTACHMENT_BIT_KHR;
+         shared_present_surface_capabilities2_found = true;
       }
+      if (!shared_present_surface_capabilities2_found)
+      {
+         auto shared_present_surface_cap_struct = util::find_extension<VkSharedPresentSurfaceCapabilitiesKHR>(
+            VK_STRUCTURE_TYPE_SHARED_PRESENT_SURFACE_CAPABILITIES_KHR, pSurfaceCapabilities);
+         if (shared_present_surface_cap_struct != nullptr)
+         {
+            shared_present_surface_cap_struct->sharedPresentSupportedUsageFlags = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+         }
+      }
+
       return props->get_surface_capabilities(physicalDevice, pSurfaceInfo, pSurfaceCapabilities);
    }
 
