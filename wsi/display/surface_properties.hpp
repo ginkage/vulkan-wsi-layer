@@ -73,6 +73,9 @@ public:
 private:
    surface *const m_specific_surface;
 
+   void populate_surface_capabilities(VkPhysicalDevice physical_device, VkSurfaceCapabilitiesKHR *pSurfaceCapabilities,
+                                      void *pNext);
+
    /* List of supported presentation modes */
    std::array<VkPresentModeKHR, 1> m_supported_modes;
 

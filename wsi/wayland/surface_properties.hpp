@@ -78,6 +78,9 @@ public:
 private:
    surface_properties();
 
+   void populate_surface_capabilities(VkPhysicalDevice physical_device, VkSurfaceCapabilitiesKHR *pSurfaceCapabilities,
+                                      void *pNext);
+
    /** If the properties are specific to a @ref wsi::wayland::surface this is a pointer to it. Can be nullptr for
     * generic Wayland surface properties.
     */

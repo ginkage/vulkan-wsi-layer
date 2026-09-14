@@ -35,6 +35,7 @@
 #include <vulkan/vulkan.h>
 
 #include <layer/private_data.hpp>
+#include <layer/wsi_layer_experimental.hpp>
 
 #include <util/custom_allocator.hpp>
 #include <util/drm/drm_utils.hpp>
@@ -49,7 +50,7 @@ namespace wsi
 struct wsialloc_create_info_args
 {
    wsialloc_format selected_format;
-   VkImageCreateFlags flags;
+   VkImageCreateFlags2KHR flags;
    VkExtent3D extent;
    bool explicit_compression;
 };

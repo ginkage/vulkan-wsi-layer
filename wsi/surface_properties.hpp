@@ -31,6 +31,7 @@
 #pragma once
 
 #include <vulkan/vulkan.h>
+#include "layer/wsi_layer_experimental.hpp"
 #include "layer/present_timing_api.hpp"
 #include "layer/private_data.hpp"
 #include "util/custom_allocator.hpp"
@@ -287,9 +288,11 @@ VkResult check_surface_present_mode_query_is_supported(const VkPhysicalDeviceSur
  * @param physical_device          Vulkan physical_device.
  * @param surface_capabilities     address of Vulkan surface capabilities struct.
  * @param override_params          Backend specfic parameters to override.
+ * @param pNext                    Optional pNext chain from VkSurfaceCapabilities2KHR.
  */
 void get_surface_capabilities_common(VkPhysicalDevice physical_device, VkSurfaceCapabilitiesKHR *surface_capabilities,
-                                     const surface_properties_override_params *override_params = nullptr);
+                                     const surface_properties_override_params *override_params = nullptr,
+                                     void *pNext = nullptr);
 
 #if VULKAN_WSI_LAYER_EXPERIMENTAL
 /**

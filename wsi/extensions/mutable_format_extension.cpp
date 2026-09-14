@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Arm Limited.
+ * Copyright (c) 2025-2026 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -27,6 +27,9 @@
  */
 
 #include "mutable_format_extension.hpp"
+
+#include <layer/wsi_layer_experimental.hpp>
+#include <util/helpers.hpp>
 
 namespace wsi
 {
@@ -66,7 +69,16 @@ util::unique_ptr<swapchain_image_create_mutable_format> swapchain_image_create_m
 VkResult swapchain_image_create_mutable_format::extend_image_create_info(VkImageCreateInfo *image_create_info)
 {
    /* If this extension is present, mutable format support is requested. */
-   image_create_info->flags |= VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT | VK_IMAGE_CREATE_EXTENDED_USAGE_BIT_KHR;
+   auto *image_create_flags2 = util::find_extension<VkImageCreateFlags2CreateInfoKHR>(
+      VK_STRUCTURE_TYPE_IMAGE_CREATE_FLAGS_2_CREATE_INFO_KHR, const_cast<void *>(image_create_info->pNext));
+   if (image_create_flags2 != nullptr)
+   {
+      image_create_flags2->flags |= VK_IMAGE_CREATE_2_MUTABLE_FORMAT_BIT_KHR | VK_IMAGE_CREATE_2_EXTENDED_USAGE_BIT_KHR;
+   }
+   else
+   {
+      image_create_info->flags |= VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT | VK_IMAGE_CREATE_EXTENDED_USAGE_BIT_KHR;
+   }
    m_format_list.pNext = image_create_info->pNext;
    image_create_info->pNext = &m_format_list;
    return VK_SUCCESS;
