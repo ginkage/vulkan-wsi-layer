@@ -145,7 +145,7 @@ static VkResult submit_wait_request(VkQueue queue, const VkPresentInfoKHR &prese
    for (uint32_t i = 0; i < present_info.swapchainCount; ++i)
    {
       auto swapchain = reinterpret_cast<wsi::swapchain_base *>(present_info.pSwapchains[i]);
-      swapchain_semaphores[i] = swapchain->get_image_present_semaphore(present_info.pImageIndices[i]);
+      TRY(swapchain->get_image_present_semaphore(present_info.pImageIndices[i], swapchain_semaphores[i]));
    }
 
    wsi::queue_submit_semaphores semaphores = { present_info.pWaitSemaphores, present_info.waitSemaphoreCount,

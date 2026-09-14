@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024-2025 Arm Limited.
+ * Copyright (c) 2024-2026 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -52,7 +52,5 @@ wsi_layer_vkReleaseSwapchainImagesEXT(VkDevice device, const VkReleaseSwapchainI
    }
 
    auto *sc = reinterpret_cast<wsi::swapchain_base *>(pReleaseInfo->swapchain);
-   sc->release_images(pReleaseInfo->imageIndexCount, pReleaseInfo->pImageIndices);
-
-   return VK_SUCCESS;
+   return sc->release_images(pReleaseInfo->imageIndexCount, pReleaseInfo->pImageIndices);
 }

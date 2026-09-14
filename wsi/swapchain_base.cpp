@@ -580,6 +580,12 @@ VkResult swapchain_base::notify_presentation_engine(const pending_present_reques
 VkResult swapchain_base::queue_present(VkQueue queue, const VkPresentInfoKHR *present_info,
                                        const swapchain_presentation_parameters &submit_info)
 {
+   if (!is_valid_image_index(submit_info.pending_present.image_index))
+   {
+      WSI_LOG_ERROR("Swapchain image index %u is out of bounds.", submit_info.pending_present.image_index);
+      return VK_ERROR_VALIDATION_FAILED;
+   }
+
    if (m_present_mode == VK_PRESENT_MODE_SHARED_CONTINUOUS_REFRESH_KHR)
    {
       const util::unique_lock<util::recursive_mutex> image_status_lock(m_image_status_mutex);
@@ -797,20 +803,35 @@ VkResult swapchain_base::wait_and_get_free_buffer(uint64_t timeout)
    return retval;
 }
 
-void swapchain_base::release_images(uint32_t image_count, const uint32_t *indices)
+VkResult swapchain_base::release_images(uint32_t image_count, const uint32_t *indices)
 {
    for (uint32_t i = 0; i < image_count; i++)
    {
+      if (!is_valid_image_index(indices[i]))
+      {
+         WSI_LOG_ERROR("Swapchain image index %u is out of bounds.", indices[i]);
+         return VK_ERROR_VALIDATION_FAILED;
+      }
+   }
+
+   for (uint32_t i = 0; i < image_count; i++)
+   {
       uint32_t index = indices[i];
-      assert(index < m_swapchain_images.size());
       /* Applications can only pass acquired images that the device doesn't own */
       assert(m_swapchain_images[index].get_status() == swapchain_image::ACQUIRED);
       unpresent_image(index, true);
    }
+
+   return VK_SUCCESS;
 }
 
 VkResult swapchain_base::is_bind_allowed(uint32_t image_index) const
 {
+   if (!is_valid_image_index(image_index))
+   {
+      return VK_ERROR_VALIDATION_FAILED;
+   }
+
    return m_swapchain_images[image_index].get_status() != swapchain_image::UNALLOCATED ? VK_SUCCESS :
                                                                                          VK_ERROR_OUT_OF_HOST_MEMORY;
 }

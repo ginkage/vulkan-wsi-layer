@@ -232,12 +232,33 @@ public:
     * @brief Get image's present semaphore
     *
     * @param image_index Image's index
+    * @param semaphore Present semaphore for the image.
     *
-    * @return the image's present_semaphore
+    * @return VK_SUCCESS on success, or VK_ERROR_VALIDATION_FAILED if the
+    * image index is out of bounds.
     */
-   VkSemaphore get_image_present_semaphore(uint32_t image_index)
+   VkResult get_image_present_semaphore(uint32_t image_index, VkSemaphore &semaphore)
    {
-      return m_swapchain_images[image_index].get_present_semaphore();
+      if (!is_valid_image_index(image_index))
+      {
+         WSI_LOG_ERROR("Swapchain image index %u is out of bounds.", image_index);
+         return VK_ERROR_VALIDATION_FAILED;
+      }
+
+      semaphore = m_swapchain_images[image_index].get_present_semaphore();
+      return VK_SUCCESS;
+   }
+
+   /**
+    * @brief Check whether an image index belongs to this swapchain.
+    *
+    * @param image_index Image index to check.
+    *
+    * @return True if the image index is valid, false otherwise.
+    */
+   bool is_valid_image_index(uint32_t image_index) const
+   {
+      return image_index < m_swapchain_images.size();
    }
 
    /**
@@ -253,8 +274,11 @@ public:
     *
     * @param image_count Amount of images in the indices array
     * @param indices Array of image indices
+    *
+    * @return VK_SUCCESS on success, or VK_ERROR_VALIDATION_FAILED if an index
+    * is out of bounds.
     */
-   void release_images(uint32_t image_count, const uint32_t *indices);
+   VkResult release_images(uint32_t image_count, const uint32_t *indices);
 
    /**
     * @brief Check if bind is allowed for a swapchain image.
