@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2022 Arm Limited.
+ * Copyright (c) 2017-2022, 2026 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -29,6 +29,7 @@
  */
 
 #include <cassert>
+#include <cerrno>
 #include <chrono>
 #include <condition_variable>
 #include <cstdint>
@@ -38,9 +39,11 @@
 #include <system_error>
 #include <thread>
 
+#include <sys/shm.h>
 #include <unistd.h>
 #include <vulkan/vulkan_core.h>
 
+#include <xcb/shm.h>
 #include <xcb/xcb.h>
 #include <xcb/xproto.h>
 
@@ -101,6 +104,54 @@ static void query_dri3_supported_formats(xcb_connection_t *connection, xcb_windo
    }
 }
 
+void x11_image_data::release_x_resources()
+{
+   /* Checked requests whose replies are discarded: no round trip, and a failure is dropped instead
+    * of reaching the application's event queue, where Xlib's default error handler would exit. */
+   bool released = false;
+   if (pixmap != XCB_PIXMAP_NONE)
+   {
+      xcb_discard_reply(connection, xcb_free_pixmap_checked(connection, pixmap).sequence);
+      pixmap = XCB_PIXMAP_NONE;
+      released = true;
+   }
+   if (shm_seg != XCB_NONE)
+   {
+      xcb_discard_reply(connection, xcb_shm_detach_checked(connection, shm_seg).sequence);
+      shm_seg = XCB_NONE;
+      released = true;
+   }
+   if (shm_seg_alt != XCB_NONE)
+   {
+      xcb_discard_reply(connection, xcb_shm_detach_checked(connection, shm_seg_alt).sequence);
+      shm_seg_alt = XCB_NONE;
+      released = true;
+   }
+   if (released)
+   {
+      xcb_flush(connection);
+   }
+
+   /* The server holds its own attachment until it processes the detach above, so the client mappings
+    * can go now; the segments were marked IPC_RMID at creation, so the kernel frees them after both. */
+   if (shm_addr != nullptr && shm_addr != (void *)-1)
+   {
+      if (shmdt(shm_addr) != 0)
+      {
+         WSI_LOG_ERROR("Failed to detach shared memory: errno=%d", errno);
+      }
+      shm_addr = nullptr;
+   }
+   if (shm_addr_alt != nullptr && shm_addr_alt != (void *)-1)
+   {
+      if (shmdt(shm_addr_alt) != 0)
+      {
+         WSI_LOG_ERROR("Failed to detach alternate shared memory: errno=%d", errno);
+      }
+      shm_addr_alt = nullptr;
+   }
+}
+
 swapchain::swapchain(layer::device_private_data &dev_data, const VkAllocationCallbacks *pAllocator,
                      surface &wsi_surface)
    : swapchain_base(dev_data, pAllocator)
@@ -137,21 +188,9 @@ swapchain::~swapchain()
 
    thread_status_lock.unlock();
 
-   /* Release the per-image SHM resources while the presenter (and its xcb connection) is still alive.
-    * The host-visible image memory is freed by each x11_image_data's external_memory during teardown. */
-   if (m_presenter)
-   {
-      for (auto &image : m_swapchain_images)
-      {
-         auto *data = image.get_data<x11_image_data>();
-         if (data != nullptr)
-         {
-            m_presenter->destroy_image_resources(data);
-         }
-      }
-   }
-
-   /* Call the base's teardown */
+   /* Call the base's teardown. The per-image X resources are released afterwards, when the images'
+    * x11_image_data is destroyed - once teardown has waited for pending presents and stopped the
+    * presentation thread, so no present_image can still be using them. */
    teardown();
 }
 
@@ -397,7 +436,7 @@ swapchain_image_factory &swapchain::get_image_factory()
 
 VkResult swapchain::allocate_and_bind_swapchain_image(swapchain_image &image)
 {
-   auto image_data_ptr = m_allocator.make_unique<x11_image_data>(m_device, m_allocator);
+   auto image_data_ptr = m_allocator.make_unique<x11_image_data>(m_device, m_allocator, m_connection);
    if (image_data_ptr == nullptr)
    {
       return VK_ERROR_OUT_OF_HOST_MEMORY;

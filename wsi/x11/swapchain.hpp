@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2019, 2021-2022 Arm Limited.
+ * Copyright (c) 2017-2019, 2021-2022, 2026 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -78,16 +78,34 @@ struct pending_completion
 /**
  * @brief Backend-specific data attached to each swapchain image.
  *
- * Holds the host-visible image memory (via @ref external_memory) and the X11 shared-memory resources
- * used to present the image.
+ * Holds the host-visible image memory (via @ref external_memory) and the X resources used to present
+ * the image: a DRI3 pixmap or the MIT-SHM segments. It owns those X resources and releases them when
+ * destroyed, which covers every way an image goes away - swapchain destruction, a failed allocation,
+ * and swapchain_base::deprecate() dropping the FREE images of a retired swapchain, which the
+ * presenter never sees.
  */
 struct x11_image_data : public swapchain_image_data
 {
-   x11_image_data(const VkDevice &dev, const util::allocator &allocator)
-      : external_mem(dev, allocator)
+   x11_image_data(const VkDevice &dev, const util::allocator &allocator, xcb_connection_t *conn)
+      : connection(conn)
+      , external_mem(dev, allocator)
       , device(dev)
    {
    }
+
+   ~x11_image_data() override
+   {
+      release_x_resources();
+   }
+
+   x11_image_data(const x11_image_data &) = delete;
+   x11_image_data &operator=(const x11_image_data &) = delete;
+
+   /** @brief Free the DRI3 pixmap and detach the MIT-SHM segments, if any. Idempotent. */
+   void release_x_resources();
+
+   /** Connection the X resources are created on: the application's, which outlives the swapchain. */
+   xcb_connection_t *connection = nullptr;
 
    external_memory external_mem;
    xcb_pixmap_t pixmap = XCB_PIXMAP_NONE;

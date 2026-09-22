@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Arm Limited.
+ * Copyright (c) 2025-2026 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -65,8 +65,10 @@ public:
    /**
     * @brief Create the per-image presentation resources (SHM segments, or a DRI3 pixmap).
     *
-    * Populates @p image_data 's width/height/depth. @p image gives access to the image's backing
-    * memory, which the DRI3 path uses to wrap the dma-buf as a pixmap; the SHM path ignores it.
+    * Populates @p image_data 's width/height/depth and records the connection, so that
+    * @p image_data can release the resources itself when it is destroyed. @p image gives access to
+    * the image's backing memory, which the DRI3 path uses to wrap the dma-buf as a pixmap; the SHM
+    * path ignores it.
     */
    virtual VkResult create_image_resources(swapchain_image &image, x11_image_data *image_data, uint32_t width,
                                            uint32_t height, int depth) = 0;
@@ -76,9 +78,6 @@ public:
     * the vsync count to present at for FIFO pacing (0 = as soon as possible); SHM ignores it.
     */
    virtual VkResult present_image(x11_image_data *image_data, uint32_t serial, uint64_t target_msc) = 0;
-
-   /** @brief Tear down the per-image resources created by @ref create_image_resources. */
-   virtual void destroy_image_resources(x11_image_data *image_data) = 0;
 
    /**
     * @brief Present special-event queue for the swapchain's event thread to drain (DRI3 Idle/Complete

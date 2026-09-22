@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Arm Limited.
+ * Copyright (c) 2025-2026 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -877,59 +877,6 @@ VkResult shm_presenter::present_image(x11_image_data *image_data, uint32_t /*ser
    }
 
    return VK_SUCCESS;
-}
-void shm_presenter::destroy_image_resources(x11_image_data *image_data)
-{
-   if (image_data->shm_seg != XCB_NONE)
-   {
-      xcb_generic_error_t *error =
-         xcb_request_check(m_connection, xcb_shm_detach_checked(m_connection, image_data->shm_seg));
-      if (error)
-      {
-         WSI_LOG_ERROR("SHM detach failed: error_code=%d, sequence=%d", error->error_code, error->sequence);
-         free(error);
-      }
-
-      image_data->shm_seg = XCB_NONE;
-   }
-
-   if (image_data->shm_seg_alt != XCB_NONE)
-   {
-      xcb_generic_error_t *error =
-         xcb_request_check(m_connection, xcb_shm_detach_checked(m_connection, image_data->shm_seg_alt));
-      if (error)
-      {
-         WSI_LOG_ERROR("SHM alt detach failed: error_code=%d, sequence=%d", error->error_code, error->sequence);
-         free(error);
-      }
-
-      image_data->shm_seg_alt = XCB_NONE;
-   }
-
-   if (image_data->shm_addr && image_data->shm_addr != (void *)-1)
-   {
-      int detach_result = shmdt(image_data->shm_addr);
-      if (detach_result != 0)
-      {
-         WSI_LOG_ERROR("Failed to detach shared memory: errno=%d", errno);
-      }
-      image_data->shm_addr = nullptr;
-   }
-
-   if (image_data->shm_addr_alt && image_data->shm_addr_alt != (void *)-1)
-   {
-      int detach_result = shmdt(image_data->shm_addr_alt);
-      if (detach_result != 0)
-      {
-         WSI_LOG_ERROR("Failed to detach alternate shared memory: errno=%d", errno);
-      }
-      image_data->shm_addr_alt = nullptr;
-   }
-
-   image_data->shm_id = -1;
-   image_data->shm_id_alt = -1;
-   image_data->shm_size = 0;
-   image_data->use_alt_buffer = false;
 }
 
 bool shm_presenter::is_available(xcb_connection_t * /*connection*/, surface *wsi_surface)
