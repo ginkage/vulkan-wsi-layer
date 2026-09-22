@@ -267,9 +267,20 @@ VkResult swapchain::init_image_factory(const VkSwapchainCreateInfoKHR &swapchain
       std::get<util::unique_ptr<vulkan_image_handle_creator>>(std::move(image_handle_creator_result));
 
    auto compression_control = image_create_compression_control::create(m_device, &swapchain_create_info);
+   /* An OPAQUE swapchain is presented through the alpha-less variant of its format (see create_wl_buffer),
+    * so only pick a modifier the compositor also supports for that variant. */
+   const auto &surface_formats =
+      m_has_alpha ? m_wsi_surface->get_formats() : m_wsi_surface->get_formats_with_opaque_variant();
+   if (surface_formats.empty())
+   {
+      /* get_surface_compatible_formats() reads an empty list as "any modifier the device supports is
+       * fine", so stop here rather than attaching a buffer the compositor never advertised. */
+      WSI_LOG_ERROR("The compositor supports no usable format/modifier pair for this swapchain");
+      return VK_ERROR_INITIALIZATION_FAILED;
+   }
    auto sc_img_create_ext_mem_result = swapchain_image_create_external_memory::create(
-      image_handle_creator->get_image_create_info(), compression_control, *m_wsi_allocator,
-      m_wsi_surface->get_formats(), m_device_data.physical_device, m_allocator);
+      image_handle_creator->get_image_create_info(), compression_control, *m_wsi_allocator, surface_formats,
+      m_device_data.physical_device, m_allocator);
    if (auto error = std::get_if<VkResult>(&sc_img_create_ext_mem_result))
    {
       return *error;
@@ -359,18 +370,12 @@ wayland_owner<wl_buffer> swapchain::create_wl_buffer(image_backing_memory_extern
    }
 
    auto fourcc = util::drm::vk_to_drm_format(image_create_info.format);
-   /* Emulate OPAQUE composite alpha by presenting through an alpha-less format - unless the app
-    * requested a premultiplied-alpha surface, in which case keep the alpha channel. */
+   /* Emulate OPAQUE composite alpha by presenting through the alpha-less variant of the format (e.g.
+    * ARGB8888 -> XRGB8888) - unless the app requested a premultiplied-alpha surface, in which case keep
+    * the alpha channel. */
    if (!m_has_alpha)
    {
-      if (fourcc == DRM_FORMAT_ARGB8888)
-      {
-         fourcc = DRM_FORMAT_XRGB8888;
-      }
-      if (fourcc == DRM_FORMAT_ABGR8888)
-      {
-         fourcc = DRM_FORMAT_XBGR8888;
-      }
+      fourcc = util::drm::drm_opaque_fourcc(fourcc);
    }
    auto buffer =
       zwp_linux_buffer_params_v1_create_immed(params, static_cast<int32_t>(image_create_info.extent.width),

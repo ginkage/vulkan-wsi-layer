@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2025 Arm Limited.
+ * Copyright (c) 2021-2026 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -135,6 +135,22 @@ public:
       return m_supported_formats;
    }
 
+   /* Note: everything except premultiplied-alpha swapchains wants
+    * @ref get_formats_with_opaque_variant instead. */
+
+   /**
+    * @brief Returns the subset of @ref get_formats whose alpha-less variant (see
+    *        util::drm::drm_opaque_fourcc) the compositor also supports with the same modifier.
+    *
+    * OPAQUE swapchains are presented through that variant, so only these formats work with every
+    * composite alpha mode the surface advertises. The reference is valid throughout the lifetime of
+    * this surface.
+    */
+   const util::vector<util::drm::drm_format_pair> &get_formats_with_opaque_variant() const
+   {
+      return m_formats_with_opaque_variant;
+   }
+
    /**
     * @brief Set the next frame callback.
     *
@@ -185,6 +201,8 @@ private:
    wl_surface *wayland_surface;
    /** A list of DRM formats supported by the Wayland compositor on this surface */
    util::vector<util::drm::drm_format_pair> m_supported_formats;
+   /** The subset of @ref m_supported_formats whose alpha-less variant is supported with the same modifier */
+   util::vector<util::drm::drm_format_pair> m_formats_with_opaque_variant;
    /** Surface properties specific to the Wayland surface. */
    surface_properties properties;
 
