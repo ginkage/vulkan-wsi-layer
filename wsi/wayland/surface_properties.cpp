@@ -257,12 +257,13 @@ VkResult surface_properties::get_surface_formats(VkPhysicalDevice physical_devic
    assert(specific_surface);
    if (!supported_formats.size())
    {
-      TRY_LOG_CALL(
-         surface_format_properties_map_init(physical_device, supported_formats, specific_surface->get_formats()));
+      /* Only offer formats that also work for OPAQUE swapchains, which present through the format's
+       * alpha-less variant (see surface::get_formats_with_opaque_variant). */
+      const auto &drm_formats = specific_surface->get_formats_with_opaque_variant();
+      TRY_LOG_CALL(surface_format_properties_map_init(physical_device, supported_formats, drm_formats));
       if (layer::instance_private_data::get(physical_device).has_image_compression_support(physical_device))
       {
-         TRY_LOG_CALL(surface_format_properties_map_add_compression(physical_device, supported_formats,
-                                                                    specific_surface->get_formats()));
+         TRY_LOG_CALL(surface_format_properties_map_add_compression(physical_device, supported_formats, drm_formats));
       }
    }
 

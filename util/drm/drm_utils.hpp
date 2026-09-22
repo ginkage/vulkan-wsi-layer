@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2025 Arm Limited.
+ * Copyright (c) 2019-2026 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -44,6 +44,19 @@ uint32_t vk_to_drm_format(VkFormat vk_format);
 VkFormat drm_to_vk_format(uint32_t drm_format);
 VkFormat drm_to_vk_srgb_format(uint32_t drm_format);
 uint32_t drm_fourcc_format_get_num_planes(uint32_t format);
+
+/**
+ * @brief Get the alpha-less variant of a DRM format, e.g. DRM_FORMAT_XRGB8888 for DRM_FORMAT_ARGB8888.
+ *
+ * Presenting through this variant makes the compositor ignore the alpha channel, which is how
+ * VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR is implemented on Wayland.
+ *
+ * @param drm_format DRM fourcc code.
+ *
+ * @return The DRM fourcc with the alpha channel replaced by padding, or @p drm_format itself if it has
+ *         no alpha channel.
+ */
+uint32_t drm_opaque_fourcc(uint32_t drm_format);
 
 } // namespace drm
 } // namespace util

@@ -164,12 +164,43 @@ struct surface::init_parameters
    wl_surface *surf;
 };
 
+/**
+ * @brief Check whether @p formats also contains the alpha-less variant of @p format with the same modifier.
+ *
+ * Formats without an alpha channel are their own alpha-less variant.
+ *
+ * @param[in] formats The DRM formats the compositor supports.
+ * @param[in] format  The DRM format and modifier to look up the alpha-less variant of.
+ *
+ * @return true if the alpha-less variant is supported with the same modifier, false otherwise.
+ */
+static bool has_opaque_variant(const util::vector<util::drm::drm_format_pair> &formats,
+                               const util::drm::drm_format_pair &format)
+{
+   const uint32_t opaque_fourcc = util::drm::drm_opaque_fourcc(format.fourcc);
+   if (opaque_fourcc == format.fourcc)
+   {
+      return true;
+   }
+
+   for (const auto &other : formats)
+   {
+      if (other.fourcc == opaque_fourcc && other.modifier == format.modifier)
+      {
+         return true;
+      }
+   }
+
+   return false;
+}
+
 surface::surface(const init_parameters &params)
    : wsi::surface()
    , wayland_display(params.display)
    , surface_queue(nullptr)
    , wayland_surface(params.surf)
    , m_supported_formats(params.allocator)
+   , m_formats_with_opaque_variant(params.allocator)
    , properties(this, params.allocator)
    , last_frame_callback(nullptr)
    , present_pending(false)
@@ -311,6 +342,30 @@ bool surface::init()
    {
       WSI_LOG_ERROR("Host got out of memory for DRM format query.");
       return false;
+   }
+
+   /* OPAQUE swapchains are presented through the alpha-less variant of their format (see
+    * swapchain::create_wl_buffer). Like Mesa, only offer formats whose alpha and alpha-less variants
+    * the compositor both supports - here per modifier, so that the modifier picked for an OPAQUE
+    * swapchain is also valid for the variant it is presented with. */
+   if (!m_formats_with_opaque_variant.try_reserve(m_supported_formats.size()))
+   {
+      WSI_LOG_ERROR("Host got out of memory reserving the opaque-variant format list.");
+      return false;
+   }
+
+   for (const auto &format : m_supported_formats)
+   {
+      if (!has_opaque_variant(m_supported_formats, format))
+      {
+         continue;
+      }
+
+      if (!m_formats_with_opaque_variant.try_push_back(format))
+      {
+         WSI_LOG_ERROR("Host got out of memory building the opaque-variant format list.");
+         return false;
+      }
    }
 
    return true;
