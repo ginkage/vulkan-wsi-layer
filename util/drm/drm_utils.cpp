@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2021, 2024-2025 Arm Limited.
+ * Copyright (c) 2019, 2021, 2024-2026 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -75,6 +75,51 @@ VkFormat drm_to_vk_srgb_format(uint32_t drm_format)
    }
 
    return VK_FORMAT_UNDEFINED;
+}
+
+uint32_t drm_opaque_fourcc(uint32_t drm_format)
+{
+   switch (drm_format)
+   {
+   case DRM_FORMAT_ARGB4444:
+      return DRM_FORMAT_XRGB4444;
+   case DRM_FORMAT_ABGR4444:
+      return DRM_FORMAT_XBGR4444;
+   case DRM_FORMAT_RGBA4444:
+      return DRM_FORMAT_RGBX4444;
+   case DRM_FORMAT_BGRA4444:
+      return DRM_FORMAT_BGRX4444;
+   case DRM_FORMAT_ARGB1555:
+      return DRM_FORMAT_XRGB1555;
+   case DRM_FORMAT_ABGR1555:
+      return DRM_FORMAT_XBGR1555;
+   case DRM_FORMAT_RGBA5551:
+      return DRM_FORMAT_RGBX5551;
+   case DRM_FORMAT_BGRA5551:
+      return DRM_FORMAT_BGRX5551;
+   case DRM_FORMAT_ARGB8888:
+      return DRM_FORMAT_XRGB8888;
+   case DRM_FORMAT_ABGR8888:
+      return DRM_FORMAT_XBGR8888;
+   case DRM_FORMAT_RGBA8888:
+      return DRM_FORMAT_RGBX8888;
+   case DRM_FORMAT_BGRA8888:
+      return DRM_FORMAT_BGRX8888;
+   case DRM_FORMAT_ARGB2101010:
+      return DRM_FORMAT_XRGB2101010;
+   case DRM_FORMAT_ABGR2101010:
+      return DRM_FORMAT_XBGR2101010;
+   case DRM_FORMAT_RGBA1010102:
+      return DRM_FORMAT_RGBX1010102;
+   case DRM_FORMAT_BGRA1010102:
+      return DRM_FORMAT_BGRX1010102;
+   case DRM_FORMAT_ARGB16161616F:
+      return DRM_FORMAT_XRGB16161616F;
+   case DRM_FORMAT_ABGR16161616F:
+      return DRM_FORMAT_XBGR16161616F;
+   default:
+      return drm_format;
+   }
 }
 
 /* Returns the number of planes represented by a fourcc format. */
