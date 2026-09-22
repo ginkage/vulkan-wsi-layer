@@ -81,7 +81,10 @@ endif()
 # Backend support
 option(BUILD_WSI_HEADLESS "Build with support for VK_EXT_headless_surface" ON)
 option(BUILD_WSI_WAYLAND "Build with support for VK_KHR_wayland_surface" ON)
-option(BUILD_WSI_DISPLAY "Build with support for VK_KHR_display" ON)
+# The display (VK_KHR_display) backend is off by default: when it is built, an instance that enables
+# VK_KHR_display loses swapchain maintenance1 - the layer reports the feature as unsupported and hides
+# the extensions - even if it presents to X11 or Wayland.
+option(BUILD_WSI_DISPLAY "Build with support for VK_KHR_display" OFF)
 option(BUILD_WSI_X11 "Build with support for VK_KHR_xcb_surface / VK_KHR_xlib_surface" ON)
 
 set(SELECT_EXTERNAL_ALLOCATOR "dma_buf_heaps" CACHE STRING "Select an external system allocator (none, dma_buf_heaps)")

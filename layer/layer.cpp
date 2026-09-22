@@ -222,7 +222,19 @@ struct features
 
       if (writable_layer_features.swapchain_maintenance1 != nullptr)
       {
-         if (instance.is_instance_extension_enabled(VK_KHR_DISPLAY_EXTENSION_NAME))
+#if BUILD_WSI_DISPLAY
+         /* The display backend does not implement swapchain maintenance1, so report it unsupported for
+          * instances that enabled VK_KHR_display - matching the extension filter in
+          * wsi_layer_vkEnumerateDeviceExtensionProperties. */
+         const bool layer_handles_display = instance.is_instance_extension_enabled(VK_KHR_DISPLAY_EXTENSION_NAME);
+#else
+         /* Without the display backend the layer never handles a display surface, and that same filter
+          * is compiled out, so suppressing the feature here would only leave the layer advertising an
+          * extension whose feature it refuses - which fails vkCreateDevice for X11/Wayland apps that
+          * happen to enable VK_KHR_display (the ICD may offer it). */
+         const bool layer_handles_display = false;
+#endif
+         if (layer_handles_display)
          {
             writable_layer_features.swapchain_maintenance1->swapchainMaintenance1 = VK_FALSE;
          }
