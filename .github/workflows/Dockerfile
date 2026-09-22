@@ -17,6 +17,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libx11-xcb-dev \
     libxcb1-dev \
     libxcb-dri3-dev \
+    libxcb-present-dev \
     libxcb-randr0-dev \
     libxcb-shm0-dev \
     libxcb-sync-dev \
@@ -30,8 +31,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
  && apt-get autoremove --yes \
  && rm -rf /var/cache/apt/archives* /var/lib/apt/lists/*
 
-# Current upstream needs Vulkan headers >= 1.4.335, newer than the distro's libvulkan-dev.
-RUN git clone --depth 1 --branch v1.4.335 \
+# Current upstream needs Vulkan headers >= 1.4.353, newer than the distro's libvulkan-dev.
+RUN git clone --depth 1 --branch v1.4.356 \
     https://github.com/KhronosGroup/Vulkan-Headers.git /opt/vulkan-headers
 ENV VULKAN_CXX_INCLUDE=/opt/vulkan-headers/include
 
