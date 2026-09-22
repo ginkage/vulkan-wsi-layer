@@ -54,11 +54,12 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Fetch up-to-date Vulkan headers
-        # The distro's libvulkan-dev is older than the headers current upstream needs (>= 1.4.335,
-        # for the VK_EXT_present_timing types it pulls in unconditionally), so build against a pinned
-        # Vulkan-Headers checkout instead of the system headers.
+        # The distro's libvulkan-dev is older than the headers current upstream needs (>= 1.4.353,
+        # for the VK_KHR_extended_flags / VK_EXT_multisampled_render_to_swapchain types it pulls in
+        # unconditionally), so build against a pinned Vulkan-Headers checkout instead of the system
+        # headers. The pin matches the version upstream validates against (WSI_LAYER_VK_PATCH).
         run: |
-          git clone --depth 1 --branch v1.4.335 \
+          git clone --depth 1 --branch v1.4.356 \
             https://github.com/KhronosGroup/Vulkan-Headers.git "$RUNNER_TEMP/vulkan-headers"
           echo "VULKAN_CXX_INCLUDE=$RUNNER_TEMP/vulkan-headers/include" >> "$GITHUB_ENV"
 
