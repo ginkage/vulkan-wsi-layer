@@ -145,7 +145,16 @@ wsi_layer_vkGetPhysicalDeviceSurfaceCapabilities2KHR(VkPhysicalDevice physicalDe
          }
       }
 
-      return props->get_surface_capabilities(physicalDevice, pSurfaceInfo, pSurfaceCapabilities);
+      TRY(props->get_surface_capabilities(physicalDevice, pSurfaceInfo, pSurfaceCapabilities));
+
+      auto *image_usage_flags_2_create_info = util::find_extension<VkImageUsageFlags2CreateInfoKHR>(
+         VK_STRUCTURE_TYPE_IMAGE_USAGE_FLAGS_2_CREATE_INFO_KHR, pSurfaceCapabilities);
+      if (image_usage_flags_2_create_info != nullptr)
+      {
+         image_usage_flags_2_create_info->usage = pSurfaceCapabilities->surfaceCapabilities.supportedUsageFlags;
+      }
+
+      return VK_SUCCESS;
    }
 
    return instance.disp.GetPhysicalDeviceSurfaceCapabilities2KHR(physicalDevice, pSurfaceInfo, pSurfaceCapabilities);
