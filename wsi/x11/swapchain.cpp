@@ -172,23 +172,18 @@ void x11_image_data::release_x_resources()
 
 swapchain::~swapchain()
 {
-   auto thread_status_lock = std::unique_lock<std::mutex>(m_thread_status_lock);
-
-   if (m_present_event_thread_run)
    {
+      auto thread_status_lock = std::unique_lock<std::mutex>(m_thread_status_lock);
       m_present_event_thread_run = false;
       m_thread_status_cond.notify_all();
-      thread_status_lock.unlock();
-
-      if (m_present_event_thread.joinable())
-      {
-         m_present_event_thread.join();
-      }
-
-      thread_status_lock.lock();
    }
 
-   thread_status_lock.unlock();
+   /* Join whenever the thread exists, even if it has already stopped by itself (an X connection error
+    * or a swapchain error ends it early): destroying a joinable std::thread calls std::terminate. */
+   if (m_present_event_thread.joinable())
+   {
+      m_present_event_thread.join();
+   }
 
    /* Call the base's teardown. The per-image X resources are released afterwards, when the images'
     * x11_image_data is destroyed - once teardown has waited for pending presents and stopped the
@@ -326,16 +321,25 @@ VkResult swapchain::init_platform(VkDevice device, const VkSwapchainCreateInfoKH
    /* DRI3 drives image recycling from Present events on this queue; null for SHM. */
    m_present_special_event = m_presenter->get_present_special_event();
 
+   /* Set the run flag before the thread starts rather than from the thread itself: a swapchain destroyed
+    * before the thread got scheduled would otherwise see it unset, and the thread would then run on a
+    * destroyed swapchain. */
+   {
+      auto thread_status_lock = std::unique_lock<std::mutex>(m_thread_status_lock);
+      m_present_event_thread_run = true;
+   }
    try
    {
       m_present_event_thread = std::thread(&swapchain::present_event_thread, this);
    }
    catch (const std::system_error &)
    {
+      m_present_event_thread_run = false;
       return VK_ERROR_INITIALIZATION_FAILED;
    }
    catch (const std::bad_alloc &)
    {
+      m_present_event_thread_run = false;
       return VK_ERROR_INITIALIZATION_FAILED;
    }
 
@@ -489,7 +493,6 @@ VkResult swapchain::allocate_and_bind_swapchain_image(swapchain_image &image)
 void swapchain::present_event_thread()
 {
    auto thread_status_lock = std::unique_lock<std::mutex>(m_thread_status_lock);
-   m_present_event_thread_run = true;
 
    if (m_use_dri3)
    {
