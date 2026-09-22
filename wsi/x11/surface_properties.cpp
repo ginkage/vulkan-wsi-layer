@@ -197,7 +197,16 @@ static const char *required_instance_extensions[] = {
 VkResult surface_properties::get_required_instance_extensions(util::extension_list &extension_list,
                                                               const uint32_t api_version)
 {
-   UNUSED(api_version);
+   /* These extensions were promoted to core in Vulkan 1.1, so only enable them for older API versions
+    * (as the Wayland backend does). Enabling VK_KHR_get_physical_device_properties2 regardless would make
+    * the loader dispatch vkGetPhysicalDeviceFeatures2 to the ...KHR entrypoint, which the layer only
+    * intercepts when the application enabled the extension itself, so the layer's feature reporting
+    * would be bypassed. */
+   if (api_version >= VK_API_VERSION_1_1)
+   {
+      return VK_SUCCESS;
+   }
+
    return extension_list.add(required_instance_extensions,
                              sizeof(required_instance_extensions) / sizeof(required_instance_extensions[0]));
 }
