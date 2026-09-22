@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Arm Limited.
+ * Copyright (c) 2025-2026 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -68,8 +68,6 @@ public:
                                    uint32_t height, int depth) override;
 
    VkResult present_image(x11_image_data *image_data, uint32_t serial, uint64_t target_msc) override;
-
-   void destroy_image_resources(x11_image_data *image_data) override;
 
 private:
    xcb_connection_t *m_connection = nullptr;

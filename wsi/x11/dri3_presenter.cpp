@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Arm Limited.
+ * Copyright (c) 2025-2026 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -133,6 +133,7 @@ VkResult dri3_presenter::init(xcb_connection_t *connection, xcb_window_t window,
 VkResult dri3_presenter::create_image_resources(swapchain_image &image, x11_image_data *image_data, uint32_t width,
                                                 uint32_t height, int depth)
 {
+   image_data->connection = m_connection;
    image_data->width = width;
    image_data->height = height;
    image_data->depth = depth;
@@ -243,15 +244,6 @@ VkResult dri3_presenter::present_image(x11_image_data *image_data, uint32_t seri
    /* Asynchronous: the swapchain's present_event_thread consumes this pixmap's PresentIdleNotify and
     * recycles the image, so do not block here. */
    return VK_SUCCESS;
-}
-
-void dri3_presenter::destroy_image_resources(x11_image_data *image_data)
-{
-   if (image_data->pixmap != XCB_PIXMAP_NONE)
-   {
-      xcb_free_pixmap(m_connection, image_data->pixmap);
-      image_data->pixmap = XCB_PIXMAP_NONE;
-   }
 }
 
 } /* namespace x11 */
