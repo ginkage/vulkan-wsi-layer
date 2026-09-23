@@ -626,6 +626,34 @@ VKAPI_ATTR VkResult create_instance(const VkInstanceCreateInfo *pCreateInfo, con
    return VK_SUCCESS;
 }
 
+/* FurMark 2.10 requests extendedDynamicState3PolygonMode without checking for it, and crashes when
+ * vkCreateDevice then fails on ICDs that lack it (Mali). Returns the structure it cleared the request in,
+ * so the caller can restore the application's value. */
+static VkPhysicalDeviceExtendedDynamicState3FeaturesEXT *clear_unsupported_polygon_mode(
+   instance_private_data &inst_data, VkPhysicalDevice physical_device, const void *p_next)
+{
+   const auto *requested = util::find_extension<VkPhysicalDeviceExtendedDynamicState3FeaturesEXT>(
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_3_FEATURES_EXT, p_next);
+   if (requested == nullptr || requested->extendedDynamicState3PolygonMode == VK_FALSE)
+   {
+      return nullptr;
+   }
+
+   VkPhysicalDeviceExtendedDynamicState3FeaturesEXT supported = {};
+   supported.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_3_FEATURES_EXT;
+   VkPhysicalDeviceFeatures2KHR features = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2_KHR, &supported, {} };
+   inst_data.disp.GetPhysicalDeviceFeatures2KHR(physical_device, &features);
+   if (supported.extendedDynamicState3PolygonMode != VK_FALSE)
+   {
+      return nullptr;
+   }
+
+   WSI_LOG_WARNING("Ignoring the unsupported extendedDynamicState3PolygonMode feature requested by the application.");
+   auto *writable = const_cast<VkPhysicalDeviceExtendedDynamicState3FeaturesEXT *>(requested);
+   writable->extendedDynamicState3PolygonMode = VK_FALSE;
+   return writable;
+}
+
 VKAPI_ATTR VkResult create_device(VkPhysicalDevice physicalDevice, const VkDeviceCreateInfo *pCreateInfo,
                                   const VkAllocationCallbacks *pAllocator, VkDevice *pDevice)
 {
@@ -791,7 +819,14 @@ VKAPI_ATTR VkResult create_device(VkPhysicalDevice physicalDevice, const VkDevic
    }
 #endif
 
+   auto *cleared_polygon_mode = clear_unsupported_polygon_mode(inst_data, physicalDevice, modified_info.pNext);
+
    const VkResult create_device_result = fpCreateDevice(physicalDevice, &modified_info, pAllocator, pDevice);
+
+   if (cleared_polygon_mode != nullptr)
+   {
+      cleared_polygon_mode->extendedDynamicState3PolygonMode = VK_TRUE;
+   }
 
 #if VULKAN_WSI_LAYER_EXPERIMENTAL
    if (multisampled_render_to_single_sampled_override != nullptr)
