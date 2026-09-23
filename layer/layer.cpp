@@ -689,17 +689,66 @@ static VkResult lower_queue_priorities(VkPhysicalDevice physical_device, util::e
       return VK_SUCCESS;
    }
 
+   /* With the globalPriorityQuery feature enabled, a queue's priority must be one its family lists, so only
+    * lower the queues of families that list LOW. Without the query extensions the application cannot enable
+    * that feature, and there is nothing to check. */
+   util::allocator allocator{ enabled_extensions.get_allocator(), VK_SYSTEM_ALLOCATION_SCOPE_COMMAND };
+   util::vector<VkQueueFamilyGlobalPriorityPropertiesKHR> family_priorities{ allocator };
+   const bool can_query = available_extensions.contains(VK_KHR_GLOBAL_PRIORITY_EXTENSION_NAME) ||
+                          available_extensions.contains(VK_EXT_GLOBAL_PRIORITY_QUERY_EXTENSION_NAME);
+   if (can_query)
+   {
+      auto &instance_data = instance_private_data::get(physical_device);
+      uint32_t family_count = 0;
+      instance_data.disp.GetPhysicalDeviceQueueFamilyProperties2KHR(physical_device, &family_count, nullptr);
+      util::vector<VkQueueFamilyProperties2KHR> family_properties{ allocator };
+      if (!family_properties.try_resize(family_count) || !family_priorities.try_resize(family_count))
+      {
+         return VK_ERROR_OUT_OF_HOST_MEMORY;
+      }
+      for (uint32_t family = 0; family < family_count; family++)
+      {
+         family_priorities[family] = {};
+         family_priorities[family].sType = VK_STRUCTURE_TYPE_QUEUE_FAMILY_GLOBAL_PRIORITY_PROPERTIES_KHR;
+         family_properties[family] = {};
+         family_properties[family].sType = VK_STRUCTURE_TYPE_QUEUE_FAMILY_PROPERTIES_2_KHR;
+         family_properties[family].pNext = &family_priorities[family];
+      }
+      instance_data.disp.GetPhysicalDeviceQueueFamilyProperties2KHR(physical_device, &family_count,
+                                                                    family_properties.data());
+   }
+   auto family_lists_low = [&](uint32_t family) {
+      if (!can_query)
+      {
+         return true;
+      }
+      if (family >= family_priorities.size())
+      {
+         return false;
+      }
+      for (uint32_t p = 0; p < family_priorities[family].priorityCount; p++)
+      {
+         if (family_priorities[family].priorities[p] == VK_QUEUE_GLOBAL_PRIORITY_LOW_KHR)
+         {
+            return true;
+         }
+      }
+      return false;
+   };
+
    if (!queue_infos.try_resize(create_info.queueCreateInfoCount) ||
        !priorities.try_resize(create_info.queueCreateInfoCount))
    {
       return VK_ERROR_OUT_OF_HOST_MEMORY;
    }
 
+   bool lowered = false;
    for (uint32_t i = 0; i < create_info.queueCreateInfoCount; i++)
    {
       queue_infos[i] = create_info.pQueueCreateInfos[i];
       if (util::find_extension<VkDeviceQueueGlobalPriorityCreateInfoKHR>(
-             VK_STRUCTURE_TYPE_DEVICE_QUEUE_GLOBAL_PRIORITY_CREATE_INFO_KHR, queue_infos[i].pNext) != nullptr)
+             VK_STRUCTURE_TYPE_DEVICE_QUEUE_GLOBAL_PRIORITY_CREATE_INFO_KHR, queue_infos[i].pNext) != nullptr ||
+          !family_lists_low(queue_infos[i].queueFamilyIndex))
       {
          continue;
       }
@@ -707,10 +756,14 @@ static VkResult lower_queue_priorities(VkPhysicalDevice physical_device, util::e
       priorities[i] = { VK_STRUCTURE_TYPE_DEVICE_QUEUE_GLOBAL_PRIORITY_CREATE_INFO_KHR, queue_infos[i].pNext,
                         VK_QUEUE_GLOBAL_PRIORITY_LOW_KHR };
       queue_infos[i].pNext = &priorities[i];
+      lowered = true;
    }
 
-   create_info.pQueueCreateInfos = queue_infos.data();
-   TRY_LOG_CALL(enabled_extensions.add(priority_extension));
+   if (lowered)
+   {
+      create_info.pQueueCreateInfos = queue_infos.data();
+      TRY_LOG_CALL(enabled_extensions.add(priority_extension));
+   }
    return VK_SUCCESS;
 }
 
