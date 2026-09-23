@@ -32,7 +32,7 @@ namespace wsi
 {
 namespace wayland
 {
-constexpr int PRESENT_MODES_NUM = 3;
+constexpr int PRESENT_MODES_NUM = 4;
 
 struct surface_format_properties_hasher
 {

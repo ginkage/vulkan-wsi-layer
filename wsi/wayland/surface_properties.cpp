@@ -57,6 +57,7 @@ void surface_properties::populate_present_mode_compatibilities()
    std::array compatible_present_modes_list = {
       present_mode_compatibility{ VK_PRESENT_MODE_FIFO_KHR, 1, { VK_PRESENT_MODE_FIFO_KHR } },
       present_mode_compatibility{ VK_PRESENT_MODE_MAILBOX_KHR, 1, { VK_PRESENT_MODE_MAILBOX_KHR } },
+      present_mode_compatibility{ VK_PRESENT_MODE_IMMEDIATE_KHR, 1, { VK_PRESENT_MODE_IMMEDIATE_KHR } },
       present_mode_compatibility{ VK_PRESENT_MODE_FIFO_LATEST_READY_EXT, 1, { VK_PRESENT_MODE_FIFO_LATEST_READY_EXT } }
    };
    m_compatible_present_modes =
@@ -66,7 +67,8 @@ void surface_properties::populate_present_mode_compatibilities()
 surface_properties::surface_properties(surface *wsi_surface, const util::allocator &allocator)
    : specific_surface(wsi_surface)
    , supported_formats(allocator)
-   , m_supported_modes({ VK_PRESENT_MODE_FIFO_KHR, VK_PRESENT_MODE_MAILBOX_KHR, VK_PRESENT_MODE_FIFO_LATEST_READY_EXT })
+   , m_supported_modes({ VK_PRESENT_MODE_FIFO_KHR, VK_PRESENT_MODE_MAILBOX_KHR, VK_PRESENT_MODE_IMMEDIATE_KHR,
+                         VK_PRESENT_MODE_FIFO_LATEST_READY_EXT })
 {
    this->surface_properties::populate_present_mode_compatibilities();
 }

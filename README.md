@@ -240,7 +240,8 @@ The layer reads the following environment variables at runtime:
 
 On X11 the strategy defaults to zero-copy and is chosen with `WSI_X11_DRI3_COPY`,
 while pacing follows the application's present mode: FIFO is paced to the display,
-and MAILBOX and IMMEDIATE send the newest finished image once per refresh.
+FIFO_RELAXED likewise but shows a late image at once, and MAILBOX and IMMEDIATE
+send the newest finished image once per refresh.
 
 ## Contributing
 
