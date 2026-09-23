@@ -192,9 +192,9 @@ At swapchain creation it picks one of two paths:
   or when forced with `WSI_X11_FORCE_SHM`. The image is copied into an X
   shared-memory segment and blitted.
 
-The default present path is **paced zero-copy** (FIFO). See
-[Environment variables](#environment-variables) to select the GPU-copy strategy
-or to allow non-FIFO (MAILBOX) present modes.
+The default present path is **zero-copy**, paced according to the application's
+present mode. See [Environment variables](#environment-variables) to select the
+GPU-copy strategy.
 
 ### Building with frame instrumentation support
 
@@ -235,16 +235,12 @@ The layer reads the following environment variables at runtime:
 | `VULKAN_WSI_DEBUG_LEVEL=<n>` | Log verbosity threshold: `1` = errors (default), `2` = + warnings, `3` = + info. |
 | `WSI_X11_FORCE_SHM=1` | X11: force the MIT-SHM present path instead of DRI3 + Present. |
 | `WSI_X11_DRI3_COPY=1` | X11 DRI3: present with GPU-copy (`XCB_PRESENT_OPTION_COPY`, the X server blits the pixmap) instead of the default zero-copy (`XCB_PRESENT_OPTION_NONE`). |
-| `WSI_ALLOW_NON_FIFO_PRESENT_MODE=1` | Honour the application's requested present mode instead of forcing FIFO. Required to reach MAILBOX / unpaced presentation; off by default because non-FIFO modes show visual artifacts on some stacks. |
 | `WSI_LOW_PRIORITY_QUEUES=0` | Keep the application's default queue priority. Otherwise the queues of devices that enable `VK_KHR_swapchain` get LOW global priority (unless the application picked one), so that compositor and Xwayland rendering is not stuck behind a GPU-bound application's frames. |
 | `WSI_DISPLAY_DRI_DEV=<path>` | `display` backend only: the DRM device node to use (otherwise auto-detected). |
 
-On X11 the out-of-the-box behaviour is **paced zero-copy**: present mode is forced
-to FIFO and the strategy defaults to zero-copy. Pacing follows the present mode
-(FIFO → paced, MAILBOX → unpaced) once `WSI_ALLOW_NON_FIFO_PRESENT_MODE` is set,
-and the strategy is chosen with `WSI_X11_DRI3_COPY`, giving four combinations
-(paced/unpaced × zero-copy/GPU-copy). Note that some present modes other than
-FIFO can show visual artifacts, which is why FIFO is the default.
+On X11 the strategy defaults to zero-copy and is chosen with `WSI_X11_DRI3_COPY`,
+while pacing follows the application's present mode: FIFO is paced to the display,
+and MAILBOX and IMMEDIATE send the newest finished image once per refresh.
 
 ## Contributing
 
