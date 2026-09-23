@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2019, 2021-2022 Arm Limited.
+ * Copyright (c) 2017-2019, 2021-2022, 2026 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -114,6 +114,22 @@ VkResult surface_properties::get_surface_capabilities(VkPhysicalDevice physical_
       get_surface_present_scaling_and_gravity(surface_scaling_capabilities);
       surface_scaling_capabilities->minScaledImageExtent = pSurfaceCapabilities->surfaceCapabilities.minImageExtent;
       surface_scaling_capabilities->maxScaledImageExtent = pSurfaceCapabilities->surfaceCapabilities.maxImageExtent;
+   }
+
+   /* The swapchain implements present id/wait for X11 surfaces, so report the version 2 capabilities
+    * as well - without them a conforming application never sets the matching swapchain flags. */
+   auto present_id2_surface_cap = util::find_extension<VkSurfaceCapabilitiesPresentId2KHR>(
+      VK_STRUCTURE_TYPE_SURFACE_CAPABILITIES_PRESENT_ID_2_KHR, pSurfaceCapabilities->pNext);
+   if (present_id2_surface_cap != nullptr)
+   {
+      present_id2_surface_cap->presentId2Supported = VK_TRUE;
+   }
+
+   auto present_wait2_surface_cap = util::find_extension<VkSurfaceCapabilitiesPresentWait2KHR>(
+      VK_STRUCTURE_TYPE_SURFACE_CAPABILITIES_PRESENT_WAIT_2_KHR, pSurfaceCapabilities->pNext);
+   if (present_wait2_surface_cap != nullptr)
+   {
+      present_wait2_surface_cap->presentWait2Supported = VK_TRUE;
    }
 
    return VK_SUCCESS;

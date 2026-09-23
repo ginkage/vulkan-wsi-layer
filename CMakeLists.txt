@@ -311,7 +311,8 @@ if(BUILD_WSI_X11)
       wsi/x11/surface.cpp
       wsi/x11/swapchain.cpp
       wsi/x11/shm_presenter.cpp
-      wsi/x11/dri3_presenter.cpp)
+      wsi/x11/dri3_presenter.cpp
+      wsi/x11/present_wait_x11.cpp)
 
    pkg_check_modules(LIBDRM REQUIRED libdrm)
 
