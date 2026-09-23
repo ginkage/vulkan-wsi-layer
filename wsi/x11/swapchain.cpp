@@ -60,6 +60,7 @@
 #include "wsi/extensions/image_compression_control.hpp"
 #include "shm_presenter.hpp"
 #include "dri3_presenter.hpp"
+#include "present_wait_x11.hpp"
 #include "util/drm/drm_utils.hpp"
 
 #include <drm_fourcc.h>
@@ -627,12 +628,12 @@ void swapchain::present_image(const pending_present_request &pending_present)
       set_error_state(present_result == VK_ERROR_DEVICE_LOST ? present_result : VK_ERROR_SURFACE_LOST_KHR);
    }
 
-   /* Only a present that was handed to the X server counts as delivered; on failure set_error_state()
-    * above wakes anything waiting on the present ID with the error. */
-   if (present_result == VK_SUCCESS && m_device_data.is_present_id_enabled())
+   /* Present ID (and so present wait) counts an image as delivered once it has been handed to the X
+    * server; on failure set_error_state() above wakes anything waiting on it with the error instead. */
+   auto *present_id_ext = get_swapchain_extension<wsi_ext_present_id>();
+   if (present_result == VK_SUCCESS && present_id_ext != nullptr)
    {
-      auto *ext = get_swapchain_extension<wsi_ext_present_id>(true);
-      ext->mark_delivered(pending_present.present_id);
+      present_id_ext->mark_delivered(pending_present.present_id);
    }
 
    m_thread_status_cond.notify_all();
@@ -734,11 +735,30 @@ VkResult swapchain::get_free_buffer(uint64_t *timeout)
 VkResult swapchain::add_required_extensions(VkDevice device, const VkSwapchainCreateInfoKHR *swapchain_create_info)
 {
    UNUSED(device);
-   UNUSED(swapchain_create_info);
 
-   if (m_device_data.is_present_id_enabled())
+   constexpr VkSwapchainCreateFlagsKHR present_wait2_mask =
+      (VK_SWAPCHAIN_CREATE_PRESENT_ID_2_BIT_KHR | VK_SWAPCHAIN_CREATE_PRESENT_WAIT_2_BIT_KHR);
+   const bool present_wait2 = (swapchain_create_info->flags & present_wait2_mask) == present_wait2_mask;
+   const bool present_wait = m_device_data.is_present_wait_enabled() || present_wait2;
+
+   /* Present wait waits on present IDs, so it needs the present ID extension as well - including when
+    * the application enabled VK_KHR_present_wait without VK_KHR_present_id, which would otherwise
+    * construct wsi_ext_present_wait_x11 from a null reference below, as the missing-extension assert
+    * is compiled out of Release builds. (Testing present_wait2 here as well would be redundant: it
+    * implies the present-ID-2 flag.) */
+   if (m_device_data.is_present_id_enabled() || m_device_data.is_present_wait_enabled() ||
+       (swapchain_create_info->flags & VK_SWAPCHAIN_CREATE_PRESENT_ID_2_BIT_KHR))
    {
       if (!add_swapchain_extension(m_allocator.make_unique<wsi_ext_present_id>()))
+      {
+         return VK_ERROR_OUT_OF_HOST_MEMORY;
+      }
+   }
+
+   if (present_wait)
+   {
+      if (!add_swapchain_extension(m_allocator.make_unique<wsi_ext_present_wait_x11>(
+             *get_swapchain_extension<wsi_ext_present_id>(true), present_wait2)))
       {
          return VK_ERROR_OUT_OF_HOST_MEMORY;
       }
