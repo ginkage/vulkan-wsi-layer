@@ -60,9 +60,11 @@ static constexpr std::array unsupported_surfaces_ext_array = {
 #if !BUILD_WSI_WAYLAND
    "VK_KHR_wayland_surface",
 #endif
-#if !BUILD_WSI_DISPLAY
-   "VK_KHR_display",
-#endif
+   /* VK_KHR_display is deliberately not listed when the display backend is not built. The Mali ICD offers
+    * it, so applications that present to X11 or Wayland often enable it too, and listing it would withdraw
+    * swapchain maintenance1 and present wait from them. The trade-off: an application presenting through
+    * the ICD's own display swapchain may now use those features on a swapchain the layer passes through,
+    * which the ICD does not implement. That needs DRM master, so never happens under a compositor. */
 };
 
 } // namespace wsi
