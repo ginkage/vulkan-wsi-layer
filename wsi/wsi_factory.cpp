@@ -146,8 +146,7 @@ util::wsi_platform_set find_enabled_layer_platforms(const VkInstanceCreateInfo *
    return ret;
 }
 
-static VkResult get_available_device_extensions(VkPhysicalDevice physical_device,
-                                                util::extension_list &available_extensions)
+VkResult get_available_device_extensions(VkPhysicalDevice physical_device, util::extension_list &available_extensions)
 {
    auto &instance_data = layer::instance_private_data::get(physical_device);
    util::vector<VkExtensionProperties> properties{ available_extensions.get_allocator() };

@@ -171,10 +171,34 @@ swapchain::swapchain(layer::device_private_data &dev_data, const VkAllocationCal
 
 swapchain::~swapchain()
 {
+   bool thread_may_wait_for_x = false;
    {
       auto thread_status_lock = std::unique_lock<std::mutex>(m_thread_status_lock);
       m_present_event_thread_run = false;
+      thread_may_wait_for_x = m_use_dri3 && dri3_present_events_due();
       m_thread_status_cond.notify_all();
+   }
+
+   /* A DRI3 event thread that is blocked waiting for a Present event only sees the stop request once an
+    * event arrives, so provoke one. Should that fail, rather than hang in join(), leave the thread blocked -
+    * and the special-event queue it waits on registered - once it has had a moment to stop by itself. */
+   bool selected_on_root = false;
+   if (thread_may_wait_for_x && m_present_event_thread.joinable() && !wake_present_event_thread(selected_on_root))
+   {
+      auto thread_status_lock = std::unique_lock<std::mutex>(m_thread_status_lock);
+      const bool exited = m_thread_status_cond.wait_for(thread_status_lock, std::chrono::milliseconds(100),
+                                                        [this] { return m_present_event_thread_exited; });
+      thread_status_lock.unlock();
+      if (!exited)
+      {
+         WSI_LOG_ERROR("Failed to wake the Present event thread; abandoning it");
+         {
+            std::lock_guard<std::mutex> control_lock(m_present_event_thread_control->lock);
+            m_present_event_thread_control->abandoned = true;
+         }
+         m_present_event_thread.detach();
+         m_presenter->abandon_present_special_event();
+      }
    }
 
    /* Join whenever the thread exists, even if it has already stopped by itself (an X connection error
@@ -182,6 +206,24 @@ swapchain::~swapchain()
    if (m_present_event_thread.joinable())
    {
       m_present_event_thread.join();
+   }
+
+   if (selected_on_root)
+   {
+      /* An empty event mask frees the event context again. */
+      const xcb_window_t root = xcb_setup_roots_iterator(xcb_get_setup(m_connection)).data->root;
+      const uint32_t event_id = static_cast<dri3_presenter *>(m_presenter.get())->get_present_event_id();
+      xcb_discard_reply(m_connection, xcb_present_select_input_checked(m_connection, event_id, root, 0).sequence);
+      xcb_flush(m_connection);
+   }
+   /* No completion will send an image still waiting behind the present in flight any more. */
+   {
+      auto thread_status_lock = std::unique_lock<std::mutex>(m_thread_status_lock);
+      if (m_held_present.has_value())
+      {
+         unpresent_image(m_held_present->image_index);
+         m_held_present.reset();
+      }
    }
 
    /* Call the base's teardown. The per-image X resources are released afterwards, when the images'
@@ -215,7 +257,6 @@ VkResult swapchain::init_platform(VkDevice device, const VkSwapchainCreateInfoKH
       if (dri3 != nullptr && dri3->is_available(m_connection, m_wsi_surface))
       {
          dri3->set_copy_mode(dri3_copy);
-         dri3->set_immediate_mode(m_present_mode == VK_PRESENT_MODE_IMMEDIATE_KHR);
          m_presenter = std::move(dri3);
          m_use_dri3 = true;
          m_dri3_copy_mode = dri3_copy;
@@ -329,7 +370,8 @@ VkResult swapchain::init_platform(VkDevice device, const VkSwapchainCreateInfoKH
    }
    try
    {
-      m_present_event_thread = std::thread(&swapchain::present_event_thread, this);
+      m_present_event_thread_control = std::make_shared<present_event_thread_control>();
+      m_present_event_thread = std::thread(&swapchain::present_event_thread, this, m_present_event_thread_control);
    }
    catch (const std::system_error &)
    {
@@ -342,13 +384,19 @@ VkResult swapchain::init_platform(VkDevice device, const VkSwapchainCreateInfoKH
       return VK_ERROR_INITIALIZATION_FAILED;
    }
 
-   /*
-    * When VK_PRESENT_MODE_MAILBOX_KHR has been chosen by the application we don't
-    * initialize the page flip thread so the present_image function can be called
-    * during vkQueuePresent.
-    */
-   use_presentation_thread =
-      (m_present_mode != VK_PRESENT_MODE_MAILBOX_KHR && m_present_mode != VK_PRESENT_MODE_IMMEDIATE_KHR);
+   if (m_use_dri3)
+   {
+      static const char xwayland[] = "XWAYLAND";
+      xcb_query_extension_reply_t *reply = xcb_query_extension_reply(
+         m_connection, xcb_query_extension(m_connection, sizeof(xwayland) - 1, xwayland), nullptr);
+      m_is_xwayland = reply != nullptr && reply->present;
+      free(reply);
+   }
+
+   /* Every present mode needs the presentation thread: it waits for rendering to finish before an image
+    * is handed to the X server, which has no other way to know (the image factory's
+    * wait_on_present_fence), and without the thread the base would present without waiting at all. */
+   use_presentation_thread = true;
 
    return VK_SUCCESS;
 }
@@ -488,59 +536,175 @@ VkResult swapchain::allocate_and_bind_swapchain_image(swapchain_image &image)
    return VK_SUCCESS;
 }
 
-void swapchain::present_event_thread()
+bool swapchain::dri3_present_events_due()
 {
+   /* Before the first present there are no events to wait for, and the image vector may still be growing. */
+   if (!m_images_ready)
+   {
+      return false;
+   }
+
+   for (auto &image : m_swapchain_images)
+   {
+      auto *data = image.get_data<x11_image_data>();
+      if (data != nullptr && (data->awaiting_idle || data->awaiting_complete))
+      {
+         return true;
+      }
+   }
+   return false;
+}
+
+void swapchain::handle_dri3_present_event(xcb_generic_event_t *event)
+{
+   /* Every swapchain that selected Present input on the window receives the events for all of its presents
+    * (e.g. a retired swapchain's), so only clear the due flags of events that match one of our presents:
+    * by pixmap, whose XID is unique, or by serial. */
+   auto *generic = reinterpret_cast<xcb_present_generic_event_t *>(event);
+   if (generic->evtype == XCB_PRESENT_IDLE_NOTIFY)
+   {
+      auto *idle = reinterpret_cast<xcb_present_idle_notify_event_t *>(event);
+      if (m_images_ready)
+      {
+         for (auto &image : m_swapchain_images)
+         {
+            auto *data = image.get_data<x11_image_data>();
+            if (data != nullptr && data->pixmap == idle->pixmap)
+            {
+               data->awaiting_idle = false;
+            }
+         }
+      }
+
+      /* The server is done reading the pixmap, so the image can be recycled: hand it to free_image_found
+       * via the free-buffer pool. The unpaced GPU-copy cell recycles through the fixed deferred-release
+       * pipeline in present_image instead. */
+      if (!m_dri3_deferred_release)
+      {
+         if (!m_free_buffer_pool.push_back(idle->pixmap))
+         {
+            WSI_LOG_ERROR("DRI3: free buffer pool full, dropping idle pixmap");
+         }
+         m_thread_status_cond.notify_all();
+      }
+   }
+   else if (generic->evtype == XCB_PRESENT_COMPLETE_NOTIFY)
+   {
+      auto *complete = reinterpret_cast<xcb_present_complete_notify_event_t *>(event);
+      if (complete->kind == XCB_PRESENT_COMPLETE_KIND_PIXMAP && m_images_ready)
+      {
+         for (auto &image : m_swapchain_images)
+         {
+            auto *data = image.get_data<x11_image_data>();
+            if (data != nullptr && data->awaiting_complete && data->present_serial == complete->serial)
+            {
+               data->awaiting_complete = false;
+            }
+         }
+      }
+
+      /* Track the vsync count so present_image can pace the next frame (FIFO target_msc). */
+      m_last_present_msc = complete->msc;
+
+      if (complete->kind == XCB_PRESENT_COMPLETE_KIND_PIXMAP && m_unpaced_serial_in_flight.has_value() &&
+          *m_unpaced_serial_in_flight == complete->serial)
+      {
+         m_unpaced_serial_in_flight.reset();
+         if (m_held_present.has_value())
+         {
+            const pending_present_request held = *m_held_present;
+            m_held_present.reset();
+            send_present(held, 0);
+         }
+      }
+      m_thread_status_cond.notify_all();
+   }
+}
+
+bool swapchain::wake_present_event_thread(bool &selected_on_root)
+{
+   selected_on_root = false;
+
+   /* A PresentNotifyMSC for MSC 0 completes at once, with a PresentCompleteNotify on our event queue. The
+    * requests here are checked so that their errors are reported here, not in the application's event
+    * queue. */
+   xcb_generic_error_t *error =
+      xcb_request_check(m_connection, xcb_present_notify_msc_checked(m_connection, m_window, 0, 0, 0, 0));
+   if (error == nullptr)
+   {
+      return true;
+   }
+   free(error);
+
+   /* The application destroyed the window first (zink does, for one), and the server freed the Present
+    * event context our thread waits on together with it. Its ID is ours to reuse: select it on the root
+    * window and notify there, and the event reaches the same queue. */
+   const xcb_window_t root = xcb_setup_roots_iterator(xcb_get_setup(m_connection)).data->root;
+   const uint32_t event_id = static_cast<dri3_presenter *>(m_presenter.get())->get_present_event_id();
+   error = xcb_request_check(m_connection, xcb_present_select_input_checked(m_connection, event_id, root,
+                                                                            XCB_PRESENT_EVENT_MASK_COMPLETE_NOTIFY));
+   if (error == nullptr)
+   {
+      selected_on_root = true;
+      error = xcb_request_check(m_connection, xcb_present_notify_msc_checked(m_connection, root, 0, 0, 0, 0));
+   }
+   if (error != nullptr)
+   {
+      free(error);
+      return false;
+   }
+   return true;
+}
+
+void swapchain::present_event_thread(std::shared_ptr<present_event_thread_control> control)
+{
+   auto control_lock = std::unique_lock<std::mutex>(control->lock);
+   if (control->abandoned)
+   {
+      return;
+   }
    auto thread_status_lock = std::unique_lock<std::mutex>(m_thread_status_lock);
 
    if (m_use_dri3)
    {
-      /* DRI3: drain Present events. A PresentIdleNotify means the server is done reading that pixmap,
-       * so the image can be recycled - hand the pixmap to free_image_found via the free-buffer pool. */
+      xcb_connection_t *connection = m_connection;
+      xcb_special_event_t *special_event = m_present_special_event;
+
       while (m_present_event_thread_run)
       {
-         thread_status_lock.unlock();
-         xcb_generic_event_t *event = xcb_poll_for_special_event(m_connection, m_present_special_event);
-         thread_status_lock.lock();
-
-         if (event != nullptr)
+         /* Block for a Present event only while one is due - one always arrives then, as long as the window
+          * exists - and otherwise sleep until the next present, so an idle swapchain costs no wakeups.
+          * xcb_wait_for_special_event returns as soon as the event is queued, whichever thread read it from
+          * the connection. */
+         if (!dri3_present_events_due())
          {
-            auto *generic = reinterpret_cast<xcb_present_generic_event_t *>(event);
-            if (generic->evtype == XCB_PRESENT_IDLE_NOTIFY)
-            {
-               /* The unpaced-GPU-copy cell recycles via the fixed deferred-release pipeline in
-                * present_image, so just drain the idle event there; every other cell hands the pixmap
-                * back through the free-buffer pool. */
-               if (!m_dri3_deferred_release)
-               {
-                  auto *idle = reinterpret_cast<xcb_present_idle_notify_event_t *>(event);
-                  if (!m_free_buffer_pool.push_back(idle->pixmap))
-                  {
-                     WSI_LOG_ERROR("DRI3: free buffer pool full, dropping idle pixmap");
-                  }
-                  m_thread_status_cond.notify_all();
-               }
-            }
-            else if (generic->evtype == XCB_PRESENT_COMPLETE_NOTIFY)
-            {
-               /* Track the vsync count so present_image can pace the next frame (FIFO target_msc). */
-               auto *complete = reinterpret_cast<xcb_present_complete_notify_event_t *>(event);
-               m_last_present_msc = complete->msc;
-               m_thread_status_cond.notify_all();
-            }
-            free(event);
+            m_thread_status_cond.wait(thread_status_lock);
             continue;
          }
 
-         if (xcb_connection_has_error(m_connection))
+         thread_status_lock.unlock();
+         control_lock.unlock();
+         xcb_generic_event_t *event = xcb_wait_for_special_event(connection, special_event);
+         control_lock.lock();
+         if (control->abandoned)
          {
+            free(event);
+            return;
+         }
+         thread_status_lock.lock();
+
+         if (event == nullptr)
+         {
+            /* The connection has failed. */
             break;
          }
 
-         /* No event ready: brief wait (also bounds shutdown latency - the destructor notifies us). */
-         m_thread_status_cond.wait_for(thread_status_lock, std::chrono::milliseconds(2));
+         handle_dri3_present_event(event);
+         free(event);
       }
 
       m_present_event_thread_run = false;
+      m_present_event_thread_exited = true;
       m_thread_status_cond.notify_all();
       return;
    }
@@ -589,27 +753,57 @@ void swapchain::present_event_thread()
    }
 
    m_present_event_thread_run = false;
+   m_present_event_thread_exited = true;
    m_thread_status_cond.notify_all();
 }
 
 void swapchain::present_image(const pending_present_request &pending_present)
 {
-   auto image_data = m_swapchain_images[pending_present.image_index].get_data<x11_image_data>();
    auto thread_status_lock = std::unique_lock<std::mutex>(m_thread_status_lock);
 
    /* swapchain_base::init() has returned by the time an image can be presented, so m_swapchain_images
     * is now stable and the present event thread may walk it. */
    m_images_ready = true;
 
-   m_send_sbc++;
-   uint32_t serial = static_cast<uint32_t>(m_send_sbc);
+   const bool paced =
+      (m_present_mode == VK_PRESENT_MODE_FIFO_KHR || m_present_mode == VK_PRESENT_MODE_FIFO_RELAXED_KHR);
+
+   if (m_use_dri3 && !m_dri3_deferred_release && !paced)
+   {
+      /* MAILBOX/IMMEDIATE: keep at most one present in flight and replace the image waiting behind it with
+       * each newer one, releasing the replaced image straight back to the application; the event thread
+       * sends the waiting image when the present in flight completes. The server then gets one present
+       * per refresh, always the newest image, instead of every frame the application renders - Xwayland
+       * falls behind the compositor when flooded with presents it can only discard. */
+      if (m_unpaced_serial_in_flight.has_value() && m_present_event_thread_run)
+      {
+         if (m_held_present.has_value())
+         {
+            /* get_free_buffer waits on m_thread_status_cond, not on the base's semaphore. */
+            unpresent_image(m_held_present->image_index);
+            m_thread_status_cond.notify_all();
+         }
+         m_held_present = pending_present;
+         return;
+      }
+      send_present(pending_present, 0);
+      return;
+   }
+
+   /* A switch to a paced present mode supersedes an image still waiting from an unpaced one. */
+   if (m_held_present.has_value())
+   {
+      unpresent_image(m_held_present->image_index);
+      m_held_present.reset();
+      m_thread_status_cond.notify_all();
+   }
 
    /* FIFO: schedule each frame one vsync past the last completed present (strictly increasing) so the
     * server paces presents to the display refresh instead of releasing them in bursts. Other present
     * modes present as soon as possible (target_msc 0). If no Complete events arrive, m_last_present_msc
     * stays 0 and the targets fall in the past, degrading gracefully to as-soon-as-possible. */
    uint64_t target_msc = 0;
-   if (m_present_mode == VK_PRESENT_MODE_FIFO_KHR || m_present_mode == VK_PRESENT_MODE_FIFO_RELAXED_KHR)
+   if (paced)
    {
       m_target_msc = m_target_msc + 1;
       if (m_last_present_msc + 1 > m_target_msc)
@@ -619,9 +813,49 @@ void swapchain::present_image(const pending_present_request &pending_present)
       target_msc = m_target_msc;
    }
 
+   send_present(pending_present, target_msc);
+
+   if (!m_use_dri3)
+   {
+      /* SHM completes synchronously inside present_image, so the image is free to reuse now. DRI3
+       * leaves it presented until its PresentIdleNotify recycles it (present_event_thread ->
+       * m_free_buffer_pool -> free_image_found). */
+      thread_status_lock.unlock();
+      unpresent_image(pending_present.image_index);
+   }
+}
+
+void swapchain::send_present(const pending_present_request &pending_present, uint64_t target_msc)
+{
+   auto image_data = m_swapchain_images[pending_present.image_index].get_data<x11_image_data>();
+
+   m_send_sbc++;
+   uint32_t serial = static_cast<uint32_t>(m_send_sbc);
+
+   const bool paced =
+      (m_present_mode == VK_PRESENT_MODE_FIFO_KHR || m_present_mode == VK_PRESENT_MODE_FIFO_RELAXED_KHR);
+
+   if (m_use_dri3)
+   {
+      /* Unpaced presents skip the wait for the next vblank: IMMEDIATE allows tearing, and on Xwayland
+       * nothing can tear, which lets a MAILBOX image reach the compositor a refresh sooner. */
+      const bool async = !paced && (m_present_mode == VK_PRESENT_MODE_IMMEDIATE_KHR || m_is_xwayland);
+      static_cast<dri3_presenter *>(m_presenter.get())->set_immediate_mode(async);
+
+      image_data->awaiting_idle = true;
+      image_data->awaiting_complete = true;
+      image_data->present_serial = serial;
+   }
+
    VkResult present_result = m_presenter->present_image(image_data, serial, target_msc);
+   if (present_result == VK_SUCCESS && m_use_dri3 && !m_dri3_deferred_release && !paced)
+   {
+      m_unpaced_serial_in_flight = serial;
+   }
    if (present_result != VK_SUCCESS)
    {
+      image_data->awaiting_idle = false;
+      image_data->awaiting_complete = false;
       WSI_LOG_ERROR("Failed to present image using presentation strategy: %d", present_result);
       /* A failed present never completes, and this runs on the presentation thread where the result
        * cannot be returned to the application. Fault the swapchain so that the next acquire/present
@@ -656,14 +890,6 @@ void swapchain::present_image(const pending_present_request &pending_present)
          unpresent_image(static_cast<uint32_t>(oldest));
          m_thread_status_cond.notify_all();
       }
-   }
-   else if (!m_use_dri3)
-   {
-      /* SHM completes synchronously inside present_image, so the image is free to reuse now. DRI3
-       * leaves it presented until its PresentIdleNotify recycles it (present_event_thread ->
-       * m_free_buffer_pool -> free_image_found). */
-      thread_status_lock.unlock();
-      unpresent_image(pending_present.image_index);
    }
 }
 

@@ -84,6 +84,11 @@ void destroy_surface_swapchain(swapchain_base *swapchain, layer::device_private_
 util::wsi_platform_set find_enabled_layer_platforms(const VkInstanceCreateInfo *pCreateInfo);
 
 /**
+ * @brief Add the device extensions that @p physical_device supports to @p available_extensions.
+ */
+VkResult get_available_device_extensions(VkPhysicalDevice physical_device, util::extension_list &available_extensions);
+
+/**
  * @brief Add extra extensions that the layer requires to support the specified list of enabled platforms.
  *
  * @details Check whether @p phys_dev has support for the extensions required by the layer in order to support the

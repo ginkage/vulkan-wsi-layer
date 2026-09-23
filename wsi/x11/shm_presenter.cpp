@@ -834,10 +834,15 @@ VkResult shm_presenter::present_image(x11_image_data *image_data, uint32_t /*ser
       return VK_ERROR_UNKNOWN;
    }
 
-   xcb_shm_put_image(m_connection, m_window, m_gc, static_cast<uint16_t>(image_data->width),
-                     static_cast<uint16_t>(image_data->height), 0, 0, static_cast<uint16_t>(image_data->width),
-                     static_cast<uint16_t>(image_data->height), 0, 0, static_cast<uint8_t>(image_data->depth),
-                     XCB_IMAGE_FORMAT_Z_PIXMAP, 0, active_seg, 0);
+   /* Checked, with the reply discarded: if the application has already destroyed the window, the error is
+    * dropped instead of reaching its event queue, where Xlib's default error handler would exit. */
+   xcb_discard_reply(
+      m_connection,
+      xcb_shm_put_image_checked(m_connection, m_window, m_gc, static_cast<uint16_t>(image_data->width),
+                                static_cast<uint16_t>(image_data->height), 0, 0,
+                                static_cast<uint16_t>(image_data->width), static_cast<uint16_t>(image_data->height), 0,
+                                0, static_cast<uint8_t>(image_data->depth), XCB_IMAGE_FORMAT_Z_PIXMAP, 0, active_seg, 0)
+         .sequence);
 
    auto current_time = std::chrono::steady_clock::now();
    auto time_since_last = std::chrono::duration_cast<std::chrono::microseconds>(current_time - m_last_frame_time);
