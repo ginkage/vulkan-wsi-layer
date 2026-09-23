@@ -837,9 +837,12 @@ void swapchain::send_present(const pending_present_request &pending_present, uin
 
    if (m_use_dri3)
    {
-      /* Unpaced presents skip the wait for the next vblank: IMMEDIATE allows tearing, and on Xwayland
-       * nothing can tear, which lets a MAILBOX image reach the compositor a refresh sooner. */
-      const bool async = !paced && (m_present_mode == VK_PRESENT_MODE_IMMEDIATE_KHR || m_is_xwayland);
+      /* PresentOptionAsync presents an image whose target MSC has already passed straight away instead of at
+       * the next vblank. That is what IMMEDIATE and FIFO_RELAXED ask for, at the risk of tearing; on Xwayland
+       * nothing can tear, which lets a MAILBOX image reach the compositor a refresh sooner too. */
+      const bool async = m_present_mode == VK_PRESENT_MODE_IMMEDIATE_KHR ||
+                         m_present_mode == VK_PRESENT_MODE_FIFO_RELAXED_KHR ||
+                         (m_present_mode == VK_PRESENT_MODE_MAILBOX_KHR && m_is_xwayland);
       static_cast<dri3_presenter *>(m_presenter.get())->set_immediate_mode(async);
 
       image_data->awaiting_idle = true;

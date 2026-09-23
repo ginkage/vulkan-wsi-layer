@@ -215,18 +215,23 @@ VkResult swapchain::init_platform(VkDevice device, const VkSwapchainCreateInfoKH
    }
 
    /*
-    * When VK_PRESENT_MODE_MAILBOX_KHR or VK_PRESENT_MODE_FIFO_LATEST_READY_EXT has
-    * been chosen by the application we don't initialize the page flip thread
-    * so the present_image function can be called during vkQueuePresent.
+    * When VK_PRESENT_MODE_MAILBOX_KHR, VK_PRESENT_MODE_IMMEDIATE_KHR or
+    * VK_PRESENT_MODE_FIFO_LATEST_READY_EXT has been chosen by the application we
+    * don't initialize the page flip thread so the present_image function can be
+    * called during vkQueuePresent. Only FIFO waits for frame callbacks; the other
+    * modes commit every image and the compositor shows the newest at each vblank,
+    * so IMMEDIATE behaves like MAILBOX (a compositor never tears without the
+    * tearing-control protocol).
     *
     * Without explicit sync, though, the presentation thread is what waits for rendering to finish before a
     * buffer is committed (the image factory's wait_on_present_fence): without it the compositor would be
     * handed buffers the GPU is still rendering, so it is needed in every present mode.
     */
    const bool has_explicit_sync = (m_wsi_surface->get_surface_sync_interface() != nullptr);
-   use_presentation_thread = !has_explicit_sync || (WAYLAND_FIFO_PRESENTATION_THREAD_ENABLED &&
-                                                    (m_present_mode != VK_PRESENT_MODE_FIFO_LATEST_READY_EXT) &&
-                                                    (m_present_mode != VK_PRESENT_MODE_MAILBOX_KHR));
+   use_presentation_thread =
+      !has_explicit_sync ||
+      (WAYLAND_FIFO_PRESENTATION_THREAD_ENABLED && (m_present_mode != VK_PRESENT_MODE_FIFO_LATEST_READY_EXT) &&
+       (m_present_mode != VK_PRESENT_MODE_MAILBOX_KHR) && (m_present_mode != VK_PRESENT_MODE_IMMEDIATE_KHR));
 
    /* Keep the alpha channel only when the app asked for a premultiplied-alpha surface; otherwise the
     * OPAQUE emulation in create_wl_buffer drops it (ARGB->XRGB). */
