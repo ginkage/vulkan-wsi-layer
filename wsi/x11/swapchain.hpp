@@ -68,13 +68,6 @@ namespace wsi
 namespace x11
 {
 
-struct pending_completion
-{
-   uint32_t serial;
-   uint64_t present_id;
-   std::optional<std::chrono::steady_clock::time_point> timestamp;
-};
-
 /**
  * @brief Backend-specific data attached to each swapchain image.
  *
@@ -109,7 +102,6 @@ struct x11_image_data : public swapchain_image_data
 
    external_memory external_mem;
    xcb_pixmap_t pixmap = XCB_PIXMAP_NONE;
-   std::vector<pending_completion> pending_completions;
 
    xcb_shm_seg_t shm_seg = XCB_NONE;
    int shm_id = -1;

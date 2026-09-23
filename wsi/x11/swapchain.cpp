@@ -709,48 +709,9 @@ void swapchain::present_event_thread(std::shared_ptr<present_event_thread_contro
       return;
    }
 
-   while (m_present_event_thread_run)
-   {
-      auto assume_forward_progress = false;
-
-      /* This thread is started from init_platform(), while swapchain_base::init() still has to create
-       * the images - it grows m_swapchain_images without holding m_thread_status_lock, so walking the
-       * vector now would race a reallocation. m_images_ready is set by the first present_image(),
-       * which cannot run before init() has returned, and pending completions only exist after one. */
-      if (m_images_ready)
-      {
-         for (auto &image : m_swapchain_images)
-         {
-            if (image.get_status() == swapchain_image::UNALLOCATED)
-            {
-               continue;
-            }
-
-            auto data = image.get_data<x11_image_data>();
-            if (data != nullptr && data->pending_completions.size() != 0)
-            {
-               assume_forward_progress = true;
-               break;
-            }
-         }
-      }
-
-      if (!assume_forward_progress)
-      {
-         m_thread_status_cond.wait(thread_status_lock);
-         continue;
-      }
-
-      if (error_has_occured())
-      {
-         break;
-      }
-
-      thread_status_lock.unlock();
-
-      thread_status_lock.lock();
-      std::this_thread::sleep_for(std::chrono::milliseconds(1)); // Short polling interval
-   }
+   /* SHM presents complete synchronously, so there are no events to wait for: the thread only keeps
+    * m_present_event_thread_run set, which get_free_buffer checks, until the swapchain is destroyed. */
+   m_thread_status_cond.wait(thread_status_lock, [this] { return !m_present_event_thread_run; });
 
    m_present_event_thread_run = false;
    m_present_event_thread_exited = true;
