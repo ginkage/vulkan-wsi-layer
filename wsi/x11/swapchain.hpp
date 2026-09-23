@@ -129,6 +129,11 @@ struct x11_image_data : public swapchain_image_data
    void *cpu_buffer = nullptr;
    size_t cpu_buffer_size = 0;
 
+   /** DRI3: the PresentIdleNotify / PresentCompleteNotify of this image's last present are still due. */
+   bool awaiting_idle = false;
+   bool awaiting_complete = false;
+   uint32_t present_serial = 0;
+
    VkDevice device = VK_NULL_HANDLE;
    layer::device_private_data *device_data = nullptr;
 };
@@ -206,7 +211,40 @@ private:
     */
    bool free_image_found();
 
-   void present_event_thread();
+   /**
+    * @brief Lets the destructor abandon an event thread it cannot join (see ~swapchain). The thread holds
+    * @c lock whenever it uses the swapchain, and stops without touching it once @c abandoned is set.
+    */
+   struct present_event_thread_control
+   {
+      std::mutex lock;
+      bool abandoned = false;
+   };
+
+   void present_event_thread(std::shared_ptr<present_event_thread_control> control);
+
+   /**
+    * @brief Hand a ready image to the presenter. Needs m_thread_status_lock.
+    *
+    * @param target_msc The MSC to present at, 0 for as soon as possible.
+    */
+   void send_present(const pending_present_request &pending_present, uint64_t target_msc);
+
+   /** @brief DRI3: whether a Present event is still due for any image. Needs m_thread_status_lock. */
+   bool dri3_present_events_due();
+
+   /** @brief DRI3: process one Present event. Needs m_thread_status_lock. */
+   void handle_dri3_present_event(xcb_generic_event_t *event);
+
+   /**
+    * @brief DRI3: make the server send a Present event now, to wake an event thread blocked waiting for one.
+    *
+    * @param[out] selected_on_root Set when the swapchain's window no longer exists and the event context was
+    *                              selected on the root window instead, to be deselected once the thread has stopped.
+    *
+    * @return false if no event will arrive.
+    */
+   bool wake_present_event_thread(bool &selected_on_root);
 
    xcb_connection_t *m_connection;
    xcb_window_t m_window;
@@ -233,6 +271,18 @@ private:
     *  cell, where buffers must free immediately for the app to run ahead; every other cell recycles
     *  via IdleNotify. */
    bool m_dri3_deferred_release = false;
+
+   /** @brief The X server is Xwayland, which presents by handing whole buffers to the compositor, so
+    *  presenting without waiting for vblank cannot tear. */
+   bool m_is_xwayland = false;
+
+   /** @brief DRI3 MAILBOX/IMMEDIATE: serial of the present sent to the server whose PresentCompleteNotify
+    *  is still due. At most one such present is in flight; see @ref m_held_present. */
+   std::optional<uint32_t> m_unpaced_serial_in_flight;
+
+   /** @brief DRI3 MAILBOX/IMMEDIATE: the newest ready image, sent once the present in flight completes.
+    *  A newer image replaces it, and the replaced image returns to the application unpresented. */
+   std::optional<pending_present_request> m_held_present;
 
    /** @brief Fixed-latency recycle pipeline depth (see @ref m_dri3_deferred_release). */
    static constexpr int DRI3_DEFER_FRAMES = 2;
@@ -266,6 +316,9 @@ private:
     */
    bool m_images_ready = false;
    std::thread m_present_event_thread;
+   std::shared_ptr<present_event_thread_control> m_present_event_thread_control;
+   /** @brief Set by the event thread, under m_thread_status_lock, when it finishes. */
+   bool m_present_event_thread_exited = false;
    std::mutex m_thread_status_lock;
    std::condition_variable m_thread_status_cond;
    util::ring_buffer<xcb_pixmap_t, 16> m_free_buffer_pool;

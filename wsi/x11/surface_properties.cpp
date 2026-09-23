@@ -82,7 +82,10 @@ VkResult surface_properties::get_surface_capabilities(VkPhysicalDevice physical_
 {
    /* Image count limits */
    get_surface_capabilities_common(physical_device, surface_capabilities);
-   surface_capabilities->minImageCount = 4;
+   /* One image on screen (held until PresentIdleNotify), one queued and one being rendered keep a FIFO
+    * swapchain busy without stalling. Every image beyond that is a frame of latency for applications
+    * that ask for minImageCount + 1. */
+   surface_capabilities->minImageCount = 3;
 
    int depth;
    specific_surface->get_size_and_depth(&surface_capabilities->currentExtent.width,

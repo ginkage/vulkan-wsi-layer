@@ -80,6 +80,17 @@ public:
       return m_special_event;
    }
 
+   /** @brief The Present event context ID that @ref get_present_special_event receives events for. */
+   uint32_t get_present_event_id() const
+   {
+      return m_event_id;
+   }
+
+   void abandon_present_special_event() override
+   {
+      m_special_event = nullptr;
+   }
+
    /**
     * @brief Enable "copy" presentation mode (WSI_X11_DRI3_COPY).
     *

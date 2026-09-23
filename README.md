@@ -236,6 +236,7 @@ The layer reads the following environment variables at runtime:
 | `WSI_X11_FORCE_SHM=1` | X11: force the MIT-SHM present path instead of DRI3 + Present. |
 | `WSI_X11_DRI3_COPY=1` | X11 DRI3: present with GPU-copy (`XCB_PRESENT_OPTION_COPY`, the X server blits the pixmap) instead of the default zero-copy (`XCB_PRESENT_OPTION_NONE`). |
 | `WSI_ALLOW_NON_FIFO_PRESENT_MODE=1` | Honour the application's requested present mode instead of forcing FIFO. Required to reach MAILBOX / unpaced presentation; off by default because non-FIFO modes show visual artifacts on some stacks. |
+| `WSI_LOW_PRIORITY_QUEUES=0` | Keep the application's default queue priority. Otherwise the queues of devices that enable `VK_KHR_swapchain` get LOW global priority (unless the application picked one), so that compositor and Xwayland rendering is not stuck behind a GPU-bound application's frames. |
 | `WSI_DISPLAY_DRI_DEV=<path>` | `display` backend only: the DRM device node to use (otherwise auto-detected). |
 
 On X11 the out-of-the-box behaviour is **paced zero-copy**: present mode is forced

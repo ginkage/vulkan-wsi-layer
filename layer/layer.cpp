@@ -654,6 +654,66 @@ static VkPhysicalDeviceExtendedDynamicState3FeaturesEXT *clear_unsupported_polyg
    return writable;
 }
 
+/* The compositor, and Xwayland's glamor when it copies a presented frame, render on the same GPU as the
+ * application. A GPU-bound application at the default queue priority keeps that work waiting behind its
+ * in-flight frames, so each presented frame reaches the screen after a varying part of the next one has
+ * rendered - on Mali, frame pacing jitter of up to a whole application frame. Give the queues of presenting
+ * applications LOW global priority, so the presentation work runs first, unless the application chose a
+ * priority itself or WSI_LOW_PRIORITY_QUEUES=0. Lowering the priority below the default never requires
+ * permission. The queue create infos are rewritten into @p queue_infos and @p priorities, which must outlive
+ * the call down. */
+static VkResult lower_queue_priorities(VkPhysicalDevice physical_device, util::extension_list &enabled_extensions,
+                                       VkDeviceCreateInfo &create_info,
+                                       util::vector<VkDeviceQueueCreateInfo> &queue_infos,
+                                       util::vector<VkDeviceQueueGlobalPriorityCreateInfoKHR> &priorities)
+{
+   const char *env = std::getenv("WSI_LOW_PRIORITY_QUEUES");
+   if ((env != nullptr && std::strcmp(env, "0") == 0) || !enabled_extensions.contains(VK_KHR_SWAPCHAIN_EXTENSION_NAME))
+   {
+      return VK_SUCCESS;
+   }
+
+   util::extension_list available_extensions{ enabled_extensions.get_allocator() };
+   TRY_LOG_CALL(wsi::get_available_device_extensions(physical_device, available_extensions));
+   const char *priority_extension = nullptr;
+   if (available_extensions.contains(VK_KHR_GLOBAL_PRIORITY_EXTENSION_NAME))
+   {
+      priority_extension = VK_KHR_GLOBAL_PRIORITY_EXTENSION_NAME;
+   }
+   else if (available_extensions.contains(VK_EXT_GLOBAL_PRIORITY_EXTENSION_NAME))
+   {
+      priority_extension = VK_EXT_GLOBAL_PRIORITY_EXTENSION_NAME;
+   }
+   else
+   {
+      return VK_SUCCESS;
+   }
+
+   if (!queue_infos.try_resize(create_info.queueCreateInfoCount) ||
+       !priorities.try_resize(create_info.queueCreateInfoCount))
+   {
+      return VK_ERROR_OUT_OF_HOST_MEMORY;
+   }
+
+   for (uint32_t i = 0; i < create_info.queueCreateInfoCount; i++)
+   {
+      queue_infos[i] = create_info.pQueueCreateInfos[i];
+      if (util::find_extension<VkDeviceQueueGlobalPriorityCreateInfoKHR>(
+             VK_STRUCTURE_TYPE_DEVICE_QUEUE_GLOBAL_PRIORITY_CREATE_INFO_KHR, queue_infos[i].pNext) != nullptr)
+      {
+         continue;
+      }
+
+      priorities[i] = { VK_STRUCTURE_TYPE_DEVICE_QUEUE_GLOBAL_PRIORITY_CREATE_INFO_KHR, queue_infos[i].pNext,
+                        VK_QUEUE_GLOBAL_PRIORITY_LOW_KHR };
+      queue_infos[i].pNext = &priorities[i];
+   }
+
+   create_info.pQueueCreateInfos = queue_infos.data();
+   TRY_LOG_CALL(enabled_extensions.add(priority_extension));
+   return VK_SUCCESS;
+}
+
 VKAPI_ATTR VkResult create_device(VkPhysicalDevice physicalDevice, const VkDeviceCreateInfo *pCreateInfo,
                                   const VkAllocationCallbacks *pAllocator, VkDevice *pDevice)
 {
@@ -727,6 +787,8 @@ VKAPI_ATTR VkResult create_device(VkPhysicalDevice physicalDevice, const VkDevic
 #endif
 
    VkPhysicalDeviceMaintenance9FeaturesKHR maintenance9_features = {};
+   util::vector<VkDeviceQueueCreateInfo> low_priority_queue_infos{ allocator };
+   util::vector<VkDeviceQueueGlobalPriorityCreateInfoKHR> low_priorities{ allocator };
    const util::wsi_platform_set &enabled_platforms = inst_data.get_enabled_platforms();
    if (!enabled_platforms.empty())
    {
@@ -763,6 +825,9 @@ VKAPI_ATTR VkResult create_device(VkPhysicalDevice physicalDevice, const VkDevic
             modified_info.pNext = &maintenance9_features;
          }
       }
+
+      TRY_LOG_CALL(lower_queue_priorities(physicalDevice, enabled_extensions, modified_info, low_priority_queue_infos,
+                                          low_priorities));
 
       TRY_LOG_CALL(enabled_extensions.get_extension_strings(modified_enabled_extensions));
 

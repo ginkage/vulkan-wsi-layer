@@ -87,6 +87,14 @@ public:
    {
       return nullptr;
    }
+
+   /**
+    * @brief Give up the special-event queue without unregistering it, because a thread that can no longer
+    * be joined may still be blocked waiting on it.
+    */
+   virtual void abandon_present_special_event()
+   {
+   }
 };
 
 } /* namespace x11 */

@@ -228,10 +228,14 @@ VkResult dri3_presenter::present_image(x11_image_data *image_data, uint32_t seri
       /* IMMEDIATE: present as soon as possible without waiting for vblank (tearing permitted). */
       options |= XCB_PRESENT_OPTION_ASYNC;
    }
-   xcb_present_pixmap(m_connection, m_window, image_data->pixmap, serial, XCB_NONE /* valid */, XCB_NONE /* update */,
-                      0 /* x_off */, 0 /* y_off */, XCB_NONE /* target_crtc */, XCB_NONE /* wait_fence */,
-                      XCB_NONE /* idle_fence */, options, target_msc, 0 /* divisor */, 0 /* remainder */,
-                      0 /* notifies_len */, nullptr);
+   /* Checked, with the reply discarded: if the application has already destroyed the window, the error is
+    * dropped instead of reaching its event queue, where Xlib's default error handler would exit. */
+   xcb_discard_reply(m_connection, xcb_present_pixmap_checked(
+                                      m_connection, m_window, image_data->pixmap, serial, XCB_NONE /* valid */,
+                                      XCB_NONE /* update */, 0 /* x_off */, 0 /* y_off */, XCB_NONE /* target_crtc */,
+                                      XCB_NONE /* wait_fence */, XCB_NONE /* idle_fence */, options, target_msc,
+                                      0 /* divisor */, 0 /* remainder */, 0 /* notifies_len */, nullptr)
+                                      .sequence);
 
    int flush_result = xcb_flush(m_connection);
    if (flush_result <= 0)
