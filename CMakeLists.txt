@@ -81,6 +81,9 @@ endif()
 # Backend support
 option(BUILD_WSI_HEADLESS "Build with support for VK_EXT_headless_surface" ON)
 option(BUILD_WSI_WAYLAND "Build with support for VK_KHR_wayland_surface" ON)
+# Direct-to-display presentation is not a use case on these targets, and building the display backend
+# also costs X11/Wayland applications swapchain maintenance1 whenever they enable VK_KHR_display (see
+# populate_supported_layer_features() in layer/layer.cpp), so leave it off.
 option(BUILD_WSI_DISPLAY "Build with support for VK_KHR_display" OFF)
 option(BUILD_WSI_X11 "Build with support for VK_KHR_xcb_surface / VK_KHR_xlib_surface" ON)
 
