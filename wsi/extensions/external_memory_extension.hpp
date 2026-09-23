@@ -35,8 +35,6 @@
 #include <util/macros.hpp>
 #include "util/drm/drm_utils.hpp"
 
-#include <layer/wsi_layer_experimental.hpp>
-
 #include <wsi/image_backing_memory_external.hpp>
 #include <wsi/wsi_alloc_utils.hpp>
 
@@ -49,7 +47,7 @@ namespace wsi
 struct external_image_create_info
 {
    wsialloc_format selected_format;
-   VkImageCreateFlags2KHR flags;
+   VkImageCreateFlags flags;
    VkExtent3D extent;
    bool explicit_compression;
 };
@@ -109,7 +107,7 @@ public:
 private:
    wsialloc_allocate_result m_wsialloc_selected_format;
 
-   VkImageCreateFlags2KHR m_create_flags;
+   VkImageCreateFlags m_create_flags;
    VkExtent3D m_create_extent;
    bool m_use_fixed_rate_compression;
    uint32_t m_prop_plane_count;
