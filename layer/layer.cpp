@@ -43,6 +43,13 @@
 #include "wsi/extensions/present_timing.hpp"
 #include "util/log.hpp"
 #include "util/macros.hpp"
+
+#if WSI_LAYER_HAVE_LIBDRM
+#include <optional>
+#include <sys/stat.h>
+#include <sys/sysmacros.h>
+#include <xf86drm.h>
+#endif
 #include "util/helpers.hpp"
 
 #define VK_LAYER_API_VERSION VK_MAKE_VERSION(1, 2, VK_HEADER_VERSION)
@@ -461,6 +468,147 @@ VkResult validate_requested_layer_features(VkPhysicalDevice physical_device, con
    }
 
    return VK_SUCCESS;
+}
+
+/* The Mali kernel driver has no DRM device, so its Vulkan driver cannot offer VK_EXT_physical_device_drm - and
+ * Mesa then cannot tie a DRM device to it: zink can back neither gbm nor EGL on a DRM device, which a compositor on
+ * zink needs, and zink clients of any compositor that names its DRM device (Wayland dma-buf feedback) fall back to
+ * copying every frame through the CPU. Its buffers are dma-bufs shared through the display controller, so report
+ * the DRM device of that for the physical device: the first DRM device with a render node, as libmali's EGL reports
+ * it, or the one of the node WSI_FAKE_DRM_DEVICE names (e.g. /dev/dri/card0). WSI_FAKE_DRM_DEVICE=0 disables it.
+ * Only for a device whose driver reports no DRM device of its own. Returns null when disabled or none is found. */
+static const VkPhysicalDeviceDrmPropertiesEXT *fake_drm_properties()
+{
+#if WSI_LAYER_HAVE_LIBDRM
+   static const std::optional<VkPhysicalDeviceDrmPropertiesEXT> properties =
+      []() -> std::optional<VkPhysicalDeviceDrmPropertiesEXT> {
+      const char *path = std::getenv("WSI_FAKE_DRM_DEVICE");
+      struct stat node;
+      drmDevicePtr device = nullptr;
+      if (path != nullptr && (path[0] == '\0' || std::strcmp(path, "0") == 0))
+      {
+         return std::nullopt;
+      }
+      if (path != nullptr)
+      {
+         if (stat(path, &node) != 0 || drmGetDeviceFromDevId(node.st_rdev, 0, &device) != 0)
+         {
+            WSI_LOG_ERROR("WSI_FAKE_DRM_DEVICE: %s is not a DRM device node", path);
+            return std::nullopt;
+         }
+      }
+      else
+      {
+         drmDevicePtr devices[16];
+         const int count = drmGetDevices2(0, devices, 16);
+         for (int i = 0; i < count; i++)
+         {
+            if (device == nullptr && (devices[i]->available_nodes & (1 << DRM_NODE_RENDER)))
+            {
+               device = devices[i];
+            }
+            else
+            {
+               drmFreeDevice(&devices[i]);
+            }
+         }
+         if (device == nullptr)
+         {
+            return std::nullopt;
+         }
+      }
+
+      VkPhysicalDeviceDrmPropertiesEXT drm = {};
+      drm.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRM_PROPERTIES_EXT;
+      if ((device->available_nodes & (1 << DRM_NODE_PRIMARY)) && stat(device->nodes[DRM_NODE_PRIMARY], &node) == 0)
+      {
+         drm.hasPrimary = VK_TRUE;
+         drm.primaryMajor = static_cast<int64_t>(major(node.st_rdev));
+         drm.primaryMinor = static_cast<int64_t>(minor(node.st_rdev));
+      }
+      if ((device->available_nodes & (1 << DRM_NODE_RENDER)) && stat(device->nodes[DRM_NODE_RENDER], &node) == 0)
+      {
+         drm.hasRender = VK_TRUE;
+         drm.renderMajor = static_cast<int64_t>(major(node.st_rdev));
+         drm.renderMinor = static_cast<int64_t>(minor(node.st_rdev));
+      }
+      drmFreeDevice(&device);
+      return drm;
+   }();
+   return properties.has_value() ? &*properties : nullptr;
+#else
+   return nullptr;
+#endif
+}
+
+/* Mesa's zink waits for the GPU to finish each frame before presenting it, unless the driver is one of Mesa's own:
+ * their WSI passes the rendering fences on to the compositor, and zink cannot know that another driver's does too.
+ * The swapchains of this layer do, by an explicit sync acquire fence or by waiting in the presentation thread, so the
+ * wait is redundant and halves the frame rate of a zink application on the Mali driver. The one way to tell zink
+ * without changing it is VK_KHR_maintenance7, which lets a layered implementation report the driver underneath:
+ * report the Mali device as layered on Vulkan with PanVK, Mesa's driver for the same GPUs, as the driver underneath.
+ * zink treats PanVK like the Mali driver in all but this. WSI_REPORT_LAYERED_DRIVER=0 disables it. */
+static void report_layered_driver(VkPhysicalDevice physical_device, const VkPhysicalDeviceProperties2 &properties,
+                                  VkPhysicalDeviceLayeredApiPropertiesListKHR *layered,
+                                  VkPhysicalDeviceLayeredApiPropertiesKHR *layered_apis, uint32_t layered_capacity)
+{
+   static const bool enabled = []() {
+      const char *env = std::getenv("WSI_REPORT_LAYERED_DRIVER");
+      return env == nullptr || std::strcmp(env, "0") != 0;
+   }();
+   if (!enabled || layered == nullptr || layered->layeredApiCount != 0)
+   {
+      return;
+   }
+
+   auto &instance = instance_private_data::get(physical_device);
+   VkPhysicalDeviceDriverProperties driver = {};
+   driver.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES;
+   VkPhysicalDeviceProperties2 driver_query = {};
+   driver_query.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+   driver_query.pNext = &driver;
+   instance.disp.GetPhysicalDeviceProperties2KHR(physical_device, &driver_query);
+   if (driver.driverID != VK_DRIVER_ID_ARM_PROPRIETARY)
+   {
+      return;
+   }
+
+   /* The driver clears the list when it has nothing to report. */
+   layered->pLayeredApis = layered_apis;
+   if (layered_apis == nullptr)
+   {
+      layered->layeredApiCount = 1;
+      return;
+   }
+   if (layered_capacity == 0)
+   {
+      return;
+   }
+
+   layered->layeredApiCount = 1;
+   VkPhysicalDeviceLayeredApiPropertiesKHR &api = layered_apis[0];
+   api.vendorID = properties.properties.vendorID;
+   api.deviceID = properties.properties.deviceID;
+   api.layeredAPI = VK_PHYSICAL_DEVICE_LAYERED_API_VULKAN_KHR;
+   std::memcpy(api.deviceName, properties.properties.deviceName, sizeof(api.deviceName));
+
+   auto *vulkan = util::find_extension<VkPhysicalDeviceLayeredApiVulkanPropertiesKHR>(
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_LAYERED_API_VULKAN_PROPERTIES_KHR, api.pNext);
+   if (vulkan != nullptr)
+   {
+      instance.disp.GetPhysicalDeviceProperties2KHR(physical_device, &vulkan->properties);
+      auto *underlying = util::find_extension<VkPhysicalDeviceDriverProperties>(
+         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES, vulkan->properties.pNext);
+      if (underlying != nullptr)
+      {
+         underlying->driverID = VK_DRIVER_ID_MESA_PANVK;
+      }
+   }
+}
+
+static bool is_physical_device_drm(const VkExtensionProperties &property)
+{
+   return strcmp(property.extensionName, VK_EXT_PHYSICAL_DEVICE_DRM_EXTENSION_NAME) == 0;
 }
 
 static bool is_swapchain_maintenance1(const VkExtensionProperties &property)
@@ -1142,13 +1290,21 @@ VWL_VKAPI_EXPORT wsi_layer_vkEnumerateDeviceExtensionProperties(VkPhysicalDevice
    assert(pPropertyCount);
 
    auto &instance = layer::instance_private_data::get(physicalDevice);
+   const bool ours =
+      pLayerName == nullptr || pLayerName[0] == '\0' || strcmp(pLayerName, "VK_LAYER_window_system_integration") == 0;
 #if BUILD_WSI_DISPLAY
-   const bool filter =
-      instance.is_instance_extension_enabled(VK_KHR_DISPLAY_EXTENSION_NAME) &&
-      (pLayerName == nullptr || pLayerName[0] == '\0' || strcmp(pLayerName, "VK_LAYER_window_system_integration") == 0);
+   const bool hide_maintenance1 = ours && instance.is_instance_extension_enabled(VK_KHR_DISPLAY_EXTENSION_NAME);
 #else
-   const bool filter = false;
+   const bool hide_maintenance1 = false;
 #endif
+   /* The manifest lists VK_EXT_physical_device_drm so that the loader accepts it, but it only means something
+    * when WSI_FAKE_DRM_DEVICE is set. */
+   const bool hide_drm = ours && layer::fake_drm_properties() == nullptr;
+   const bool filter = hide_maintenance1 || hide_drm;
+   auto hidden = [&](const VkExtensionProperties &property) {
+      return (hide_maintenance1 && layer::is_swapchain_maintenance1(property)) ||
+             (hide_drm && layer::is_physical_device_drm(property));
+   };
 
    if (!filter)
    {
@@ -1184,7 +1340,7 @@ VWL_VKAPI_EXPORT wsi_layer_vkEnumerateDeviceExtensionProperties(VkPhysicalDevice
    uint32_t filtered_count = 0;
    for (uint32_t i = 0; i < property_count; ++i)
    {
-      if (!layer::is_swapchain_maintenance1(properties[i]))
+      if (!hidden(properties[i]))
       {
          ++filtered_count;
       }
@@ -1200,7 +1356,7 @@ VWL_VKAPI_EXPORT wsi_layer_vkEnumerateDeviceExtensionProperties(VkPhysicalDevice
    uint32_t copied_count = 0;
    for (uint32_t i = 0; i < property_count && copied_count < capacity; ++i)
    {
-      if (!layer::is_swapchain_maintenance1(properties[i]))
+      if (!hidden(properties[i]))
       {
          pProperties[copied_count++] = properties[i];
       }
@@ -1236,6 +1392,33 @@ wsi_layer_vkGetPhysicalDeviceFeatures2(VkPhysicalDevice physical_device,
                                        VkPhysicalDeviceFeatures2 *pFeatures) VWL_API_POST
 {
    layer::populate_supported_layer_features(physical_device, *pFeatures);
+}
+
+VWL_VKAPI_CALL(void)
+wsi_layer_vkGetPhysicalDeviceProperties2(VkPhysicalDevice physical_device,
+                                         VkPhysicalDeviceProperties2 *pProperties) VWL_API_POST
+{
+   /* The driver may clear the list of layered APIs, so keep the application's array for report_layered_driver. */
+   auto *layered = util::find_extension<VkPhysicalDeviceLayeredApiPropertiesListKHR>(
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_LAYERED_API_PROPERTIES_LIST_KHR, pProperties->pNext);
+   VkPhysicalDeviceLayeredApiPropertiesKHR *layered_apis = layered != nullptr ? layered->pLayeredApis : nullptr;
+   const uint32_t layered_capacity = layered != nullptr ? layered->layeredApiCount : 0;
+
+   layer::instance_private_data::get(physical_device)
+      .disp.GetPhysicalDeviceProperties2KHR(physical_device, pProperties);
+
+   /* Only for a device whose driver reports no DRM device of its own. */
+   const auto *fake = layer::fake_drm_properties();
+   auto *drm = util::find_extension<VkPhysicalDeviceDrmPropertiesEXT>(
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRM_PROPERTIES_EXT, pProperties->pNext);
+   if (fake != nullptr && drm != nullptr && !drm->hasPrimary && !drm->hasRender)
+   {
+      void *next = drm->pNext;
+      *drm = *fake;
+      drm->pNext = next;
+   }
+
+   layer::report_layered_driver(physical_device, *pProperties, layered, layered_apis, layered_capacity);
 }
 
 #define GET_PROC_ADDR(func)      \
@@ -1398,10 +1581,15 @@ wsi_layer_vkGetInstanceProcAddr(VkInstance instance, const char *funcName) VWL_A
       {
          return (PFN_vkVoidFunction)&wsi_layer_vkGetPhysicalDeviceFeatures2;
       }
+      if (!strcmp(funcName, "vkGetPhysicalDeviceProperties2KHR"))
+      {
+         return (PFN_vkVoidFunction)&wsi_layer_vkGetPhysicalDeviceProperties2;
+      }
    }
    if (core_1_1)
    {
       GET_PROC_ADDR(vkGetPhysicalDeviceFeatures2);
+      GET_PROC_ADDR(vkGetPhysicalDeviceProperties2);
    }
 
    if (instance_data.is_instance_extension_enabled(VK_KHR_SURFACE_EXTENSION_NAME))

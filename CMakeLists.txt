@@ -410,6 +410,12 @@ endif()
 
 target_link_libraries(${PROJECT_NAME} ${LINK_WSI_LIBS})
 
+if(BUILD_DRM_UTILS)
+   # Reporting a DRM device for the physical device (WSI_FAKE_DRM_DEVICE) looks it up with libdrm.
+   target_link_libraries(${PROJECT_NAME} drm_utils drm)
+   target_compile_definitions(${PROJECT_NAME} PRIVATE WSI_LAYER_HAVE_LIBDRM=1)
+endif()
+
 # image_backing_memory_device is shared by the headless and X11 backends. Compile it once into the
 # layer here rather than into each backend's static library, where it would otherwise produce a
 # duplicate-symbol error when both backends are enabled together.

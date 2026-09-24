@@ -236,6 +236,8 @@ The layer reads the following environment variables at runtime:
 | `WSI_X11_FORCE_SHM=1` | X11: force the MIT-SHM present path instead of DRI3 + Present. |
 | `WSI_X11_DRI3_COPY=1` | X11 DRI3: present with GPU-copy (`XCB_PRESENT_OPTION_COPY`, the X server blits the pixmap) instead of the default zero-copy (`XCB_PRESENT_OPTION_NONE`). |
 | `WSI_LOW_PRIORITY_QUEUES=0` | Keep the application's default queue priority. Otherwise the queues of devices that enable `VK_KHR_swapchain` get LOW global priority (unless the application picked one), so that compositor and Xwayland rendering is not stuck behind a GPU-bound application's frames. |
+| `WSI_FAKE_DRM_DEVICE=<path>` | For GPUs whose driver has no DRM device of its own (the Mali kbase driver), report the DRM device of the given node (e.g. `/dev/dri/card0`) through `VK_EXT_physical_device_drm` instead of the first DRM device with a render node (the display controller, as libmali's EGL reports it). `0` reports none. Lets Mesa's zink back gbm and EGL on that device, and pass its clients' buffers to the compositor as dma-bufs. |
+| `WSI_REPORT_LAYERED_DRIVER=0` | Don't report, through `VK_KHR_maintenance7`, the Mali driver as layered on Mesa's PanVK. Otherwise zink, which only trusts Mesa's own drivers to pass rendering fences on to the compositor, waits for every frame to finish before presenting it, which cuts its frame rate to about a fifth. |
 | `WSI_DISPLAY_DRI_DEV=<path>` | `display` backend only: the DRM device node to use (otherwise auto-detected). |
 
 On X11 the strategy defaults to zero-copy and is chosen with `WSI_X11_DRI3_COPY`,
