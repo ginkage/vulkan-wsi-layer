@@ -61,9 +61,7 @@ struct features
       VkPhysicalDevicePresentId2FeaturesKHR *present_id2 = nullptr;
       VkPhysicalDevicePresentTimingFeaturesEXT *present_timing = nullptr;
       VkPhysicalDevicePresentModeFifoLatestReadyFeaturesEXT *fifo_latest_ready = nullptr;
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
       VkPhysicalDeviceMultisampledRenderToSwapchainFeaturesEXT *multisampled_render_to_swapchain = nullptr;
-#endif
 
       writable_layer_feature() = default;
 
@@ -85,11 +83,9 @@ struct features
             VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_TIMING_FEATURES_EXT, p_next);
          fifo_latest_ready = util::find_extension<VkPhysicalDevicePresentModeFifoLatestReadyFeaturesEXT>(
             VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_MODE_FIFO_LATEST_READY_FEATURES_EXT, p_next);
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
          multisampled_render_to_swapchain =
             util::find_extension<VkPhysicalDeviceMultisampledRenderToSwapchainFeaturesEXT>(
                VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTISAMPLED_RENDER_TO_SWAPCHAIN_FEATURES_EXT, p_next);
-#endif
 
          /* We only need to initialize swapchain_maintenance1 and present_wait because these values are
           * used in the post_query after the ICD call to derive the final value.
@@ -116,9 +112,7 @@ struct features
       VkPhysicalDevicePresentId2FeaturesKHR present_id2 = {};
       VkPhysicalDevicePresentTimingFeaturesEXT present_timing = {};
       VkPhysicalDevicePresentModeFifoLatestReadyFeaturesEXT fifo_latest_ready = {};
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
       VkPhysicalDeviceMultisampledRenderToSwapchainFeaturesEXT multisampled_render_to_swapchain = {};
-#endif
 
       storage() noexcept
       {
@@ -131,10 +125,8 @@ struct features
          present_id2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_ID_2_FEATURES_KHR;
          present_timing.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_TIMING_FEATURES_EXT;
          fifo_latest_ready.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_MODE_FIFO_LATEST_READY_FEATURES_EXT;
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
          multisampled_render_to_swapchain.sType =
             VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTISAMPLED_RENDER_TO_SWAPCHAIN_FEATURES_EXT;
-#endif
       }
    };
 
@@ -184,11 +176,9 @@ struct features
       APPEND_IF_REQUESTED(VkPhysicalDevicePresentModeFifoLatestReadyFeaturesEXT,
                           VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_MODE_FIFO_LATEST_READY_FEATURES_EXT,
                           requested_features, storage.fifo_latest_ready, supported_feature_chain);
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
       APPEND_IF_REQUESTED(VkPhysicalDeviceMultisampledRenderToSwapchainFeaturesEXT,
                           VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTISAMPLED_RENDER_TO_SWAPCHAIN_FEATURES_EXT,
                           requested_features, storage.multisampled_render_to_swapchain, supported_feature_chain);
-#endif
 
 #undef APPEND_IF_REQUESTED
 
@@ -284,17 +274,14 @@ struct features
              compare(writable_layer_features.present_timing,
                      util::find_extension<VkPhysicalDevicePresentTimingFeaturesEXT>(
                         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_TIMING_FEATURES_EXT, requested_features)) &&
-             compare(
-                writable_layer_features.fifo_latest_ready,
-                util::find_extension<VkPhysicalDevicePresentModeFifoLatestReadyFeaturesEXT>(
-                   VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_MODE_FIFO_LATEST_READY_FEATURES_EXT, requested_features))
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
-             && compare(writable_layer_features.multisampled_render_to_swapchain,
-                        util::find_extension<VkPhysicalDeviceMultisampledRenderToSwapchainFeaturesEXT>(
-                           VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTISAMPLED_RENDER_TO_SWAPCHAIN_FEATURES_EXT,
-                           requested_features))
-#endif
-         ;
+             compare(writable_layer_features.fifo_latest_ready,
+                     util::find_extension<VkPhysicalDevicePresentModeFifoLatestReadyFeaturesEXT>(
+                        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_MODE_FIFO_LATEST_READY_FEATURES_EXT,
+                        requested_features)) &&
+             compare(writable_layer_features.multisampled_render_to_swapchain,
+                     util::find_extension<VkPhysicalDeviceMultisampledRenderToSwapchainFeaturesEXT>(
+                        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTISAMPLED_RENDER_TO_SWAPCHAIN_FEATURES_EXT,
+                        requested_features));
    }
 
 private:
@@ -372,14 +359,12 @@ private:
              supported_features->presentModeFifoLatestReady == VK_TRUE;
    }
 
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
    static bool compare(VkPhysicalDeviceMultisampledRenderToSwapchainFeaturesEXT *supported_features,
                        const VkPhysicalDeviceMultisampledRenderToSwapchainFeaturesEXT *requested_features) noexcept
    {
       return requested_features == nullptr || requested_features->multisampledRenderToSwapchain == VK_FALSE ||
              supported_features->multisampledRenderToSwapchain == VK_TRUE;
    }
-#endif
 };
 
 void populate_supported_layer_features(VkPhysicalDevice physical_device, VkPhysicalDeviceFeatures2 &supported_features)
@@ -387,7 +372,6 @@ void populate_supported_layer_features(VkPhysicalDevice physical_device, VkPhysi
    auto &instance = layer::instance_private_data::get(physical_device);
    auto supported_layer_features = features{ supported_features.pNext };
 
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
    auto *multisampled_render_to_swapchain =
       util::find_extension<VkPhysicalDeviceMultisampledRenderToSwapchainFeaturesEXT>(
          VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTISAMPLED_RENDER_TO_SWAPCHAIN_FEATURES_EXT, supported_features.pNext);
@@ -406,7 +390,6 @@ void populate_supported_layer_features(VkPhysicalDevice physical_device, VkPhysi
       multisampled_render_to_single_sampled = &multisampled_render_to_single_sampled_storage;
       supported_features.pNext = multisampled_render_to_single_sampled;
    }
-#endif
 
    auto get_physical_device_features2 =
       instance.disp.get_fn<PFN_vkGetPhysicalDeviceFeatures2KHR>("vkGetPhysicalDeviceFeatures2KHR");
@@ -415,14 +398,12 @@ void populate_supported_layer_features(VkPhysicalDevice physical_device, VkPhysi
       (*get_physical_device_features2)(physical_device, &supported_features);
    }
 
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
    if (multisampled_render_to_swapchain != nullptr)
    {
       multisampled_render_to_swapchain->multisampledRenderToSwapchain =
          multisampled_render_to_single_sampled->multisampledRenderToSingleSampled;
       supported_features.pNext = const_cast<void *>(original_feature_chain);
    }
-#endif
 
    supported_layer_features.post_query(physical_device);
 }
@@ -655,7 +636,6 @@ VKAPI_ATTR VkResult create_device(VkPhysicalDevice physicalDevice, const VkDevic
 
    TRY(validate_requested_layer_features(physicalDevice, pCreateInfo));
 
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
    VkPhysicalDeviceMultisampledRenderToSingleSampledFeaturesEXT multisampled_render_to_single_sampled = {};
    VkPhysicalDeviceMultisampledRenderToSingleSampledFeaturesEXT *multisampled_render_to_single_sampled_override =
       nullptr;
@@ -684,7 +664,6 @@ VKAPI_ATTR VkResult create_device(VkPhysicalDevice physicalDevice, const VkDevic
          modified_info.pNext = &multisampled_render_to_single_sampled;
       }
    }
-#endif
 
    VkPhysicalDeviceMaintenance9FeaturesKHR maintenance9_features = {};
    const util::wsi_platform_set &enabled_platforms = inst_data.get_enabled_platforms();
@@ -772,22 +751,18 @@ VKAPI_ATTR VkResult create_device(VkPhysicalDevice physicalDevice, const VkDevic
    }
 
    /* Now call create device on the chain further down the list. */
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
    if (multisampled_render_to_single_sampled_override != nullptr)
    {
       multisampled_render_to_single_sampled_override->multisampledRenderToSingleSampled = VK_TRUE;
    }
-#endif
 
    const VkResult create_device_result = fpCreateDevice(physicalDevice, &modified_info, pAllocator, pDevice);
 
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
    if (multisampled_render_to_single_sampled_override != nullptr)
    {
       multisampled_render_to_single_sampled_override->multisampledRenderToSingleSampled =
          original_multisampled_render_to_single_sampled;
    }
-#endif
 
    TRY_LOG(create_device_result, "Failed to create the device");
 

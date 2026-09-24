@@ -291,7 +291,6 @@ VkResult check_surface_present_mode_query_is_supported(const VkPhysicalDeviceSur
 void get_surface_capabilities_common(VkPhysicalDevice physical_device, VkSurfaceCapabilitiesKHR *surface_capabilities,
                                      const surface_properties_override_params *override_params = nullptr);
 
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
 /**
  * @brief Populate VkSwapchainFlagsSurfaceCapabilitiesEXT::swapchainSupportedFlags.
  *
@@ -302,7 +301,6 @@ void get_surface_capabilities_common(VkPhysicalDevice physical_device, VkSurface
 void populate_swapchain_supported_flags(VkPhysicalDevice physical_device,
                                         VkSurfaceCapabilities2KHR *surface_capabilities,
                                         VkSwapchainCreateFlagsKHR backend_specific_flags);
-#endif
 
 /**
  * @brief Common function for the get_surface_present_modes.
