@@ -35,8 +35,6 @@ namespace wsi
 namespace display
 {
 
-constexpr int max_core_1_0_formats = VK_FORMAT_ASTC_12x12_SRGB_BLOCK + 1;
-
 void surface_properties::populate_present_mode_compatibilities()
 {
    std::array<present_mode_compatibility, 1> compatible_present_modes_list = { present_mode_compatibility{
@@ -136,45 +134,30 @@ VkResult surface_properties::get_surface_formats(VkPhysicalDevice physical_devic
 
    auto display_formats = display->get_supported_formats();
 
-   uint32_t format_count = 0;
-
    assert(display_formats->size() > 0);
-   assert(display_formats->size() <= max_core_1_0_formats);
 
-   std::array<surface_format_properties, max_core_1_0_formats> formats{};
+   auto &instance_data = layer::instance_private_data::get(physical_device);
+   util::allocator allocator{ instance_data.get_allocator(), VK_SYSTEM_ALLOCATION_SCOPE_COMMAND };
+   util::vector<surface_format_properties> formats{ allocator };
 
    for (const auto &drm_format : *display_formats)
    {
-      auto vk_format = util::drm::drm_to_vk_format(drm_format.fourcc);
-      if (VK_FORMAT_UNDEFINED != vk_format)
-      {
-         formats[format_count] = surface_format_properties{ vk_format };
-         VkPhysicalDeviceImageFormatInfo2KHR format_info = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_FORMAT_INFO_2_KHR,
-                                                             nullptr,
-                                                             vk_format,
-                                                             VK_IMAGE_TYPE_2D,
-                                                             VK_IMAGE_TILING_OPTIMAL,
-                                                             VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-                                                             0 };
-         VkResult res = formats[format_count].check_device_support(physical_device, format_info);
-         if (VK_SUCCESS == res)
-         {
-            if (layer::instance_private_data::get(physical_device).has_image_compression_support(physical_device))
-            {
-               formats[format_count].add_device_compression_support(physical_device, format_info);
-            }
-            format_count++;
-         }
-      }
-
       /* Certain 8-bit UNORM formats can be interpreted as both UNORM and sRGB by Vulkan, so expose both formats.
        * The colorSpace value is how the presentation engine interprets the format.
        * The linearity of VkFormat and the display format may be different.
        */
-      auto vk_srgb_format = util::drm::drm_to_vk_srgb_format(drm_format.fourcc);
-      if (VK_FORMAT_UNDEFINED != vk_srgb_format)
+      const std::array vk_formats = { util::drm::drm_to_vk_format(drm_format.fourcc),
+                                      util::drm::drm_to_vk_srgb_format(drm_format.fourcc) };
+      for (const auto vk_format : vk_formats)
       {
-         formats[format_count] = surface_format_properties{ vk_srgb_format };
+         if (vk_format == VK_FORMAT_UNDEFINED ||
+             std::any_of(formats.begin(), formats.end(),
+                         [vk_format](const auto &props) { return props.m_surface_format.format == vk_format; }))
+         {
+            continue;
+         }
+
+         surface_format_properties format_properties{ vk_format };
          VkPhysicalDeviceImageFormatInfo2KHR format_info = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_FORMAT_INFO_2_KHR,
                                                              nullptr,
                                                              vk_format,
@@ -182,20 +165,23 @@ VkResult surface_properties::get_surface_formats(VkPhysicalDevice physical_devic
                                                              VK_IMAGE_TILING_OPTIMAL,
                                                              VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
                                                              0 };
-         VkResult res = formats[format_count].check_device_support(physical_device, format_info);
+         VkResult res = format_properties.check_device_support(physical_device, format_info);
          if (VK_SUCCESS == res)
          {
-            if (layer::instance_private_data::get(physical_device).has_image_compression_support(physical_device))
+            if (instance_data.has_image_compression_support(physical_device))
             {
-               formats[format_count].add_device_compression_support(physical_device, format_info);
+               format_properties.add_device_compression_support(physical_device, format_info);
             }
-            format_count++;
+            if (!formats.try_push_back(format_properties))
+            {
+               return VK_ERROR_OUT_OF_HOST_MEMORY;
+            }
          }
       }
    }
 
-   return surface_properties_formats_helper(formats.begin(), formats.begin() + format_count, surfaceFormatCount,
-                                            surfaceFormats, extended_surface_formats);
+   return surface_properties_formats_helper(formats.begin(), formats.end(), surfaceFormatCount, surfaceFormats,
+                                            extended_surface_formats);
 }
 
 VkResult surface_properties::get_surface_present_modes(VkPhysicalDevice physical_device, VkSurfaceKHR surface,
