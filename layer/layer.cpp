@@ -673,6 +673,17 @@ static VkResult lower_queue_priorities(VkPhysicalDevice physical_device, util::e
       return VK_SUCCESS;
    }
 
+   /* The point is for display servers to run first, so leave them alone when they render through Vulkan (e.g. a
+    * compositor or Xwayland on zink) - at equal priority the GPU time-slices between them and a busy client, and
+    * the screen stalls for a scheduling period at a time. A compositor on KMS has neither WAYLAND_DISPLAY nor
+    * DISPLAY to connect to, and a compositor hands Xwayland (and its own helper clients) a WAYLAND_SOCKET. */
+   const bool is_client = (std::getenv("WAYLAND_DISPLAY") != nullptr || std::getenv("DISPLAY") != nullptr) &&
+                          std::getenv("WAYLAND_SOCKET") == nullptr;
+   if (!is_client)
+   {
+      return VK_SUCCESS;
+   }
+
    util::extension_list available_extensions{ enabled_extensions.get_allocator() };
    TRY_LOG_CALL(wsi::get_available_device_extensions(physical_device, available_extensions));
    const char *priority_extension = nullptr;
