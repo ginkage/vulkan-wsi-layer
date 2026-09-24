@@ -236,7 +236,7 @@ The layer reads the following environment variables at runtime:
 | `VULKAN_WSI_DEBUG_LEVEL=<n>` | Log verbosity threshold: `1` = errors (default), `2` = + warnings, `3` = + info. |
 | `WSI_X11_FORCE_SHM=1` | X11: force the MIT-SHM present path instead of DRI3 + Present. |
 | `WSI_X11_DRI3_COPY=1` | X11 DRI3: present with GPU-copy (`XCB_PRESENT_OPTION_COPY`, the X server blits the pixmap) instead of the default zero-copy (`XCB_PRESENT_OPTION_NONE`). |
-| `WSI_LOW_PRIORITY_QUEUES=0` | Keep the application's default queue priority. Otherwise the queues of devices that enable `VK_KHR_swapchain` get LOW global priority (unless the application picked one), so that compositor and Xwayland rendering is not stuck behind a GPU-bound application's frames. |
+| `WSI_LOW_PRIORITY_QUEUES=0` | Keep the application's default queue priority. Otherwise, in display clients (processes with `WAYLAND_DISPLAY` or `DISPLAY` set and no `WAYLAND_SOCKET`), the queues of devices that enable `VK_KHR_swapchain` get LOW global priority (unless the application picked one), so that compositor and Xwayland rendering is not stuck behind a GPU-bound application's frames. Display servers keep the default, as they may render through Vulkan themselves (e.g. on zink). |
 | `WSI_DISPLAY_DRI_DEV=<path>` | `display` backend only: the DRM device node to use (otherwise auto-detected). |
 
 On X11 the strategy defaults to zero-copy and is chosen with `WSI_X11_DRI3_COPY`,
