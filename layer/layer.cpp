@@ -37,6 +37,7 @@
 #include "surface_api.hpp"
 #include "swapchain_api.hpp"
 #include "swapchain_maintenance_api.hpp"
+#include "dmabuf_export_api.hpp"
 #include "util/extension_list.hpp"
 #include "util/custom_allocator.hpp"
 #include "wsi/wsi_factory.hpp"
@@ -1475,6 +1476,14 @@ wsi_layer_vkGetDeviceProcAddr(VkDevice device, const char *funcName) VWL_API_POS
       GET_PROC_ADDR(vkGetSwapchainStatusKHR);
    }
 
+   if (device_data.is_device_extension_enabled(VK_EXT_EXTERNAL_MEMORY_DMA_BUF_EXTENSION_NAME) &&
+       layer::dmabuf_export_emulated(device_data.physical_device))
+   {
+      GET_PROC_ADDR(vkAllocateMemory);
+      GET_PROC_ADDR(vkFreeMemory);
+      GET_PROC_ADDR(vkGetMemoryFdKHR);
+   }
+
    if (device_data.is_device_extension_enabled(VK_EXT_PRESENT_TIMING_EXTENSION_NAME))
    {
       GET_PROC_ADDR(vkSetSwapchainPresentTimingQueueSizeEXT);
@@ -1585,11 +1594,22 @@ wsi_layer_vkGetInstanceProcAddr(VkInstance instance, const char *funcName) VWL_A
       {
          return (PFN_vkVoidFunction)&wsi_layer_vkGetPhysicalDeviceProperties2;
       }
+      if (!strcmp(funcName, "vkGetPhysicalDeviceImageFormatProperties2KHR"))
+      {
+         return (PFN_vkVoidFunction)&wsi_layer_vkGetPhysicalDeviceImageFormatProperties2;
+      }
    }
    if (core_1_1)
    {
       GET_PROC_ADDR(vkGetPhysicalDeviceFeatures2);
       GET_PROC_ADDR(vkGetPhysicalDeviceProperties2);
+      GET_PROC_ADDR(vkGetPhysicalDeviceImageFormatProperties2);
+      GET_PROC_ADDR(vkGetPhysicalDeviceExternalBufferProperties);
+   }
+   if (instance_data.is_instance_extension_enabled(VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME) &&
+       !strcmp(funcName, "vkGetPhysicalDeviceExternalBufferPropertiesKHR"))
+   {
+      return (PFN_vkVoidFunction)&wsi_layer_vkGetPhysicalDeviceExternalBufferProperties;
    }
 
    if (instance_data.is_instance_extension_enabled(VK_KHR_SURFACE_EXTENSION_NAME))

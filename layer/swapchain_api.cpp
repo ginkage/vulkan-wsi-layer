@@ -32,6 +32,8 @@
 #include <cstdlib>
 #include <new>
 
+#include <drm_fourcc.h>
+
 #include "private_data.hpp"
 #include "swapchain_api.hpp"
 
@@ -383,6 +385,111 @@ wsi_layer_vkAcquireNextImage2KHR(VkDevice device, const VkAcquireNextImageInfoKH
    return sc->acquire_next_image(pAcquireInfo->timeout, pAcquireInfo->semaphore, pAcquireInfo->fence, pImageIndex);
 }
 
+/* Each modifier in a VkImageDrmFormatModifierListCreateInfoEXT must be one the driver supports for the image, but
+ * Mesa's zink passes a display plane's modifiers unfiltered - on RK3588 ten AFBC variants the Mali driver does not
+ * support for the format, plus LINEAR - and the Mali driver then rejects the whole list instead of picking LINEAR.
+ * Create the image with only the modifiers its driver supports for it, as vkGetPhysicalDeviceImageFormatProperties2
+ * reports them.
+ *
+ * DRM_FORMAT_MOD_INVALID is not a modifier at all, but zink passes it on when an X server reports it through DRI3
+ * (Xwayland does, for "implicit" layouts). The Mali driver reports it as supported, then rejects any list that has
+ * it, so it is always dropped. If nothing else is left, LINEAR stands in for it, as the Wayland backend does for
+ * compositors that advertise INVALID. */
+static VkResult create_image_with_supported_modifiers(layer::device_private_data &device_data,
+                                                      const VkImageCreateInfo *pCreateInfo,
+                                                      const VkAllocationCallbacks *pAllocator, VkImage *pImage)
+{
+   const auto *modifier_list = util::find_extension<VkImageDrmFormatModifierListCreateInfoEXT>(
+      VK_STRUCTURE_TYPE_IMAGE_DRM_FORMAT_MODIFIER_LIST_CREATE_INFO_EXT, pCreateInfo->pNext);
+   if (pCreateInfo->tiling != VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT || modifier_list == nullptr ||
+       modifier_list->drmFormatModifierCount == 0)
+   {
+      return device_data.disp.CreateImage(device_data.device, pCreateInfo, pAllocator, pImage);
+   }
+
+   const auto *format_list = util::find_extension<VkImageFormatListCreateInfo>(
+      VK_STRUCTURE_TYPE_IMAGE_FORMAT_LIST_CREATE_INFO, pCreateInfo->pNext);
+   const auto *external = util::find_extension<VkExternalMemoryImageCreateInfo>(
+      VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO, pCreateInfo->pNext);
+   const auto is_supported = [&](uint64_t modifier) {
+      VkImageFormatListCreateInfo view_formats = {};
+      if (format_list != nullptr)
+      {
+         view_formats = *format_list;
+         view_formats.pNext = nullptr;
+      }
+      VkPhysicalDeviceImageDrmFormatModifierInfoEXT modifier_info = {};
+      modifier_info.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_DRM_FORMAT_MODIFIER_INFO_EXT;
+      modifier_info.pNext = format_list != nullptr ? &view_formats : nullptr;
+      modifier_info.drmFormatModifier = modifier;
+      modifier_info.sharingMode = pCreateInfo->sharingMode;
+      modifier_info.queueFamilyIndexCount = pCreateInfo->queueFamilyIndexCount;
+      modifier_info.pQueueFamilyIndices = pCreateInfo->pQueueFamilyIndices;
+      VkPhysicalDeviceExternalImageFormatInfo external_info = {};
+      external_info.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTERNAL_IMAGE_FORMAT_INFO;
+      external_info.pNext = &modifier_info;
+      /* Mesa's zink asks for OPAQUE_FD along with DMA_BUF, and the Mali driver supports no modifier at all for
+       * OPAQUE_FD - the modifiers are what the dma-buf is shared with, so query for that. */
+      const VkExternalMemoryHandleTypeFlags handle_types = external != nullptr ? external->handleTypes : 0;
+      external_info.handleType = static_cast<VkExternalMemoryHandleTypeFlagBits>(
+         (handle_types & VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT) != 0 ?
+            static_cast<VkExternalMemoryHandleTypeFlags>(VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT) :
+            (handle_types & -handle_types));
+      VkPhysicalDeviceImageFormatInfo2 format_info = {};
+      format_info.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_FORMAT_INFO_2;
+      format_info.pNext = external_info.handleType != 0 ? static_cast<void *>(&external_info) : &modifier_info;
+      format_info.format = pCreateInfo->format;
+      format_info.type = pCreateInfo->imageType;
+      format_info.tiling = pCreateInfo->tiling;
+      format_info.usage = pCreateInfo->usage;
+      format_info.flags = pCreateInfo->flags;
+      VkImageFormatProperties2 format_properties = {};
+      format_properties.sType = VK_STRUCTURE_TYPE_IMAGE_FORMAT_PROPERTIES_2;
+      return device_data.instance_data.disp.GetPhysicalDeviceImageFormatProperties2KHR(
+                device_data.physical_device, &format_info, &format_properties) == VK_SUCCESS;
+   };
+
+   util::allocator allocator{ device_data.get_allocator(), VK_SYSTEM_ALLOCATION_SCOPE_COMMAND, pAllocator };
+   util::vector<uint64_t> supported{ allocator };
+   if (!supported.try_reserve(modifier_list->drmFormatModifierCount))
+   {
+      return VK_ERROR_OUT_OF_HOST_MEMORY;
+   }
+   bool has_invalid = false;
+   for (uint32_t i = 0; i < modifier_list->drmFormatModifierCount; i++)
+   {
+      const uint64_t modifier = modifier_list->pDrmFormatModifiers[i];
+      if (modifier == DRM_FORMAT_MOD_INVALID)
+      {
+         has_invalid = true;
+      }
+      else if (is_supported(modifier))
+      {
+         (void)supported.try_push_back(modifier); /* reserved above */
+      }
+   }
+   if (supported.size() == 0 && has_invalid && is_supported(DRM_FORMAT_MOD_LINEAR))
+   {
+      (void)supported.try_push_back(DRM_FORMAT_MOD_LINEAR); /* reserved above */
+   }
+
+   if (supported.size() == 0 || (!has_invalid && supported.size() == modifier_list->drmFormatModifierCount))
+   {
+      return device_data.disp.CreateImage(device_data.device, pCreateInfo, pAllocator, pImage);
+   }
+
+   /* The chain is the application's and const, so point its list at the supported modifiers for the call. */
+   auto *list = const_cast<VkImageDrmFormatModifierListCreateInfoEXT *>(modifier_list);
+   const uint32_t original_count = list->drmFormatModifierCount;
+   const uint64_t *original_modifiers = list->pDrmFormatModifiers;
+   list->drmFormatModifierCount = static_cast<uint32_t>(supported.size());
+   list->pDrmFormatModifiers = supported.data();
+   const VkResult result = device_data.disp.CreateImage(device_data.device, pCreateInfo, pAllocator, pImage);
+   list->drmFormatModifierCount = original_count;
+   list->pDrmFormatModifiers = original_modifiers;
+   return result;
+}
+
 VWL_VKAPI_CALL(VkResult)
 wsi_layer_vkCreateImage(VkDevice device, const VkImageCreateInfo *pCreateInfo, const VkAllocationCallbacks *pAllocator,
                         VkImage *pImage) VWL_API_POST
@@ -394,7 +501,7 @@ wsi_layer_vkCreateImage(VkDevice device, const VkImageCreateInfo *pCreateInfo, c
 
    if (image_sc_create_info == nullptr || !device_data.layer_owns_swapchain(image_sc_create_info->swapchain))
    {
-      return device_data.disp.CreateImage(device_data.device, pCreateInfo, pAllocator, pImage);
+      return create_image_with_supported_modifiers(device_data, pCreateInfo, pAllocator, pImage);
    }
 
    auto sc = reinterpret_cast<wsi::swapchain_base *>(image_sc_create_info->swapchain);

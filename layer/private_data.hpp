@@ -420,6 +420,7 @@ private:
    EP(CreateImage, "", VK_API_VERSION_1_0, true, )                                                                          \
    EP(DestroyImage, "", VK_API_VERSION_1_0, true, )                                                                         \
    EP(GetImageMemoryRequirements, "", VK_API_VERSION_1_0, true, )                                                           \
+   EP(GetBufferMemoryRequirements, "", VK_API_VERSION_1_0, true, )                                                          \
    EP(BindImageMemory, "", VK_API_VERSION_1_0, true, )                                                                      \
    EP(MapMemory, "", VK_API_VERSION_1_0, true, )                                                                            \
    EP(UnmapMemory, "", VK_API_VERSION_1_0, true, )                                                                          \
@@ -1018,6 +1019,13 @@ public:
     * @return true if enabled, false otherwise.
     */
    bool is_swapchain_maintenance1_enabled() const;
+
+   /**
+    * @brief dma-bufs backing the memory allocated for export when the layer emulates dma-buf export
+    * (see layer/dmabuf_export_api.cpp), owned by the layer.
+    */
+   util::unordered_map<VkDeviceMemory, int> dmabuf_exports;
+   util::mutex dmabuf_exports_lock;
 
    /**
     * @brief Set whether present wait feature is enabled.

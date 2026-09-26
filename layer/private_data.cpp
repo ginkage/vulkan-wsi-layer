@@ -473,6 +473,7 @@ device_private_data::device_private_data(instance_private_data &inst_data, VkPhy
    , SetDeviceLoaderData{ set_loader_data }
    , physical_device{ phys_dev }
    , device{ dev }
+   , dmabuf_exports{ alloc }
    , allocator{ alloc }
    , swapchains{ allocator } /* clang-format off */
    , enabled_extensions{ allocator }
