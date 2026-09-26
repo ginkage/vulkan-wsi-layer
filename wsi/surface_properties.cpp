@@ -136,6 +136,20 @@ void surface_format_properties::fill_format_properties(VkSurfaceFormat2KHR &surf
    }
 }
 
+uint32_t surface_properties::get_min_image_count_for_present_mode(const VkPhysicalDeviceSurfaceInfo2KHR *surface_info)
+{
+   const auto *present_mode = surface_info != nullptr ?
+                                 util::find_extension<VkSurfacePresentModeEXT>(
+                                    VK_STRUCTURE_TYPE_SURFACE_PRESENT_MODE_EXT, surface_info->pNext) :
+                                 nullptr;
+   if (present_mode != nullptr && (present_mode->presentMode == VK_PRESENT_MODE_MAILBOX_KHR ||
+                                   present_mode->presentMode == VK_PRESENT_MODE_IMMEDIATE_KHR))
+   {
+      return UNPACED_MIN_IMAGE_COUNT;
+   }
+   return PACED_MIN_IMAGE_COUNT;
+}
+
 void get_surface_capabilities_common(VkPhysicalDevice physical_device, VkSurfaceCapabilitiesKHR *surface_capabilities,
                                      const surface_properties_override_params *override_params, void *pNext)
 {

@@ -113,6 +113,20 @@ public:
    /* There is no maximum theoretically speaking however we choose 6 for practicality */
    static constexpr uint32_t MAX_SWAPCHAIN_IMAGE_COUNT = 6;
 
+   /* One image on screen, one queued and one being rendered keep a FIFO swapchain busy without stalling. Every image
+    * beyond that is a frame of latency for applications that ask for minImageCount + 1. */
+   static constexpr uint32_t PACED_MIN_IMAGE_COUNT = 3;
+
+   /* MAILBOX and IMMEDIATE replace the queued image instead of waiting for the compositor, which still holds the one
+    * on screen, so they need one more to never wait for a release. */
+   static constexpr uint32_t UNPACED_MIN_IMAGE_COUNT = 4;
+
+   /**
+    * @brief The minimum image count of a surface whose capabilities are queried with @p surface_info: for the present
+    * mode it names, if any, and otherwise for FIFO (swapchain creation adds a spare image for unpaced modes).
+    */
+   static uint32_t get_min_image_count_for_present_mode(const VkPhysicalDeviceSurfaceInfo2KHR *surface_info);
+
    /**
     * @brief Get the scaling and gravity capabilities of the surface.
     */
