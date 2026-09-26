@@ -88,7 +88,7 @@ VkResult surface_properties::get_surface_capabilities(VkPhysicalDevice physical_
                                                       VkSurfaceCapabilitiesKHR *pSurfaceCapabilities)
 {
    /* Image count limits */
-   surface_properties_override_params override_params = { 2, 0 };
+   surface_properties_override_params override_params = { PACED_MIN_IMAGE_COUNT, 0 };
    get_surface_capabilities_common(physical_device, pSurfaceCapabilities, &override_params);
 
    /* Composite alpha */
@@ -107,6 +107,7 @@ VkResult surface_properties::get_surface_capabilities(VkPhysicalDevice physical_
 
    /* Image count limits */
    get_surface_capabilities(physical_device, &pSurfaceCapabilities->surfaceCapabilities);
+   pSurfaceCapabilities->surfaceCapabilities.minImageCount = get_min_image_count_for_present_mode(pSurfaceInfo);
 
    m_compatible_present_modes.get_surface_present_mode_compatibility_common(pSurfaceInfo, pSurfaceCapabilities);
 

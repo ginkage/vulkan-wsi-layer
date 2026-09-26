@@ -28,6 +28,7 @@
  * @brief Contains the Vulkan entrypoints for the swapchain.
  */
 
+#include <algorithm>
 #include <cassert>
 #include <cstdlib>
 #include <new>
@@ -39,6 +40,7 @@
 
 #include <util/helpers.hpp>
 
+#include <wsi/surface_properties.hpp>
 #include <wsi/synchronization.hpp>
 #include <wsi/wsi_factory.hpp>
 #include <wsi/extensions/frame_boundary.hpp>
@@ -67,7 +69,28 @@ wsi_layer_vkCreateSwapchainKHR(VkDevice device, const VkSwapchainCreateInfoKHR *
       return VK_ERROR_OUT_OF_HOST_MEMORY;
    }
 
-   TRY_LOG(sc->init(device, pSwapchainCreateInfo), "Failed to initialise swapchain");
+   /* The minimum image count suits FIFO: one image on screen, one queued, one being rendered. MAILBOX and
+    * IMMEDIATE swapchains also hand the compositor a new image while it still holds the one it shows, and with
+    * as few images the application then waits for a release every frame. Applications, like Mesa's zink, ask for
+    * the reported minimum without saying which present mode it is for, so give those swapchains a spare image, as
+    * Mesa's own Wayland WSI does: the application learns the count from vkGetSwapchainImagesKHR. */
+   VkSwapchainCreateInfoKHR create_info = *pSwapchainCreateInfo;
+   const auto *present_modes = util::find_extension<VkSwapchainPresentModesCreateInfoEXT>(
+      VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_MODES_CREATE_INFO_EXT, pSwapchainCreateInfo->pNext);
+   const auto is_unpaced = [](VkPresentModeKHR mode) {
+      return mode == VK_PRESENT_MODE_MAILBOX_KHR || mode == VK_PRESENT_MODE_IMMEDIATE_KHR;
+   };
+   bool unpaced = is_unpaced(create_info.presentMode);
+   for (uint32_t i = 0; present_modes != nullptr && i < present_modes->presentModeCount; i++)
+   {
+      unpaced = unpaced || is_unpaced(present_modes->pPresentModes[i]);
+   }
+   if (unpaced)
+   {
+      create_info.minImageCount = std::max(create_info.minImageCount, wsi::surface_properties::UNPACED_MIN_IMAGE_COUNT);
+   }
+
+   TRY_LOG(sc->init(device, &create_info), "Failed to initialise swapchain");
 
    TRY_LOG(device_data.add_layer_swapchain(reinterpret_cast<VkSwapchainKHR>(sc.get())),
            "Failed to associate swapchain with the layer");

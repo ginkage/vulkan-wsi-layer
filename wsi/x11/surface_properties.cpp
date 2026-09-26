@@ -84,12 +84,9 @@ surface_properties &surface_properties::get_instance()
 VkResult surface_properties::get_surface_capabilities(VkPhysicalDevice physical_device,
                                                       VkSurfaceCapabilitiesKHR *surface_capabilities)
 {
-   /* Image count limits */
+   /* Image count limits: an image stays on screen until PresentIdleNotify */
    get_surface_capabilities_common(physical_device, surface_capabilities);
-   /* One image on screen (held until PresentIdleNotify), one queued and one being rendered keep a FIFO
-    * swapchain busy without stalling. Every image beyond that is a frame of latency for applications
-    * that ask for minImageCount + 1. */
-   surface_capabilities->minImageCount = 3;
+   surface_capabilities->minImageCount = PACED_MIN_IMAGE_COUNT;
 
    int depth;
    specific_surface->get_size_and_depth(&surface_capabilities->currentExtent.width,
@@ -111,6 +108,7 @@ VkResult surface_properties::get_surface_capabilities(VkPhysicalDevice physical_
 
    /* Image count limits */
    get_surface_capabilities(physical_device, &pSurfaceCapabilities->surfaceCapabilities);
+   pSurfaceCapabilities->surfaceCapabilities.minImageCount = get_min_image_count_for_present_mode(pSurfaceInfo);
 
    m_compatible_present_modes.get_surface_present_mode_compatibility_common(pSurfaceInfo, pSurfaceCapabilities);
 
