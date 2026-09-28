@@ -35,6 +35,7 @@
 #include <vulkan/vulkan.h>
 #include <thread>
 #include <array>
+#include <condition_variable>
 #include <variant>
 
 #include <util/custom_allocator.hpp>
@@ -399,6 +400,16 @@ protected:
     * than we have we eliminate race conditions.
     */
    util::ring_buffer<pending_present_request, wsi::surface_properties::MAX_SWAPCHAIN_IMAGE_COUNT> m_pending_buffer_pool;
+
+   /**
+    * @brief Number of queued or in-progress page flips, protected by m_image_status_mutex.
+    */
+   uint32_t m_pending_present_count{ 0 };
+
+   /**
+    * @brief Notifies waiters when all queued page flips have finished.
+    */
+   std::condition_variable_any m_pending_present_condition;
 
    /**
     * @brief User provided memory allocation callbacks.

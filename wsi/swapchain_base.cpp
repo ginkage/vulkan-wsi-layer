@@ -109,10 +109,24 @@ void swapchain_base::page_flip_thread()
       {
          set_error_state(vk_res);
          m_free_image_semaphore.post();
-         continue;
+      }
+      else
+      {
+         call_present(submit_info);
       }
 
-      call_present(submit_info);
+      util::unique_lock<util::recursive_mutex> image_status_lock(m_image_status_mutex);
+      if (!image_status_lock)
+      {
+         WSI_LOG_ERROR("Failed to acquire image status lock after page flip.");
+         abort();
+      }
+
+      assert(m_pending_present_count > 0);
+      if (--m_pending_present_count == 0)
+      {
+         m_pending_present_condition.notify_all();
+      }
    }
 }
 
@@ -567,6 +581,7 @@ VkResult swapchain_base::notify_presentation_engine(const pending_present_reques
       bool buffer_pool_res = m_pending_buffer_pool.push_back(pending_present);
       (void)buffer_pool_res;
       assert(buffer_pool_res);
+      ++m_pending_present_count;
       m_page_flip_semaphore.post();
    }
    else
@@ -730,6 +745,10 @@ void swapchain_base::wait_for_pending_buffers()
       WSI_LOG_ERROR("Failed to acquire mutex lock in wait_for_pending_buffers.\n");
       abort();
    }
+
+   /* A buffer still queued in the layer cannot be treated as the compositor's
+    * final retained image. Finish all page flips before waiting for releases. */
+   m_pending_present_condition.wait(image_status_lock, [this]() { return m_pending_present_count == 0; });
 
    uint64_t non_pending_images = 0;
    for (auto &img : m_swapchain_images)
