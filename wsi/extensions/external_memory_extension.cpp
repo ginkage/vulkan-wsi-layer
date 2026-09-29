@@ -31,27 +31,8 @@
 #include <util/format_modifiers.hpp>
 
 #include <layer/private_data.hpp>
-#include <layer/wsi_layer_experimental.hpp>
-
 #include "external_memory_extension.hpp"
 #include "wsi/image_usage.hpp"
-
-namespace
-{
-
-VkImageCreateFlags2KHR get_image_create_flags(const VkImageCreateInfo &image_create_info) noexcept
-{
-   const auto *flags2 = util::find_extension<VkImageCreateFlags2CreateInfoKHR>(
-      VK_STRUCTURE_TYPE_IMAGE_CREATE_FLAGS_2_CREATE_INFO_KHR, image_create_info.pNext);
-   if (flags2 != nullptr)
-   {
-      return flags2->flags;
-   }
-
-   return image_create_info.flags;
-}
-
-} // namespace
 
 namespace wsi
 {
@@ -141,19 +122,7 @@ VkResult get_surface_compatible_formats(const VkImageCreateInfo &image_create_in
             image_info.usage = image_create_info.usage;
          }
 
-         const auto *image_create_flags2 = util::find_extension<VkImageCreateFlags2CreateInfoKHR>(
-            VK_STRUCTURE_TYPE_IMAGE_CREATE_FLAGS_2_CREATE_INFO_KHR, image_create_info.pNext);
-         VkImageCreateFlags2CreateInfoKHR image_create_flags2_copy = {};
-         if (image_create_flags2 != nullptr)
-         {
-            image_create_flags2_copy = util::shallow_copy_extension(image_create_flags2);
-            image_create_flags2_copy.pNext = const_cast<void *>(image_info.pNext);
-            image_info.pNext = &image_create_flags2_copy;
-         }
-         else
-         {
-            image_info.flags = image_create_info.flags;
-         }
+         image_info.flags = image_create_info.flags;
 
          /* Attach view format list (if any) to the image_info chain, as required by the spec. */
          const auto *image_format_list = util::find_extension<VkImageFormatListCreateInfo>(
@@ -247,7 +216,7 @@ std::variant<VkResult, wsialloc_allocate_result> query_wsialloc_preferred_format
       }
    }
 
-   allocation_params params = { (get_image_create_flags(image_create_info) & VK_IMAGE_CREATE_PROTECTED_BIT) != 0,
+   allocation_params params = { (image_create_info.flags & VK_IMAGE_CREATE_PROTECTED_BIT) != 0,
                                 image_create_info.extent,
                                 in_importable_formats.data(),
                                 in_importable_formats.size(),
@@ -343,10 +312,10 @@ swapchain_image_create_external_memory::swapchain_image_create_external_memory(
    }
 
    m_create_extent = image_create_info.extent;
-   m_create_flags = get_image_create_flags(image_create_info);
+   m_create_flags = image_create_info.flags;
    if (m_wsialloc_selected_format.is_disjoint)
    {
-      m_create_flags |= VK_IMAGE_CREATE_2_DISJOINT_BIT_KHR;
+      m_create_flags |= VK_IMAGE_CREATE_DISJOINT_BIT;
    }
 }
 
@@ -356,16 +325,7 @@ VkResult swapchain_image_create_external_memory::extend_image_create_info(VkImag
 
    if (m_wsialloc_selected_format.is_disjoint)
    {
-      auto *image_create_flags2 = util::find_extension<VkImageCreateFlags2CreateInfoKHR>(
-         VK_STRUCTURE_TYPE_IMAGE_CREATE_FLAGS_2_CREATE_INFO_KHR, const_cast<void *>(image_create_info->pNext));
-      if (image_create_flags2 != nullptr)
-      {
-         image_create_flags2->flags |= VK_IMAGE_CREATE_2_DISJOINT_BIT_KHR;
-      }
-      else
-      {
-         image_create_info->flags |= VK_IMAGE_CREATE_DISJOINT_BIT;
-      }
+      image_create_info->flags |= VK_IMAGE_CREATE_DISJOINT_BIT;
    }
 
    m_drm_mod_info.sType = VK_STRUCTURE_TYPE_IMAGE_DRM_FORMAT_MODIFIER_EXPLICIT_CREATE_INFO_EXT;
