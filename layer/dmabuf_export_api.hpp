@@ -55,6 +55,10 @@ wsi_layer_vkFreeMemory(VkDevice device, VkDeviceMemory memory, const VkAllocatio
 VWL_VKAPI_CALL(VkResult)
 wsi_layer_vkGetMemoryFdKHR(VkDevice device, const VkMemoryGetFdInfoKHR *pGetFdInfo, int *pFd) VWL_API_POST;
 
+VWL_VKAPI_CALL(void)
+wsi_layer_vkGetImageSubresourceLayout(VkDevice device, VkImage image, const VkImageSubresource *pSubresource,
+                                      VkSubresourceLayout *pLayout) VWL_API_POST;
+
 VWL_VKAPI_CALL(VkResult)
 wsi_layer_vkGetPhysicalDeviceImageFormatProperties2(VkPhysicalDevice physicalDevice,
                                                     const VkPhysicalDeviceImageFormatInfo2 *pImageFormatInfo,

@@ -1520,6 +1520,7 @@ wsi_layer_vkGetDeviceProcAddr(VkDevice device, const char *funcName) VWL_API_POS
       GET_PROC_ADDR(vkAllocateMemory);
       GET_PROC_ADDR(vkFreeMemory);
       GET_PROC_ADDR(vkGetMemoryFdKHR);
+      GET_PROC_ADDR(vkGetImageSubresourceLayout);
    }
 
    if (device_data.is_device_extension_enabled(VK_EXT_PRESENT_TIMING_EXTENSION_NAME))
