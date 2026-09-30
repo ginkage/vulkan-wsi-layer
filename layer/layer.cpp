@@ -46,10 +46,13 @@
 #include "util/macros.hpp"
 
 #if WSI_LAYER_HAVE_LIBDRM
+#include <fcntl.h>
 #include <optional>
 #include <sys/stat.h>
 #include <sys/sysmacros.h>
+#include <unistd.h>
 #include <xf86drm.h>
+#include <xf86drmMode.h>
 #endif
 #include "util/helpers.hpp"
 
@@ -475,9 +478,27 @@ VkResult validate_requested_layer_features(VkPhysicalDevice physical_device, con
  * Mesa then cannot tie a DRM device to it: zink can back neither gbm nor EGL on a DRM device, which a compositor on
  * zink needs, and zink clients of any compositor that names its DRM device (Wayland dma-buf feedback) fall back to
  * copying every frame through the CPU. Its buffers are dma-bufs shared through the display controller, so report
- * the DRM device of that for the physical device: the first DRM device with a render node, as libmali's EGL reports
- * it, or the one of the node WSI_FAKE_DRM_DEVICE names (e.g. /dev/dri/card0). WSI_FAKE_DRM_DEVICE=0 disables it.
+ * the DRM device of that for the physical device: the first DRM device with a render node that can drive a display
+ * (other DRM devices, like the RK3588's NPU, may be listed first), or the one of the node WSI_FAKE_DRM_DEVICE names
+ * (e.g. /dev/dri/card0). Without access to a primary node to tell, the first DRM device with a render node, as
+ * libmali's EGL reports it. WSI_FAKE_DRM_DEVICE=0 disables it.
  * Only for a device whose driver reports no DRM device of its own. Returns null when disabled or none is found. */
+static bool is_display_device(drmDevicePtr device)
+{
+   if (!(device->available_nodes & (1 << DRM_NODE_PRIMARY)))
+   {
+      return false;
+   }
+   const int fd = open(device->nodes[DRM_NODE_PRIMARY], O_RDONLY | O_CLOEXEC);
+   if (fd < 0)
+   {
+      return false;
+   }
+   const bool kms = drmIsKMS(fd) != 0;
+   close(fd);
+   return kms;
+}
+
 static const VkPhysicalDeviceDrmPropertiesEXT *fake_drm_properties()
 {
 #if WSI_LAYER_HAVE_LIBDRM
@@ -502,9 +523,26 @@ static const VkPhysicalDeviceDrmPropertiesEXT *fake_drm_properties()
       {
          drmDevicePtr devices[16];
          const int count = drmGetDevices2(0, devices, 16);
+         int chosen = -1;
          for (int i = 0; i < count; i++)
          {
-            if (device == nullptr && (devices[i]->available_nodes & (1 << DRM_NODE_RENDER)))
+            if (!(devices[i]->available_nodes & (1 << DRM_NODE_RENDER)))
+            {
+               continue;
+            }
+            if (chosen < 0)
+            {
+               chosen = i;
+            }
+            if (is_display_device(devices[i]))
+            {
+               chosen = i;
+               break;
+            }
+         }
+         for (int i = 0; i < count; i++)
+         {
+            if (i == chosen)
             {
                device = devices[i];
             }
