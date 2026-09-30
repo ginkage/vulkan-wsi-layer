@@ -312,6 +312,23 @@ wsi_layer_vkGetMemoryFdKHR(VkDevice device, const VkMemoryGetFdInfoKHR *pGetFdIn
    return (result == VK_SUCCESS && *pFd < 0) ? VK_ERROR_TOO_MANY_OBJECTS : result;
 }
 
+VWL_VKAPI_CALL(void)
+wsi_layer_vkGetImageSubresourceLayout(VkDevice device, VkImage image, const VkImageSubresource *pSubresource,
+                                      VkSubresourceLayout *pLayout) VWL_API_POST
+{
+   auto &device_data = layer::device_private_data::get(device);
+   device_data.disp.GetImageSubresourceLayout(device, image, pSubresource, pLayout);
+
+   /* The Mali driver reports a row pitch of 0 for images one row tall, LINEAR ones included, with the row's size,
+    * aligned as the rows of taller images are, as the size of the subresource. Whoever imports such an image's
+    * dma-buf needs its pitch: Xwayland rejects a stride of 0, so zink could not share the buffers of one-row
+    * surfaces over DRI3, and Chromium's GPU process (Steam's webhelper) crashed. */
+   if (pLayout->rowPitch == 0 && pLayout->size != 0)
+   {
+      pLayout->rowPitch = pLayout->size;
+   }
+}
+
 VWL_VKAPI_CALL(VkResult)
 wsi_layer_vkGetPhysicalDeviceImageFormatProperties2(VkPhysicalDevice physicalDevice,
                                                     const VkPhysicalDeviceImageFormatInfo2 *pImageFormatInfo,
