@@ -167,13 +167,15 @@ VkResult surface_properties::get_surface_present_modes(VkPhysicalDevice physical
    return get_surface_present_modes_common(present_mode_count, present_modes, m_supported_modes);
 }
 
+/* VK_KHR_external_fence_fd and VK_KHR_external_semaphore_fd are enabled when available (see
+ * add_device_extensions_required_by_layer), but not required: neither X11 presenter exports its present fence, and
+ * without sync fd import the base signals acquire fences and semaphores with a queue submission instead. Requiring
+ * them failed vkCreateDevice on devices without them, such as SwiftShader, which Chromium falls back to. */
 static const char *required_device_extensions[] = {
    VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME,
    VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME,
    VK_KHR_EXTERNAL_FENCE_EXTENSION_NAME,
-   VK_KHR_EXTERNAL_FENCE_FD_EXTENSION_NAME,
    VK_KHR_EXTERNAL_SEMAPHORE_EXTENSION_NAME,
-   VK_KHR_EXTERNAL_SEMAPHORE_FD_EXTENSION_NAME,
    VK_KHR_DEDICATED_ALLOCATION_EXTENSION_NAME,
    VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME,
    VK_KHR_SAMPLER_YCBCR_CONVERSION_EXTENSION_NAME,
