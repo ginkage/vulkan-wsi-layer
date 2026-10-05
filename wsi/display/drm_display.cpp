@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024-2025 Arm Limited.
+ * Copyright (c) 2024-2026 Arm Limited.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -26,6 +26,7 @@
 #include "util/custom_allocator.hpp"
 #include "wsi/surface.hpp"
 
+#include <algorithm>
 #include <cstdlib>
 #include <cstring>
 #include <cerrno>
@@ -376,21 +377,33 @@ std::optional<drm_display> &drm_display::get_display()
          {
             return;
          }
+         util::vector<std::string> cards{ util::allocator::get_generic() };
          struct dirent *entry;
          while ((entry = readdir(dir)) != nullptr)
          {
             if (strncmp(entry->d_name, "card", 4) == 0)
             {
-               std::string path = std::string(dri_dir) + "/" + entry->d_name;
-               display = drm_display::make_display(util::allocator::get_generic(), path.c_str());
-               if (display.has_value())
+               if (!cards.try_push_back(entry->d_name))
                {
-                  WSI_LOG_INFO("Using DRM device: %s", path.c_str());
-                  break;
+                  closedir(dir);
+                  WSI_LOG_ERROR("Out of host memory.");
+                  return;
                }
             }
          }
          closedir(dir);
+
+         std::sort(cards.begin(), cards.end());
+         for (const auto &card : cards)
+         {
+            std::string path = std::string(dri_dir) + "/" + card;
+            display = drm_display::make_display(util::allocator::get_generic(), path.c_str());
+            if (display.has_value())
+            {
+               WSI_LOG_INFO("Using DRM device: %s", path.c_str());
+               break;
+            }
+         }
       }
    });
    return display;
