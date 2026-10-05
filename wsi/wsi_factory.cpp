@@ -219,11 +219,15 @@ VkResult add_device_extensions_required_by_layer(VkPhysicalDevice phys_dev,
       bool supported = available_device_extensions.contains(extensions_required_by_layer);
       if (!supported)
       {
-         /* Can we accept failure? The layer unconditionally advertises support for this platform and the loader uses
-          * this information to enable its own support of the vkCreate*SurfaceKHR entrypoints. The rest of the Vulkan
-          * stack may not support this extension so we cannot blindly fall back to it.
-          * For now treat this as an error.
+         /* Leave the platform to an ICD that implements VK_KHR_swapchain itself (lavapipe lacks
+          * VK_EXT_image_drm_format_modifier, which Wayland needs): instance_private_data::do_icds_support_surface
+          * sends that device's surfaces down the chain. Otherwise the layer unconditionally advertises support for
+          * this platform and the rest of the Vulkan stack may not support it, so treat this as an error.
           */
+         if (available_device_extensions.contains(VK_KHR_SWAPCHAIN_EXTENSION_NAME))
+         {
+            continue;
+         }
          return VK_ERROR_INITIALIZATION_FAILED;
       }
 

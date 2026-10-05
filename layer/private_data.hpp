@@ -804,6 +804,9 @@ private:
 
    /**
     * @brief Check whether the given surface is already supported for presentation without the layer.
+    *
+    * True for surfaces created by calling down the chain when @p phys_dev lacks the extensions the layer needs for the
+    * surface's platform but its ICD implements VK_KHR_swapchain.
     */
    bool do_icds_support_surface(VkPhysicalDevice phys_dev, VkSurfaceKHR surface);
 
