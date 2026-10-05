@@ -29,7 +29,6 @@
 namespace wsi
 {
 
-#if VULKAN_WSI_LAYER_EXPERIMENTAL
 void populate_swapchain_supported_flags(VkPhysicalDevice physical_device,
                                         VkSurfaceCapabilities2KHR *surface_capabilities,
                                         VkSwapchainCreateFlagsKHR backend_specific_flags)
@@ -68,7 +67,6 @@ void populate_swapchain_supported_flags(VkPhysicalDevice physical_device,
       swapchain_flags->swapchainSupportedFlags |= VK_SWAPCHAIN_CREATE_MULTISAMPLED_RENDER_TO_SINGLE_SAMPLED_BIT_EXT;
    }
 }
-#endif
 
 VkResult surface_format_properties::check_device_support(VkPhysicalDevice phys_dev,
                                                          VkPhysicalDeviceImageFormatInfo2KHR image_format_info)

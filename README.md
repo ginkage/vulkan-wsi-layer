@@ -26,6 +26,7 @@ implements the following extensions:
 * Device extensions
   * VK_KHR_shared_presentable_image
   * VK_EXT_image_compression_control_swapchain
+  * VK_EXT_multisampled_render_to_swapchain (For Headless, Wayland, and Display)
   * VK_KHR_present_id
   * VK_KHR_present_id2
   * VK_KHR_present_wait
