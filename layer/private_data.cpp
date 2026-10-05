@@ -392,13 +392,30 @@ void instance_private_data::destroy(instance_private_data *instance_data)
    alloc.destroy<instance_private_data>(1, instance_data);
 }
 
-bool instance_private_data::do_icds_support_surface(VkPhysicalDevice, VkSurfaceKHR)
+bool instance_private_data::do_icds_support_surface(VkPhysicalDevice phys_dev, VkSurfaceKHR surface)
 {
-   /* For now assume ICDs do not support VK_KHR_surface. This means that the layer will handle all the surfaces it can
-    * handle (even if the ICDs can handle the surface) and only call down for surfaces it cannot handle. In the future
-    * we may allow system integrators to configure which ICDs have precedence handling which platforms.
+   /* The layer handles every surface it can handle, even if the ICD could too: Mali advertises VK_KHR_swapchain
+    * without implementing any WSI. The exception is a device lacking the extensions the layer needs for the surface's
+    * platform, which wsi::add_device_extensions_required_by_layer leaves to an ICD that implements VK_KHR_swapchain
+    * itself (lavapipe has no VK_EXT_image_drm_format_modifier for Wayland). The loader created a surface for that ICD
+    * when the layer called down; surfaces whose handle the layer fabricates (X11) never reached it.
     */
-   return false;
+   wsi::surface *wsi_surface = get_surface(surface);
+   if (wsi_surface == nullptr || !wsi_surface->created_by_icd_calldown())
+   {
+      return false;
+   }
+
+   util::allocator command_allocator{ get_allocator(), VK_SYSTEM_ALLOCATION_SCOPE_COMMAND };
+   util::extension_list available_extensions{ command_allocator };
+   util::extension_list required_extensions{ command_allocator };
+   if (wsi::get_available_device_extensions(phys_dev, available_extensions) != VK_SUCCESS ||
+       wsi_surface->get_properties().get_required_device_extensions(required_extensions, api_version) != VK_SUCCESS)
+   {
+      return false;
+   }
+   return !available_extensions.contains(required_extensions) &&
+          available_extensions.contains(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
 }
 
 bool instance_private_data::should_layer_handle_surface(VkPhysicalDevice phys_dev, VkSurfaceKHR surface)
