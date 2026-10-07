@@ -311,7 +311,7 @@ public:
     *
     * @param present_stage   The present stage to calibrate
     * @param calibrated_time The calibrated time output
-    * @return VK_SUCCESS when calibrated successfully VK_ERROR_OUT_OF_HOST_MEMORY otherwise.
+    * @return VK_SUCCESS.
     */
    VkResult calibrate(VkPresentStageFlagBitsEXT present_stage, swapchain_calibrated_time *calibrated_time);
 
