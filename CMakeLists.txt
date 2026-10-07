@@ -361,6 +361,7 @@ add_library(${PROJECT_NAME} SHARED
    layer/calibrated_timestamps_api.cpp
    layer/dmabuf_export_api.cpp
    layer/layer.cpp
+   layer/low_address_map_api.cpp
    layer/private_data.cpp
    layer/surface_api.cpp
    layer/swapchain_api.cpp
