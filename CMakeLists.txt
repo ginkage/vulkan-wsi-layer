@@ -101,6 +101,13 @@ option(ENABLE_WAYLAND_FIFO_PRESENTATION_THREAD "Enable the non-conformant FIFO p
 # VK_EXT_frame_boundary then the layer will not pass its own frame boundary events.
 option(ENABLE_INSTRUMENTATION "Pass frame boundary events by using VK_EXT_frame_boundary" OFF)
 
+# The Vulkan loader rejects instance extensions missing from its own list of known extensions, whoever
+# advertises them, and only loaders from 1.4.321 on know VK_KHR_surface_maintenance1. Advertising it to an
+# older loader (Ubuntu 24.04 ships 1.3.275, the Steam Runtime 1.4.309) makes vkCreateInstance fail for
+# applications that enable every extension they see, such as DXVK. VK_EXT_surface_maintenance1 is the same
+# extension under the name older loaders know.
+option(ADVERTISE_KHR_SURFACE_MAINTENANCE1 "Advertise VK_KHR_surface_maintenance1 (needs Vulkan loader 1.4.321 or newer)" OFF)
+
 if(BUILD_WSI_WAYLAND OR BUILD_WSI_DISPLAY OR BUILD_WSI_X11)
    set(BUILD_DRM_UTILS true)
    set(BUILD_WSIALLOC_UTILS true)
@@ -422,6 +429,12 @@ endif()
 # duplicate-symbol error when both backends are enabled together.
 if(BUILD_WSI_HEADLESS OR BUILD_WSI_X11)
    target_sources(${PROJECT_NAME} PRIVATE wsi/image_backing_memory_device.cpp)
+endif()
+
+if(NOT ADVERTISE_KHR_SURFACE_MAINTENANCE1)
+   # Remove the entry together with the comma before it, as it is the last one in its list.
+   list(APPEND JSON_COMMANDS COMMAND sed -i -z 's/,[[:space:]]*{[^}]*VK_KHR_surface_maintenance1[^}]*}//'
+        ${CMAKE_CURRENT_BINARY_DIR}/VkLayer_window_system_integration.json)
 endif()
 
 # The build-tree manifest keeps the relative "./" library path, so the layer can be tried straight from

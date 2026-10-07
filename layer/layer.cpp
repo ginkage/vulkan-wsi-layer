@@ -1339,10 +1339,17 @@ VWL_VKAPI_EXPORT wsi_layer_vkEnumerateDeviceExtensionProperties(VkPhysicalDevice
    /* The manifest lists VK_EXT_physical_device_drm so that the loader accepts it, but it only means something
     * when WSI_FAKE_DRM_DEVICE is set. */
    const bool hide_drm = ours && layer::fake_drm_properties() == nullptr;
-   const bool filter = hide_maintenance1 || hide_drm;
+   /* VK_KHR_swapchain_maintenance1 requires VK_KHR_surface_maintenance1, which the layer only advertises with
+    * ADVERTISE_KHR_SURFACE_MAINTENANCE1, so offer it only to instances that enabled that. Others get the
+    * VK_EXT_swapchain_maintenance1 equivalent. */
+   const bool hide_khr_maintenance1 =
+      ours && !instance.is_instance_extension_enabled(VK_KHR_SURFACE_MAINTENANCE_1_EXTENSION_NAME);
+   const bool filter = hide_maintenance1 || hide_drm || hide_khr_maintenance1;
    auto hidden = [&](const VkExtensionProperties &property) {
       return (hide_maintenance1 && layer::is_swapchain_maintenance1(property)) ||
-             (hide_drm && layer::is_physical_device_drm(property));
+             (hide_drm && layer::is_physical_device_drm(property)) ||
+             (hide_khr_maintenance1 &&
+              strcmp(property.extensionName, VK_KHR_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME) == 0);
    };
 
    if (!filter)
