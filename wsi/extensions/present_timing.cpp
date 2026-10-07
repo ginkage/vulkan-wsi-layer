@@ -755,7 +755,9 @@ VkResult swapchain_time_domains::calibrate(VkPresentStageFlagBitsEXT present_sta
       }
    }
 
-   return VK_ERROR_OUT_OF_HOST_MEMORY;
+   /* Unsupported stages have no presentation timestamps to correlate. */
+   *calibrated_time = { VK_TIME_DOMAIN_DEVICE_KHR, 0 };
+   return VK_SUCCESS;
 }
 
 bool swapchain_time_domains::add_time_domain(util::unique_ptr<swapchain_time_domain> time_domain)
