@@ -1,0 +1,25 @@
+#!/bin/sh
+set -e
+
+# Undo preinst's diversions, putting libmali's bundled copy of the layer back in place.
+
+case "$DPKG_MAINTSCRIPT_ARCH" in
+	arm64) multiarch=aarch64-linux-gnu ;;
+	armhf) multiarch=arm-linux-gnueabihf ;;
+	*) multiarch= ;;
+esac
+
+if [ -n "$multiarch" ] && { [ "$1" = remove ] || [ "$1" = abort-install ] || [ "$1" = disappear ]; }; then
+	dpkg-divert --package libvulkan-wsi-layer --remove --rename \
+		--divert "/usr/lib/$multiarch/libvulkan-wsi-layer/libmali/libVkLayer_window_system_integration.so" \
+		"/usr/lib/$multiarch/libVkLayer_window_system_integration.so"
+	dpkg-divert --package libvulkan-wsi-layer --remove --rename \
+		--divert /usr/share/libvulkan-wsi-layer/libmali/VkLayer_window_system_integration.json \
+		/usr/share/vulkan/implicit_layer.d/VkLayer_window_system_integration.json
+	rmdir "$DPKG_ROOT/usr/lib/$multiarch/libvulkan-wsi-layer/libmali" \
+		"$DPKG_ROOT/usr/lib/$multiarch/libvulkan-wsi-layer" \
+		"$DPKG_ROOT/usr/share/libvulkan-wsi-layer/libmali" \
+		"$DPKG_ROOT/usr/share/libvulkan-wsi-layer" 2>/dev/null || true
+fi
+
+#DEBHELPER#
