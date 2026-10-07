@@ -24,10 +24,24 @@
 
 #include "custom_allocator.hpp"
 #include "macros.hpp"
+#include <cstdlib>
+#include <cstring>
 #include <vulkan/vulkan.h>
 
 namespace util
 {
+
+/* Under a translation layer such as FEX's Vulkan thunks, the application's allocation callbacks are guest
+ * (e.g. x86-64) code that this native layer cannot call. WSI_IGNORE_ALLOCATION_CALLBACKS=1 makes the layer use
+ * its own allocator instead. */
+static bool ignore_application_callbacks()
+{
+   static const bool ignore = []() {
+      const char *env = std::getenv("WSI_IGNORE_ALLOCATION_CALLBACKS");
+      return env != nullptr && std::strcmp(env, "0") != 0;
+   }();
+   return ignore;
+}
 
 VWL_VKAPI_CALL(void *) default_allocation(void *, size_t size, size_t, VkSystemAllocationScope) VWL_API_POST
 {
@@ -60,7 +74,7 @@ allocator::allocator(const allocator &other, VkSystemAllocationScope new_scope, 
 allocator::allocator(VkSystemAllocationScope scope, const VkAllocationCallbacks *callbacks)
 {
    m_scope = scope;
-   if (callbacks != nullptr)
+   if (callbacks != nullptr && !ignore_application_callbacks())
    {
       m_callbacks = *callbacks;
    }
