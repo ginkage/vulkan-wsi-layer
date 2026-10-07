@@ -42,6 +42,7 @@
 #include <sys/ioctl.h>
 #include <unistd.h>
 
+#include "low_address_map_api.hpp"
 #include "private_data.hpp"
 #include "util/helpers.hpp"
 #include "util/log.hpp"
@@ -269,6 +270,10 @@ VWL_VKAPI_CALL(void)
 wsi_layer_vkFreeMemory(VkDevice device, VkDeviceMemory memory, const VkAllocationCallbacks *pAllocator) VWL_API_POST
 {
    auto &device_data = layer::device_private_data::get(device);
+   if (layer::low_address_map_enabled())
+   {
+      layer::low_address_map_free_memory(device, memory);
+   }
    if (memory != VK_NULL_HANDLE)
    {
       util::unique_lock<util::mutex> lock(device_data.dmabuf_exports_lock);

@@ -38,6 +38,7 @@
 #include "swapchain_api.hpp"
 #include "swapchain_maintenance_api.hpp"
 #include "dmabuf_export_api.hpp"
+#include "low_address_map_api.hpp"
 #include "util/extension_list.hpp"
 #include "util/custom_allocator.hpp"
 #include "wsi/wsi_factory.hpp"
@@ -1302,6 +1303,11 @@ wsi_layer_vkDestroyDevice(VkDevice device, const VkAllocationCallbacks *pAllocat
     */
    layer::device_private_data::disassociate(device);
 
+   if (layer::low_address_map_enabled())
+   {
+      layer::low_address_map_destroy_device(device);
+   }
+
    assert(fn_destroy_device.has_value());
    (*fn_destroy_device)(device, pAllocator);
 }
@@ -1519,6 +1525,41 @@ wsi_layer_vkGetDeviceProcAddr(VkDevice device, const char *funcName) VWL_API_POS
    if (device_data.is_device_extension_enabled(VK_KHR_SHARED_PRESENTABLE_IMAGE_EXTENSION_NAME))
    {
       GET_PROC_ADDR(vkGetSwapchainStatusKHR);
+   }
+
+   if (layer::low_address_map_enabled())
+   {
+      GET_PROC_ADDR(vkMapMemory);
+      GET_PROC_ADDR(vkUnmapMemory);
+      GET_PROC_ADDR(vkFlushMappedMemoryRanges);
+      GET_PROC_ADDR(vkInvalidateMappedMemoryRanges);
+      GET_PROC_ADDR(vkQueueSubmit);
+      GET_PROC_ADDR(vkFreeMemory);
+      if (device_data.is_device_extension_enabled(VK_KHR_MAP_MEMORY_2_EXTENSION_NAME))
+      {
+         if (!strcmp(funcName, "vkMapMemory2KHR"))
+         {
+            return (PFN_vkVoidFunction)&wsi_layer_vkMapMemory2;
+         }
+         if (!strcmp(funcName, "vkUnmapMemory2KHR"))
+         {
+            return (PFN_vkVoidFunction)&wsi_layer_vkUnmapMemory2;
+         }
+      }
+      if (api_version >= VK_API_VERSION_1_4)
+      {
+         GET_PROC_ADDR(vkMapMemory2);
+         GET_PROC_ADDR(vkUnmapMemory2);
+      }
+      if (device_data.is_device_extension_enabled(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME) &&
+          !strcmp(funcName, "vkQueueSubmit2KHR"))
+      {
+         return (PFN_vkVoidFunction)&wsi_layer_vkQueueSubmit2;
+      }
+      if (api_version >= VK_API_VERSION_1_3)
+      {
+         GET_PROC_ADDR(vkQueueSubmit2);
+      }
    }
 
    if (device_data.is_device_extension_enabled(VK_EXT_EXTERNAL_MEMORY_DMA_BUF_EXTENSION_NAME) &&

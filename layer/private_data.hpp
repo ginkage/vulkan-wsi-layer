@@ -424,6 +424,8 @@ private:
    EP(BindImageMemory, "", VK_API_VERSION_1_0, true, )                                                                      \
    EP(MapMemory, "", VK_API_VERSION_1_0, true, )                                                                            \
    EP(UnmapMemory, "", VK_API_VERSION_1_0, true, )                                                                          \
+   EP(FlushMappedMemoryRanges, "", VK_API_VERSION_1_0, true, )                                                              \
+   EP(InvalidateMappedMemoryRanges, "", VK_API_VERSION_1_0, true, )                                                         \
    EP(GetImageSubresourceLayout, "", VK_API_VERSION_1_0, true, )                                                            \
    EP(AllocateMemory, "", VK_API_VERSION_1_0, true, )                                                                       \
    EP(FreeMemory, "", VK_API_VERSION_1_0, true, )                                                                           \
@@ -457,6 +459,11 @@ private:
    EP(GetMemoryFdPropertiesKHR, VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME, API_VERSION_MAX, false, )                         \
    /* VK_KHR_bind_memory2 or 1.1 (without KHR suffix) */                                                                    \
    EP(BindImageMemory2KHR, VK_KHR_BIND_MEMORY_2_EXTENSION_NAME, VK_API_VERSION_1_1, false, BindImageMemory2)                \
+   /* VK_KHR_map_memory2 or 1.4 */                                                                                          \
+   EP(MapMemory2KHR, VK_KHR_MAP_MEMORY_2_EXTENSION_NAME, VK_API_VERSION_1_4, false, MapMemory2)                             \
+   EP(UnmapMemory2KHR, VK_KHR_MAP_MEMORY_2_EXTENSION_NAME, VK_API_VERSION_1_4, false, UnmapMemory2)                         \
+   /* VK_KHR_synchronization2 or 1.3 */                                                                                     \
+   EP(QueueSubmit2KHR, VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME, VK_API_VERSION_1_3, false, QueueSubmit2)                    \
    EP(BindBufferMemory2KHR, VK_KHR_BIND_MEMORY_2_EXTENSION_NAME, VK_API_VERSION_1_1, false, BindBufferMemory2)              \
    /* VK_KHR_external_fence_fd */                                                                                           \
    EP(GetFenceFdKHR, VK_KHR_EXTERNAL_FENCE_FD_EXTENSION_NAME, API_VERSION_MAX, false, )                                     \
