@@ -1,0 +1,26 @@
+#!/bin/sh
+set -e
+
+# libmali bundles a prebuilt copy of this layer at the same paths this package installs to. Divert
+# libmali's copies into directories neither ld.so nor the Vulkan loader search, so this package's
+# build is the only VK_LAYER_window_system_integration in use, whichever of the two is installed or
+# upgraded first. postrm puts them back.
+
+case "$DPKG_MAINTSCRIPT_ARCH" in
+	arm64) multiarch=aarch64-linux-gnu ;;
+	armhf) multiarch=arm-linux-gnueabihf ;;
+	*) multiarch= ;;
+esac
+
+if [ -n "$multiarch" ] && { [ "$1" = install ] || [ "$1" = upgrade ]; }; then
+	mkdir -p "$DPKG_ROOT/usr/lib/$multiarch/libvulkan-wsi-layer/libmali" \
+		"$DPKG_ROOT/usr/share/libvulkan-wsi-layer/libmali"
+	dpkg-divert --package libvulkan-wsi-layer --add --rename \
+		--divert "/usr/lib/$multiarch/libvulkan-wsi-layer/libmali/libVkLayer_window_system_integration.so" \
+		"/usr/lib/$multiarch/libVkLayer_window_system_integration.so"
+	dpkg-divert --package libvulkan-wsi-layer --add --rename \
+		--divert /usr/share/libvulkan-wsi-layer/libmali/VkLayer_window_system_integration.json \
+		/usr/share/vulkan/implicit_layer.d/VkLayer_window_system_integration.json
+fi
+
+#DEBHELPER#

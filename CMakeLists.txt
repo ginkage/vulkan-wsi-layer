@@ -424,12 +424,22 @@ if(BUILD_WSI_HEADLESS OR BUILD_WSI_X11)
    target_sources(${PROJECT_NAME} PRIVATE wsi/image_backing_memory_device.cpp)
 endif()
 
+# The build-tree manifest keeps the relative "./" library path, so the layer can be tried straight from
+# the build directory (VK_LAYER_PATH / VK_ADD_IMPLICIT_LAYER_PATH). The installed copy names the layer by
+# its soname instead, for ld.so to resolve from the library directory.
 add_custom_target(manifest_json ALL COMMAND
    cp ${PROJECT_SOURCE_DIR}/layer/VkLayer_window_system_integration.json ${CMAKE_CURRENT_BINARY_DIR}
-   ${JSON_COMMANDS})
+   ${JSON_COMMANDS}
+   COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/install
+   COMMAND cp ${CMAKE_CURRENT_BINARY_DIR}/VkLayer_window_system_integration.json ${CMAKE_CURRENT_BINARY_DIR}/install
+   COMMAND sed -i 's|./libVkLayer_window_system_integration.so|libVkLayer_window_system_integration.so|'
+           ${CMAKE_CURRENT_BINARY_DIR}/install/VkLayer_window_system_integration.json)
 
-# Install the layer and its manifest into a Vulkan implicit layer directory. Upstream leaves this to
-# manual copying; the fork adds install rules so the Debian package picks up the .so and JSON.
-install(TARGETS ${PROJECT_NAME} DESTINATION share/vulkan/implicit_layer.d/)
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/VkLayer_window_system_integration.json
-        DESTINATION share/vulkan/implicit_layer.d/)
+# Install with the same layout libmali uses for its bundled copy of this layer: the .so in the library
+# directory and the manifest in the implicit layer directory. Installed with --prefix /usr (as the
+# Debian package does), it takes the place of the libmali copy rather than adding a second
+# VK_LAYER_window_system_integration that loaders and pressure-vessel would pick between.
+include(GNUInstallDirs)
+install(TARGETS ${PROJECT_NAME} LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/install/VkLayer_window_system_integration.json
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/vulkan/implicit_layer.d)
