@@ -539,7 +539,7 @@ VKAPI_ATTR VkResult create_instance(const VkInstanceCreateInfo *pCreateInfo, con
    {
       if (!extensions.contains(VK_KHR_SURFACE_EXTENSION_NAME))
       {
-         return VK_ERROR_EXTENSION_NOT_PRESENT;
+         return VK_ERROR_INITIALIZATION_FAILED;
       }
       TRY_LOG_CALL(wsi::add_instance_extensions_required_by_layer(layer_platforms_to_enable, extensions, api_version));
    }
