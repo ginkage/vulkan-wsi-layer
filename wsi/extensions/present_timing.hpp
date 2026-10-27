@@ -403,6 +403,7 @@ public:
       VkCommandBufferBeginInfo begin_info = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, nullptr, 0, nullptr };
       for (uint32_t query_slot = 0; query_slot < query_count; query_slot++)
       {
+         TRY_LOG_CALL(m_device.SetDeviceLoaderData(m_device.device, m_command_buffer[query_slot]));
          TRY_LOG_CALL(m_device.disp.BeginCommandBuffer(m_command_buffer[query_slot], &begin_info));
          m_device.disp.CmdResetQueryPool(m_command_buffer[query_slot], m_query_pool, query_slot, 1u);
          m_device.disp.CmdWriteTimestamp(m_command_buffer[query_slot], VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
