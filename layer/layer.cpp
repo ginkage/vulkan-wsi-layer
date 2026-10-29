@@ -438,6 +438,11 @@ static bool is_swapchain_maintenance1(const VkExtensionProperties &property)
           strcmp(property.extensionName, VK_KHR_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME) == 0;
 }
 
+static bool is_swapchain_mutable_format(const VkExtensionProperties &property)
+{
+   return strcmp(property.extensionName, VK_KHR_SWAPCHAIN_MUTABLE_FORMAT_EXTENSION_NAME) == 0;
+}
+
 VKAPI_ATTR VkLayerInstanceCreateInfo *get_chain_info(const VkInstanceCreateInfo *pCreateInfo, VkLayerFunction func)
 {
    auto *chain_info = reinterpret_cast<const VkLayerInstanceCreateInfo *>(pCreateInfo->pNext);
@@ -983,7 +988,7 @@ VWL_VKAPI_EXPORT wsi_layer_vkEnumerateDeviceExtensionProperties(VkPhysicalDevice
    uint32_t filtered_count = 0;
    for (uint32_t i = 0; i < property_count; ++i)
    {
-      if (!layer::is_swapchain_maintenance1(properties[i]))
+      if (!layer::is_swapchain_maintenance1(properties[i]) && !layer::is_swapchain_mutable_format(properties[i]))
       {
          ++filtered_count;
       }
@@ -999,7 +1004,7 @@ VWL_VKAPI_EXPORT wsi_layer_vkEnumerateDeviceExtensionProperties(VkPhysicalDevice
    uint32_t copied_count = 0;
    for (uint32_t i = 0; i < property_count && copied_count < capacity; ++i)
    {
-      if (!layer::is_swapchain_maintenance1(properties[i]))
+      if (!layer::is_swapchain_maintenance1(properties[i]) && !layer::is_swapchain_mutable_format(properties[i]))
       {
          pProperties[copied_count++] = properties[i];
       }
