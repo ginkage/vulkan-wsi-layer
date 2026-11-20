@@ -9,8 +9,20 @@ on:
 jobs:
 
   build_and_release:
-    name: Build and Release Debian Package
+    name: Build and Release Debian Package (${{ matrix.variant }})
     runs-on: ubuntu-24.04-arm
+    strategy:
+      matrix:
+        include:
+          # Rockchip RK3588 (libmali-rockchip): the CMake defaults.
+          - variant: rockchip
+            cmake_args: ""
+            version_suffix: ""
+          # CIX P1 (libmali-cix): CIX's libmali allocates from /dev/dma_heap/system, and mesa-cix's zink
+          # trusts the Mali driver itself, so the layer reports it as it is (not layered on PanVK).
+          - variant: cix
+            cmake_args: "-DWSIALLOC_MEMORY_HEAP_NAME=system -DWSI_REPORT_LAYERED_DRIVER_DEFAULT=OFF"
+            version_suffix: "+cix"
     permissions:
       contents: write
     steps:
@@ -63,11 +75,18 @@ jobs:
             https://github.com/KhronosGroup/Vulkan-Headers.git "$RUNNER_TEMP/vulkan-headers"
           echo "VULKAN_CXX_INCLUDE=$RUNNER_TEMP/vulkan-headers/include" >> "$GITHUB_ENV"
 
-      - name: Build Debian package
-        # -e VULKAN_CXX_INCLUDE forwards the env var through debuild's sanitised environment to
-        # debian/rules.
+      - name: Version the variant
+        if: matrix.version_suffix != ''
         run: |
-          debuild -e VULKAN_CXX_INCLUDE -us -uc -b && cp -a ../*.deb ./
+          dch --local "${{ matrix.version_suffix }}" --distribution UNRELEASED \
+            "Build for ${{ matrix.variant }}: ${{ matrix.cmake_args }}"
+
+      - name: Build Debian package
+        # -e forwards the env vars through debuild's sanitised environment to debian/rules.
+        env:
+          WSI_CMAKE_ARGS: ${{ matrix.cmake_args }}
+        run: |
+          debuild -e VULKAN_CXX_INCLUDE -e WSI_CMAKE_ARGS -us -uc -b && cp -a ../*.deb ./
 
       - name: Get version
         id: get_version
