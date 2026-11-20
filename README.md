@@ -226,6 +226,17 @@ Copy the shared library `libVkLayer_window_system_integration.so` and JSON
 configuration `VkLayer_window_system_integration.json` into a Vulkan®
 [implicit layer directory](https://github.com/KhronosGroup/Vulkan-Loader/blob/main/docs/LoaderLayerInterface.md#linux-layer-discovery).
 
+This fork's CI builds a Debian package (`libvulkan-wsi-layer`) in two variants and publishes both in one
+GitHub release per commit:
+
+| Variant | Version | CMake options | Used by |
+|---|---|---|---|
+| RK3588 | `1.3.276-1` | the defaults (`system-uncached` heap, Mali reported as layered on PanVK) | [libmali-rockchip](https://github.com/ginkage/libmali-rockchip) |
+| CIX P1 | `1.3.276-1+cix1` | `-DWSIALLOC_MEMORY_HEAP_NAME=system -DWSI_REPORT_LAYERED_DRIVER_DEFAULT=OFF -DWSI_DMABUF_HEAP_COHERENT=ON` | [libmali-cix](https://github.com/ginkage/libmali-cix), which bundles a pinned release |
+
+The libmali packages bundle the layer from a pinned release (`scripts/update_wsi.sh`); the packages here are
+the build inputs, not meant to be installed next to them.
+
 ## Environment variables
 
 The layer reads the following environment variables at runtime:
