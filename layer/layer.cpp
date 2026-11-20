@@ -576,14 +576,20 @@ static const VkPhysicalDeviceDrmPropertiesEXT *fake_drm_properties(VkPhysicalDev
  * wait is redundant and halves the frame rate of a zink application on the Mali driver. The one way to tell zink
  * without changing it is VK_KHR_maintenance7, which lets a layered implementation report the driver underneath:
  * report the Mali device as layered on Vulkan with PanVK, Mesa's driver for the same GPUs, as the driver underneath.
- * zink treats PanVK like the Mali driver in all but this. WSI_REPORT_LAYERED_DRIVER=0 disables it. */
+ * zink treats PanVK like the Mali driver in all but this. On by default unless built with
+ * -DWSI_REPORT_LAYERED_DRIVER_DEFAULT=OFF (for a zink that trusts the Mali driver itself); WSI_REPORT_LAYERED_DRIVER=0
+ * or =1 overrides it. */
 static void report_layered_driver(VkPhysicalDevice physical_device, const VkPhysicalDeviceProperties2 &properties,
                                   VkPhysicalDeviceLayeredApiPropertiesListKHR *layered,
                                   VkPhysicalDeviceLayeredApiPropertiesKHR *layered_apis, uint32_t layered_capacity)
 {
    static const bool enabled = []() {
       const char *env = std::getenv("WSI_REPORT_LAYERED_DRIVER");
-      return env == nullptr || std::strcmp(env, "0") != 0;
+      if (env == nullptr)
+      {
+         return WSI_REPORT_LAYERED_DRIVER_DEFAULT != 0;
+      }
+      return std::strcmp(env, "0") != 0;
    }();
    if (!enabled || layered == nullptr || layered->layeredApiCount != 0)
    {

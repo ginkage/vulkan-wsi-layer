@@ -90,6 +90,10 @@ option(BUILD_WSI_X11 "Build with support for VK_KHR_xcb_surface / VK_KHR_xlib_su
 set(SELECT_EXTERNAL_ALLOCATOR "dma_buf_heaps" CACHE STRING "Select an external system allocator (none, dma_buf_heaps)")
 set(EXTERNAL_WSIALLOC_LIBRARY "" CACHE STRING "External implementation of the wsialloc interface to use")
 set(WSIALLOC_MEMORY_HEAP_NAME "system-uncached" CACHE STRING "Heap name used by the dma_buf_heaps allocator")
+# Report the Mali driver as layered on Mesa's PanVK (VK_KHR_maintenance7), so that an unmodified zink skips its per-frame
+# wait before presenting; WSI_REPORT_LAYERED_DRIVER overrides it at run time. Turn it off where the zink in use trusts
+# the Mali driver itself: zink then also applies its ARM_PROPRIETARY workarounds instead of PanVK's.
+option(WSI_REPORT_LAYERED_DRIVER_DEFAULT "Report the Mali driver as layered on PanVK unless WSI_REPORT_LAYERED_DRIVER=0" ON)
 
 # Optional features
 option(BUILD_WSI_DISPLAY_SUPPORT_FORMAT_MODIFIERS "Build with support for format modifiers in VK_KHR_display" ON)
@@ -390,6 +394,12 @@ add_library(${PROJECT_NAME} SHARED
    wsi/vulkan_image_handle_creator.cpp
    wsi/swapchain_image_factory.cpp
    wsi/swapchain_image.cpp)
+
+if (WSI_REPORT_LAYERED_DRIVER_DEFAULT)
+   add_definitions("-DWSI_REPORT_LAYERED_DRIVER_DEFAULT=1")
+else()
+   add_definitions("-DWSI_REPORT_LAYERED_DRIVER_DEFAULT=0")
+endif()
 
 if (VULKAN_WSI_LAYER_EXPERIMENTAL)
    add_definitions("-DVULKAN_WSI_LAYER_EXPERIMENTAL=1")
