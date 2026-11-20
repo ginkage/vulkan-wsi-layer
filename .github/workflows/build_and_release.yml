@@ -8,8 +8,8 @@ on:
 
 jobs:
 
-  build_and_release:
-    name: Build and Release Debian Package (${{ matrix.variant }})
+  build:
+    name: Build Debian Package (${{ matrix.variant }})
     runs-on: ubuntu-24.04-arm
     strategy:
       matrix:
@@ -23,8 +23,6 @@ jobs:
           - variant: cix
             cmake_args: "-DWSIALLOC_MEMORY_HEAP_NAME=system -DWSI_REPORT_LAYERED_DRIVER_DEFAULT=OFF -DWSI_DMABUF_HEAP_COHERENT=ON"
             version_suffix: "+cix"
-    permissions:
-      contents: write
     steps:
 
       - name: Fix Git Permissions
@@ -88,20 +86,46 @@ jobs:
         run: |
           debuild -e VULKAN_CXX_INCLUDE -e WSI_CMAKE_ARGS -us -uc -b && cp -a ../*.deb ./
 
-      - name: Get version
-        id: get_version
-        run: |
-          echo "version=$(dpkg-parsechangelog --show-field Version)" >> $GITHUB_OUTPUT
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: deb-${{ matrix.variant }}
+          path: ./*.deb
+          if-no-files-found: error
 
-      - name: Get commit hash
-        id: get_commit_hash
-        uses: prompt/actions-commit-hash@v3
+  # One release per commit with every variant's package: the tag carries the base version (without a variant's
+  # local suffix) and the commit.
+  release:
+    name: Release Debian Packages
+    needs: build
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: write
+    steps:
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download packages
+        uses: actions/download-artifact@v4
+        with:
+          pattern: deb-*
+          path: debs
+          merge-multiple: true
+
+      - name: Get tag
+        id: get_tag
+        run: |
+          version=$(sed -n '1s/^[^(]*(\([^)]*\)).*/\1/p' debian/changelog)
+          echo "tag=v${version}-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          ls -l debs
 
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
-          name: v${{ steps.get_version.outputs.version }}-${{ steps.get_commit_hash.outputs.short }}
-          tag_name: v${{ steps.get_version.outputs.version }}-${{ steps.get_commit_hash.outputs.short }}
+          name: ${{ steps.get_tag.outputs.tag }}
+          tag_name: ${{ steps.get_tag.outputs.tag }}
           generate_release_notes: true
+          fail_on_unmatched_files: true
           files: |
-            ./*.deb
+            debs/*.deb
