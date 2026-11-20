@@ -90,6 +90,11 @@ option(BUILD_WSI_X11 "Build with support for VK_KHR_xcb_surface / VK_KHR_xlib_su
 set(SELECT_EXTERNAL_ALLOCATOR "dma_buf_heaps" CACHE STRING "Select an external system allocator (none, dma_buf_heaps)")
 set(EXTERNAL_WSIALLOC_LIBRARY "" CACHE STRING "External implementation of the wsialloc interface to use")
 set(WSIALLOC_MEMORY_HEAP_NAME "system-uncached" CACHE STRING "Heap name used by the dma_buf_heaps allocator")
+# The layer emulates dma-buf export for drivers that can only import (Mali) by allocating from that heap and importing
+# the dma-buf, which the Mali driver accepts only with its HOST_CACHED, non-HOST_COHERENT memory type. Such memory still
+# serves applications that asked for HOST_COHERENT memory where CPU mappings of the heap's buffers are coherent with the
+# GPU: an uncached heap (detected from the name), or a cached heap with an I/O-coherent GPU.
+option(WSI_DMABUF_HEAP_COHERENT "CPU mappings of WSIALLOC_MEMORY_HEAP_NAME's buffers are coherent with the GPU" OFF)
 # Report the Mali driver as layered on Mesa's PanVK (VK_KHR_maintenance7), so that an unmodified zink skips its per-frame
 # wait before presenting; WSI_REPORT_LAYERED_DRIVER overrides it at run time. Turn it off where the zink in use trusts
 # the Mali driver itself: zink then also applies its ARM_PROPRIETARY workarounds instead of PanVK's.
@@ -399,6 +404,12 @@ if (WSI_REPORT_LAYERED_DRIVER_DEFAULT)
    add_definitions("-DWSI_REPORT_LAYERED_DRIVER_DEFAULT=1")
 else()
    add_definitions("-DWSI_REPORT_LAYERED_DRIVER_DEFAULT=0")
+endif()
+
+if (WSI_DMABUF_HEAP_COHERENT)
+   add_definitions("-DWSI_DMABUF_HEAP_COHERENT=1")
+else()
+   add_definitions("-DWSI_DMABUF_HEAP_COHERENT=0")
 endif()
 
 if (VULKAN_WSI_LAYER_EXPERIMENTAL)

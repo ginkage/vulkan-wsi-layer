@@ -21,7 +21,7 @@ jobs:
           # CIX P1 (libmali-cix): CIX's libmali allocates from /dev/dma_heap/system, and mesa-cix's zink
           # trusts the Mali driver itself, so the layer reports it as it is (not layered on PanVK).
           - variant: cix
-            cmake_args: "-DWSIALLOC_MEMORY_HEAP_NAME=system -DWSI_REPORT_LAYERED_DRIVER_DEFAULT=OFF"
+            cmake_args: "-DWSIALLOC_MEMORY_HEAP_NAME=system -DWSI_REPORT_LAYERED_DRIVER_DEFAULT=OFF -DWSI_DMABUF_HEAP_COHERENT=ON"
             version_suffix: "+cix"
     permissions:
       contents: write

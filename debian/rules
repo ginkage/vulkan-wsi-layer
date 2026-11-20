@@ -11,7 +11,7 @@ ifneq ($(VULKAN_CXX_INCLUDE),)
 VULKAN_HEADERS_ARG = -DVULKAN_CXX_INCLUDE=$(VULKAN_CXX_INCLUDE)
 endif
 # Extra CMake options for a board variant, forwarded the same way ("debuild -e WSI_CMAKE_ARGS"), e.g. the
-# CIX P1 build: -DWSIALLOC_MEMORY_HEAP_NAME=system -DWSI_REPORT_LAYERED_DRIVER_DEFAULT=OFF
+# CIX P1 build: -DWSIALLOC_MEMORY_HEAP_NAME=system -DWSI_REPORT_LAYERED_DRIVER_DEFAULT=OFF -DWSI_DMABUF_HEAP_COHERENT=ON
 
 %:
 	dh $@ --builddirectory=build/

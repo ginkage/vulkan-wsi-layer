@@ -57,8 +57,13 @@ constexpr const char *heap_path = "/dev/dma_heap/" DMABUF_EXPORT_STR(WSIALLOC_ME
 constexpr const char *heap_path = "/dev/dma_heap/system";
 #endif
 
-/* CPU mappings of an uncached heap's buffers are uncached, so coherent whatever the memory type says. */
-const bool heap_is_uncached = std::strstr(heap_path, "uncached") != nullptr;
+/* Whether CPU mappings of the heap's buffers are coherent with the GPU whatever the memory type says: those of an
+ * uncached heap are uncached, and with an I/O-coherent GPU (WSI_DMABUF_HEAP_COHERENT, e.g. CIX P1's ACE-Lite Mali) the
+ * GPU snoops the CPU caches, so a cached heap is coherent too. */
+#ifndef WSI_DMABUF_HEAP_COHERENT
+#define WSI_DMABUF_HEAP_COHERENT 0
+#endif
+const bool heap_is_coherent = WSI_DMABUF_HEAP_COHERENT || std::strstr(heap_path, "uncached") != nullptr;
 
 int heap_fd()
 {
@@ -83,7 +88,7 @@ int allocate_dmabuf(VkDeviceSize size)
 /* The memory type to import a dma-buf allocated for @p allocate_info with, or -1 if none will do. The driver may
  * accept imported dma-bufs only for other types than it offers for the resource (the Mali driver: only its
  * HOST_CACHED type, while applications tend to pick the HOST_COHERENT one), so take any type of the same heap it
- * accepts that has all the requested properties - with an uncached heap, coherence comes for free - and that a
+ * accepts that has all the requested properties - with a coherent heap, coherence comes for free - and that a
  * dedicated image or buffer accepts too. */
 int import_memory_type(layer::device_private_data &device_data, const VkMemoryAllocateInfo &allocate_info,
                        uint32_t dmabuf_type_bits)
@@ -103,7 +108,7 @@ int import_memory_type(layer::device_private_data &device_data, const VkMemoryAl
       return -1;
    }
    VkMemoryPropertyFlags wanted = types[allocate_info.memoryTypeIndex].propertyFlags;
-   if (heap_is_uncached)
+   if (heap_is_coherent)
    {
       wanted &= ~static_cast<VkMemoryPropertyFlags>(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
    }
