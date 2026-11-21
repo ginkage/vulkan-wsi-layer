@@ -31,6 +31,7 @@
 #include <xcb/xcb.h>
 #include <xcb/xproto.h>
 #include <xcb/shm.h>
+#include <mutex>
 #include "wsi/surface.hpp"
 #include "surface_properties.hpp"
 
@@ -61,7 +62,23 @@ public:
    static util::unique_ptr<surface> make_surface(const util::allocator &allocator, xcb_connection_t *conn,
                                                  xcb_window_t window);
 
+   /**
+    * @brief Get the window's size and depth.
+    *
+    * While size tracking is on (a DRI3 swapchain of this surface exists), the surface keeps the size from
+    * the previous query and reads the window's Present ConfigureNotify events itself, without blocking:
+    * a query costs a GetGeometry round trip only when the window has been resized since the previous one
+    * (or before the first), not on every query - zink's kopper queries the surface capabilities every frame.
+    * Without tracking, every query is a round trip.
+    */
    bool get_size_and_depth(uint32_t *width, uint32_t *height, int *depth);
+
+   /**
+    * @brief Start or stop size tracking. Reference counted, because a swapchain and the one replacing it
+    * coexist; the last swapchain to stop turns it off.
+    */
+   void begin_size_tracking();
+   void end_size_tracking();
 
    xcb_connection_t *get_connection()
    {
@@ -79,6 +96,21 @@ public:
    }
 
 private:
+   /** @brief Drain the ConfigureNotify queue. True if the window was resized or destroyed meanwhile. */
+   bool size_events_pending();
+
+   std::mutex m_size_lock;
+   unsigned m_size_tracking_refs = 0;
+   /** Present event context selecting ConfigureNotify on the window, and its event queue. */
+   uint32_t m_configure_event_id = 0;
+   xcb_special_event_t *m_configure_events = nullptr;
+   /** m_width/m_height/m_depth are the window's as of the last query, kept current by the events. */
+   bool m_size_valid = false;
+   bool m_window_destroyed = false;
+   uint32_t m_width = 0;
+   uint32_t m_height = 0;
+   int m_depth = 0;
+
    xcb_connection_t *m_connection;
    xcb_window_t m_window;
    /** Surface properties specific to the X11 surface. */

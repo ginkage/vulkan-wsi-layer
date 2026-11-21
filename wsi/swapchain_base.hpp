@@ -593,6 +593,15 @@ protected:
    }
 
    /**
+    * @brief Check the surface for changes that make the swapchain suboptimal, e.g. a resized window, and set
+    * the error state to VK_SUBOPTIMAL_KHR if so. Called before acquire and present return, in the calling
+    * thread, so the application learns about the change from the next acquire or present.
+    */
+   virtual void check_surface_changes()
+   {
+   }
+
+   /**
     * @brief Returns true if an error has occurred.
     */
    bool error_has_occured() const

@@ -187,6 +187,9 @@ protected:
     */
    VkResult get_free_buffer(uint64_t *timeout) override;
 
+   /** @brief VK_SUBOPTIMAL_KHR once the window has been resized away from the swapchain's extent. */
+   void check_surface_changes() override;
+
    /**
     * @brief Add required swapchain extensions.
     */
@@ -252,6 +255,13 @@ private:
 
    /** @brief True when @ref m_presenter is the DRI3 strategy (dma-buf images); false for SHM. */
    bool m_use_dri3 = false;
+
+   /** @brief This swapchain keeps the surface's size tracking on (surface::begin_size_tracking). */
+   bool m_tracking_size = false;
+
+   /** @brief The window's size when the swapchain was created: only a change from it is a resize. */
+   uint32_t m_created_window_width = 0;
+   uint32_t m_created_window_height = 0;
 
    /** @brief DRI3 GPU-copy strategy (WSI_X11_DRI3_COPY): present with XCB_PRESENT_OPTION_COPY so the
     *  X server blits the pixmap into the window. Default is true zero-copy (OPTION_NONE). Independent

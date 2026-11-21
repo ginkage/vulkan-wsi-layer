@@ -171,6 +171,10 @@ swapchain::swapchain(layer::device_private_data &dev_data, const VkAllocationCal
 
 swapchain::~swapchain()
 {
+   if (m_tracking_size)
+   {
+      m_wsi_surface->end_size_tracking();
+   }
    bool thread_may_wait_for_x = false;
    {
       auto thread_status_lock = std::unique_lock<std::mutex>(m_thread_status_lock);
@@ -260,6 +264,8 @@ VkResult swapchain::init_platform(VkDevice device, const VkSwapchainCreateInfoKH
          m_presenter = std::move(dri3);
          m_use_dri3 = true;
          m_dri3_copy_mode = dri3_copy;
+         m_wsi_surface->begin_size_tracking();
+         m_tracking_size = true;
       }
       else
       {
@@ -419,6 +425,8 @@ VkResult swapchain::init_image_factory(const VkSwapchainCreateInfoKHR &swapchain
       uint32_t height = 0;
       int depth = 24;
       m_wsi_surface->get_size_and_depth(&width, &height, &depth);
+      m_created_window_width = width;
+      m_created_window_height = height;
       const uint8_t bpp = static_cast<uint8_t>((depth == 24) ? 32 : depth);
       const uint32_t fourcc = util::drm::vk_to_drm_format(swapchain_create_info.imageFormat);
 
@@ -881,6 +889,28 @@ bool swapchain::free_image_found()
       }
    }
    return false;
+}
+
+void swapchain::check_surface_changes()
+{
+   if (!m_use_dri3 || get_error_state() != VK_SUCCESS)
+   {
+      return;
+   }
+   uint32_t width = 0;
+   uint32_t height = 0;
+   int depth = 0;
+   if (!m_wsi_surface->get_size_and_depth(&width, &height, &depth))
+   {
+      return;
+   }
+   const VkExtent3D extent = get_image_factory().get_image_handle_creator().get_image_create_info().extent;
+   if ((width != m_created_window_width || height != m_created_window_height) &&
+       (width != extent.width || height != extent.height))
+   {
+      /* As Mesa's X11 WSI does: the swapchain still works, the application should recreate it. */
+      set_error_state(VK_SUBOPTIMAL_KHR);
+   }
 }
 
 VkResult swapchain::get_free_buffer(uint64_t *timeout)
