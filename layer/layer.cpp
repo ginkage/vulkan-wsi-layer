@@ -1350,9 +1350,17 @@ VWL_VKAPI_EXPORT wsi_layer_vkEnumerateDeviceExtensionProperties(VkPhysicalDevice
     * VK_EXT_swapchain_maintenance1 equivalent. */
    const bool hide_khr_maintenance1 =
       ours && !instance.is_instance_extension_enabled(VK_KHR_SURFACE_MAINTENANCE_1_EXTENSION_NAME);
-   const bool filter = hide_maintenance1 || hide_drm || hide_khr_maintenance1;
+   /* Wine's WoW64 keeps mappings below 4 GiB with VK_EXT_map_memory_placed, else with VK_EXT_external_memory_host:
+    * then it creates every image with VkExternalMemoryImageCreateInfo(HOST_ALLOCATION) and backs host-visible memory
+    * (all of Mali's) with imported host pointers, and the Mali driver refuses such images (CIX's libmali has the
+    * extension; Rockchip's does not). With WSI_LOW_ADDRESS_MAP the layer lowers vkMapMemory pointers itself, so hide
+    * the extension and let Wine use plain vkMapMemory. */
+   const bool hide_external_memory_host = ours && layer::low_address_map_enabled();
+   const bool filter = hide_maintenance1 || hide_drm || hide_khr_maintenance1 || hide_external_memory_host;
    auto hidden = [&](const VkExtensionProperties &property) {
-      return (hide_maintenance1 &&
+      return (hide_external_memory_host &&
+              strcmp(property.extensionName, VK_EXT_EXTERNAL_MEMORY_HOST_EXTENSION_NAME) == 0) ||
+             (hide_maintenance1 &&
               (layer::is_swapchain_maintenance1(property) || layer::is_swapchain_mutable_format(property))) ||
              (hide_drm && layer::is_physical_device_drm(property)) ||
              (hide_khr_maintenance1 &&
@@ -1539,7 +1547,10 @@ wsi_layer_vkGetDeviceProcAddr(VkDevice device, const char *funcName) VWL_API_POS
       GET_PROC_ADDR(vkInvalidateMappedMemoryRanges);
       GET_PROC_ADDR(vkQueueSubmit);
       GET_PROC_ADDR(vkFreeMemory);
-      if (device_data.is_device_extension_enabled(VK_KHR_MAP_MEMORY_2_EXTENSION_NAME))
+      /* Also on a 1.4 device: the driver answers the KHR names there without the extension enabled too, so an
+       * application using them (Wine's WoW64 maps with vkMapMemory2KHR when it has it) would skip the layer. */
+      if (device_data.is_device_extension_enabled(VK_KHR_MAP_MEMORY_2_EXTENSION_NAME) ||
+          api_version >= VK_API_VERSION_1_4)
       {
          if (!strcmp(funcName, "vkMapMemory2KHR"))
          {
