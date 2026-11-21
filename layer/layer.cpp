@@ -1498,6 +1498,9 @@ wsi_layer_vkGetDeviceProcAddr(VkDevice device, const char *funcName) VWL_API_POS
    auto &device_data = layer::device_private_data::get(device);
    const uint64_t api_version = device_data.instance_data.api_version;
    const bool core_1_1 = api_version >= VK_API_VERSION_1_1;
+   /* A layer above this one may fetch vkGetDeviceProcAddr through it and resolve everything else with that (Steam's
+    * fossilize layer does): answering with the driver's would route all its device calls past this layer. */
+   GET_PROC_ADDR(vkGetDeviceProcAddr);
    if (device_data.is_device_extension_enabled(VK_KHR_SWAPCHAIN_EXTENSION_NAME))
    {
       GET_PROC_ADDR(vkCreateSwapchainKHR);
