@@ -1454,13 +1454,14 @@ VWL_VKAPI_EXPORT wsi_layer_vkNegotiateLoaderLayerInterfaceVersion(VkNegotiateLay
  * and fillModeNonSolid, which it otherwise reports as missing, and it has none of them: its limits stay
  * maxClipDistances = maxCullDistances = 0 and maxViewports = 1, its shader compiler crashes on any shader that
  * accesses gl_ClipDistance, and polygon modes LINE and POINT draw filled triangles. DXVK forks that make these
- * features optional (DXVK-Sarek) then use them and crash. Report them as missing again; WSI_HIDE_DXVK_FEATURES=0
- * keeps the driver's report. */
+ * features optional (DXVK-Sarek) then use them and crash, so WSI_HIDE_DXVK_FEATURES=1 reports them as missing again.
+ * It is off by default: upstream DXVK requires these features and runs D3D11 games on the driver's report, as long as
+ * the game's own shaders don't use clip or cull distances. */
 static void hide_unsupported_dxvk_features(VkPhysicalDevice physical_device, VkPhysicalDeviceFeatures &features)
 {
    static const bool enabled = []() {
       const char *env = std::getenv("WSI_HIDE_DXVK_FEATURES");
-      return env == nullptr || std::strcmp(env, "0") != 0;
+      return env != nullptr && std::strcmp(env, "1") == 0;
    }();
    auto &instance = layer::instance_private_data::get(physical_device);
    if (!enabled || !instance.dxvk_engine)
