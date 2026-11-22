@@ -797,6 +797,8 @@ VKAPI_ATTR VkResult create_instance(const VkInstanceCreateInfo *pCreateInfo, con
 
    TRY_LOG_CALL(instance_private_data::associate(*pInstance, std::move(*table), loader_callback,
                                                  layer_platforms_to_enable, api_version, instance_allocator));
+   const char *engine = pCreateInfo->pApplicationInfo != nullptr ? pCreateInfo->pApplicationInfo->pEngineName : nullptr;
+   instance_private_data::get(*pInstance).dxvk_engine = engine != nullptr && strcmp(engine, "DXVK") == 0;
 
    /*
     * Store the enabled instance extensions in order to return nullptr in
@@ -1448,11 +1450,71 @@ VWL_VKAPI_EXPORT wsi_layer_vkNegotiateLoaderLayerInterfaceVersion(VkNegotiateLay
    return VK_SUCCESS;
 }
 
+/* For the engine name "DXVK" the Mali driver (r54p1) reports shaderClipDistance, shaderCullDistance, multiViewport
+ * and fillModeNonSolid, which it otherwise reports as missing, and it has none of them: its limits stay
+ * maxClipDistances = maxCullDistances = 0 and maxViewports = 1, its shader compiler crashes on any shader that
+ * accesses gl_ClipDistance, and polygon modes LINE and POINT draw filled triangles. DXVK forks that make these
+ * features optional (DXVK-Sarek) then use them and crash. Report them as missing again; WSI_HIDE_DXVK_FEATURES=0
+ * keeps the driver's report. */
+static void hide_unsupported_dxvk_features(VkPhysicalDevice physical_device, VkPhysicalDeviceFeatures &features)
+{
+   static const bool enabled = []() {
+      const char *env = std::getenv("WSI_HIDE_DXVK_FEATURES");
+      return env == nullptr || std::strcmp(env, "0") != 0;
+   }();
+   auto &instance = layer::instance_private_data::get(physical_device);
+   if (!enabled || !instance.dxvk_engine)
+   {
+      return;
+   }
+
+   auto get_properties2 =
+      instance.disp.get_fn<PFN_vkGetPhysicalDeviceProperties2KHR>("vkGetPhysicalDeviceProperties2KHR");
+   if (!get_properties2.has_value())
+   {
+      return;
+   }
+   VkPhysicalDeviceDriverProperties driver = {};
+   driver.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES;
+   VkPhysicalDeviceProperties2 properties = {};
+   properties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+   properties.pNext = &driver;
+   (*get_properties2)(physical_device, &properties);
+   if (driver.driverID != VK_DRIVER_ID_ARM_PROPRIETARY)
+   {
+      return;
+   }
+
+   const VkPhysicalDeviceLimits &limits = properties.properties.limits;
+   if (limits.maxClipDistances == 0)
+   {
+      features.shaderClipDistance = VK_FALSE;
+   }
+   if (limits.maxCullDistances == 0)
+   {
+      features.shaderCullDistance = VK_FALSE;
+   }
+   if (limits.maxViewports <= 1)
+   {
+      features.multiViewport = VK_FALSE;
+   }
+   features.fillModeNonSolid = VK_FALSE;
+}
+
+VWL_VKAPI_CALL(void)
+wsi_layer_vkGetPhysicalDeviceFeatures(VkPhysicalDevice physical_device,
+                                      VkPhysicalDeviceFeatures *pFeatures) VWL_API_POST
+{
+   layer::instance_private_data::get(physical_device).disp.GetPhysicalDeviceFeatures(physical_device, pFeatures);
+   hide_unsupported_dxvk_features(physical_device, *pFeatures);
+}
+
 VWL_VKAPI_CALL(void)
 wsi_layer_vkGetPhysicalDeviceFeatures2(VkPhysicalDevice physical_device,
                                        VkPhysicalDeviceFeatures2 *pFeatures) VWL_API_POST
 {
    layer::populate_supported_layer_features(physical_device, *pFeatures);
+   hide_unsupported_dxvk_features(physical_device, pFeatures->features);
 }
 
 VWL_VKAPI_CALL(void)
@@ -1677,6 +1739,7 @@ wsi_layer_vkGetInstanceProcAddr(VkInstance instance, const char *funcName) VWL_A
 
    auto &instance_data = layer::instance_private_data::get(instance);
    GET_PROC_ADDR(vkEnumerateDeviceExtensionProperties);
+   GET_PROC_ADDR(vkGetPhysicalDeviceFeatures);
 
    const bool core_1_1 = instance_data.api_version >= VK_API_VERSION_1_1;
    if ((instance_data.is_instance_extension_enabled(VK_KHR_DEVICE_GROUP_EXTENSION_NAME) &&

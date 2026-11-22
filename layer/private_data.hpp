@@ -233,6 +233,7 @@ static constexpr uint32_t API_VERSION_MAX = UINT32_MAX;
    EP(GetInstanceProcAddr, "", VK_API_VERSION_1_0, true, )                                                                \
    EP(DestroyInstance, "", VK_API_VERSION_1_0, true, )                                                                    \
    EP(GetPhysicalDeviceProperties, "", VK_API_VERSION_1_0, true, )                                                        \
+   EP(GetPhysicalDeviceFeatures, "", VK_API_VERSION_1_0, true, )                                                          \
    EP(GetPhysicalDeviceImageFormatProperties, "", VK_API_VERSION_1_0, true, )                                             \
    EP(EnumerateDeviceExtensionProperties, "", VK_API_VERSION_1_0, true, )                                                 \
    /* VK_KHR_surface */                                                                                                   \
@@ -763,6 +764,9 @@ public:
 
    const instance_dispatch_table disp;
    const uint32_t api_version;
+
+   /** @brief The application gave the engine name "DXVK", for which the Mali driver reports features it lacks. */
+   bool dxvk_engine = false;
 
    /**
     * @brief Check whether there is an enabled surface extension that is not supported by the layer.
